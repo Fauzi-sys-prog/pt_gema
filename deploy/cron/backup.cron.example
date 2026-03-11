@@ -1,0 +1,5 @@
+# Daily backup at 02:30 server time (WIB example)
+30 2 * * * cd /opt/ptgema-main2 && COMPOSE_FILE=docker-compose.prod.yml OUT_DIR=/opt/ptgema-main2/backups ./scripts/backup_postgres.sh >> /var/log/ptgema-backup.log 2>&1
+
+# Daily retention cleanup at 02:40 (keep 14 days)
+40 2 * * * cd /opt/ptgema-main2 && OUT_DIR=/opt/ptgema-main2/backups RETENTION_DAYS=14 ./scripts/prune_backups.sh >> /var/log/ptgema-backup.log 2>&1

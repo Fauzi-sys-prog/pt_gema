@@ -1,0 +1,1888 @@
+{
+  "createdAt": "2026-03-10T16:08:25.707Z",
+  "files": [
+    "/Users/macbook/Downloads/data_pt_gema/clear/01 SPK Lembur.xls",
+    "/Users/macbook/Downloads/data_pt_gema/clear/1. Januari 2025  Material Board, Paper, Blanket, Fiber Steel.xlsx",
+    "/Users/macbook/Downloads/data_pt_gema/clear/11. Rekon Bank & Petty Cash - NOV 2025.xlsx",
+    "/Users/macbook/Downloads/data_pt_gema/clear/200. PO PT.WILLICH MATERIAL BLANKET TEBAL 25MM T1430.xls",
+    "/Users/macbook/Downloads/data_pt_gema/clear/282.INVOICE PT. GEMILANG MITRA ABADI ANCHOR.xls",
+    "/Users/macbook/Downloads/data_pt_gema/clear/45. SURAT JALAN Alat PT. Daiki (Daiki Plant II Rotary Furnace No.2).xlsx",
+    "/Users/macbook/Downloads/data_pt_gema/clear/62. BAP PT.DAIKI HEKIKAI 450.doc",
+    "/Users/macbook/Downloads/data_pt_gema/clear/66.INVOICE P'TOHI LR M-34 (TRIMITRA).xls",
+    "/Users/macbook/Downloads/data_pt_gema/clear/Absensi (Cuti ijin Sakit)2025.xls",
+    "/Users/macbook/Downloads/data_pt_gema/clear/Grafik Penjualan 2025.xlsx",
+    "/Users/macbook/Downloads/data_pt_gema/clear/Jan'25 310 Round Bar, Plat,.xlsx",
+    "/Users/macbook/Downloads/data_pt_gema/clear/Jan'25 SUS 304 Round Bar, Plat,  Plat Strep.xlsx",
+    "/Users/macbook/Downloads/data_pt_gema/clear/Januari 2025 Stock Material Brick.xlsx",
+    "/Users/macbook/Downloads/data_pt_gema/clear/Januari 2025 Stock Material Castable.xlsx",
+    "/Users/macbook/Downloads/data_pt_gema/clear/LAPORAN KEUANGAN 2025.xls",
+    "/Users/macbook/Downloads/data_pt_gema/clear/LAPORAN KEWAJIBAN PT.GMT 2025.xlsx",
+    "/Users/macbook/Downloads/data_pt_gema/clear/LAPORAN SALES PPN PT.GMT 2025.xlsx",
+    "/Users/macbook/Downloads/data_pt_gema/clear/MEMO PENGAMBILAN LORONG API PT. PAS BB4LH.doc",
+    "/Users/macbook/Downloads/data_pt_gema/clear/Penawaran Equipment PT. Neotek Inovasi Global.xls",
+    "/Users/macbook/Downloads/data_pt_gema/clear/Penawaran Jasa PT. Halco Tehnik.xlsx",
+    "/Users/macbook/Downloads/data_pt_gema/clear/Penawaran Material PT. Halco Tehnik.xls",
+    "/Users/macbook/Downloads/data_pt_gema/clear/RAB PT Daiki Lebaran.xlsx",
+    "/Users/macbook/Downloads/data_pt_gema/clear/SALDO PIUTANG  2025.xlsx",
+    "/Users/macbook/Downloads/data_pt_gema/clear/THL PT.GMT NOV'25.xlsx"
+  ],
+  "summary": {
+    "totalFiles": 24,
+    "byExt": {
+      ".xls": 8,
+      ".xlsx": 14,
+      ".doc": 2
+    },
+    "byCategory": {
+      "biaya-kerja": 1,
+      "laporan-material": 5,
+      "rekon-bank": 1,
+      "po": 1,
+      "invoice": 2,
+      "surat-jalan": 1,
+      "bap": 3,
+      "absensi": 2,
+      "laporan-penjualan": 2,
+      "laporan-keuangan": 2,
+      "penawaran": 3,
+      "kasbon": 1
+    },
+    "warnings": 12
+  },
+  "records": [
+    {
+      "sourceFile": "/Users/macbook/Downloads/data_pt_gema/clear/01 SPK Lembur.xls",
+      "ext": ".xls",
+      "category": "biaya-kerja",
+      "title": "01 SPK Lembur.xls",
+      "fields": {
+        "fileName": "01 SPK Lembur.xls"
+      },
+      "warnings": [],
+      "textSnippet": "SURAT PERINTAH KERJA Hari/Tanggal 15 Januari '24 NO.SPK : 01/SPK/GM/I/2025 Jam masuk 17 Jam keluar 22 Pekerjaan No Nama Keterangan QTY Hasil Paraf 1 Soleh Anchor PT Brikasa 2 Sarji Anchor PT Brikasa - 3 Deni Anchor PT Brikasa 4 Abd. Rohman Anchor PT Brikasa Catatan : Kerja Lembur tanpa ada SPK dari Kantor maka tidak dibayar. Bekasi 19 Januari 2024 Mengetahui Menyetujui Dewi Angesti Syamsudin",
+      "excel": {
+        "sheets": [
+          "01 (2)",
+          "Sheet1"
+        ],
+        "selectedSheet": "01 (2)",
+        "headers": [
+          "No",
+          "Nama",
+          "Keterangan",
+          "QTY",
+          "Hasil",
+          "Paraf",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ],
+        "sampleRows": [
+          {
+            "No": "1",
+            "Nama": "Soleh",
+            "Keterangan": "Anchor PT Brikasa",
+            "QTY": "",
+            "Hasil": "",
+            "Paraf": ""
+          },
+          {
+            "No": "2",
+            "Nama": "Sarji",
+            "Keterangan": "Anchor PT Brikasa",
+            "QTY": "-",
+            "Hasil": "",
+            "Paraf": ""
+          },
+          {
+            "No": "3",
+            "Nama": "Deni",
+            "Keterangan": "Anchor PT Brikasa",
+            "QTY": "",
+            "Hasil": "",
+            "Paraf": ""
+          },
+          {
+            "No": "4",
+            "Nama": "Abd. Rohman",
+            "Keterangan": "Anchor PT Brikasa",
+            "QTY": "",
+            "Hasil": "",
+            "Paraf": ""
+          },
+          {
+            "No": "Catatan :",
+            "Nama": "",
+            "Keterangan": "",
+            "QTY": "",
+            "Hasil": "",
+            "Paraf": ""
+          },
+          {
+            "No": "Kerja Lembur tanpa ada SPK dari Kantor maka tidak dibayar.",
+            "Nama": "",
+            "Keterangan": "",
+            "QTY": "",
+            "Hasil": "",
+            "Paraf": ""
+          },
+          {
+            "No": "Bekasi 19 Januari 2024",
+            "Nama": "",
+            "Keterangan": "",
+            "QTY": "",
+            "Hasil": "",
+            "Paraf": ""
+          }
+        ]
+      }
+    },
+    {
+      "sourceFile": "/Users/macbook/Downloads/data_pt_gema/clear/1. Januari 2025  Material Board, Paper, Blanket, Fiber Steel.xlsx",
+      "ext": ".xlsx",
+      "category": "laporan-material",
+      "title": "1. Januari 2025  Material Board, Paper, Blanket, Fiber Steel.xlsx",
+      "fields": {
+        "fileName": "1. Januari 2025  Material Board, Paper, Blanket, Fiber Steel.xlsx"
+      },
+      "warnings": [],
+      "textSnippet": "STOCK MATERIAL PER 1 JANUARI 2024 Rp- GEMA TEKNIK NO NAMA MATERIAL SUPLLIER Stock Harga Keterangan Castable 1 Excelereed ABR Plus HWI 100 Kg Sample Sample 2 Calde Cast LR 68 Indopoerlen 975 Kg Rp11,500 Rp11,212,500 3 Calde Cast LR 25 Indopoerlen 1,125 Kg Rp7,100 Rp7,987,500 4 Calde Cast 40 TR Indopoerlen 25 Kg Rp29,560 Rp739,000 5 Eko Cast L-15 Mula 650 Kg Rp10,000 Rp6,500,000 6 Eko cast L-16 Mula 950 Kg Rp10,000 Rp9,500,000 7 Green Kleen 60 Plus HWI 750 Kg Rp21,700 Rp16,275,000 8 Ultra Express 80 HWI 325 Kg Rp17,500 Rp5,687,500 9 Mizou Plus HWI 350 Kg Rp14,000 Rp4,900,000 10 Green Cast 94 plus HWI 875 Kg Rp24,000 Rp21,000,000 11 KS 4 V Plus HWI 750 Kg Rp17,000 Rp12,750,000 12 Neocast Super Sic 30 Benteng Api 125 Kg Rp2,250 Rp281,250 13 Neocast Super Sic 60 Benteng Api 125 Kg Rp38,500 Rp4,812,500 14 Ekw L-16 Mula 350 Kg Rp6,500 Rp2,275,000 15 Eka Plast 80 B Mula 250 Kg Rp6,500 Rp1,625,000 16 Shiracrete 60 Shinagawa 125 Kg Rp13,000 Rp1,625,000 17 Caprax SC 30 LCF Cafrefindo 50 Kg Rp4,500 Rp225,000 18 Matriphost MMGD 100 Kg Rp48,000 Rp4,800,000 19 Tri Momolithic Morgan 75 Kg Rp- 20 C-16 BRS Indoporlen 100 Kg Rp- 21 Roram 68 Al 5 Indoporlen 250 Kg Rp- 22 Sentinel RC Plus HWI 100 Kg Rp",
+      "excel": {
+        "sheets": [
+          "Stock Jan 2024 ",
+          "Karung Anchor",
+          "Karung Castable",
+          "Teflon 0,2x550x2000",
+          "Calci Board 25x500x1000",
+          "Calci Board 50x500x1000",
+          "CeramicFiber Board 50x600x900",
+          "CF Paper 1x610x2500mm",
+          "CF Paper 3x610x20000 (Willich)",
+          "CF Paper 3x1200x20000",
+          "CF Paper 3x1220x15000mm Kaowool",
+          "CF Paper 5x1220x10000 Mula",
+          "CF Paper 5x1220x15000 Kaowool ",
+          "Rockwool",
+          "Mica Sheet",
+          "CF Blanket 12,x610x1440Cerawil",
+          "Cf Blanket 25x610x7200  Mula",
+          "Cf Blanket 25x610x7200 Cerawil",
+          "Cf Blanket 25x610x7200 T.1430",
+          "Cf Blanket 25x600x7200 Isowool",
+          "CF Blanket 50x610x3600 Cerawil",
+          "Cf Blanket 50x600x7200 Isowool",
+          "Fiber Steel SS 304",
+          "Fiber Steel SS 310",
+          "Fiber Steel 446",
+          "Mortar M 36 Indoporlen "
+        ],
+        "selectedSheet": "Stock Jan 2024 ",
+        "headers": [
+          "NO",
+          "NAMA MATERIAL",
+          "SUPLLIER",
+          "Stock",
+          "",
+          "Harga",
+          "Keterangan",
+          "",
+          "",
+          ""
+        ],
+        "sampleRows": [
+          {
+            "NO": "",
+            "NAMA MATERIAL": "Castable",
+            "SUPLLIER": "",
+            "Stock": "",
+            "Harga": "",
+            "Keterangan": ""
+          },
+          {
+            "NO": "1",
+            "NAMA MATERIAL": "Excelereed ABR Plus",
+            "SUPLLIER": "HWI",
+            "Stock": "100",
+            "Harga": "Sample",
+            "Keterangan": "Sample"
+          },
+          {
+            "NO": "2",
+            "NAMA MATERIAL": "Calde Cast LR 68",
+            "SUPLLIER": "Indopoerlen",
+            "Stock": "975",
+            "Harga": "Rp11,500",
+            "Keterangan": "Rp11,212,500"
+          },
+          {
+            "NO": "3",
+            "NAMA MATERIAL": "Calde Cast LR 25",
+            "SUPLLIER": "Indopoerlen",
+            "Stock": "1,125",
+            "Harga": "Rp7,100",
+            "Keterangan": "Rp7,987,500"
+          },
+          {
+            "NO": "4",
+            "NAMA MATERIAL": "Calde Cast 40 TR",
+            "SUPLLIER": "Indopoerlen",
+            "Stock": "25",
+            "Harga": "Rp29,560",
+            "Keterangan": "Rp739,000"
+          },
+          {
+            "NO": "5",
+            "NAMA MATERIAL": "Eko Cast L-15",
+            "SUPLLIER": "Mula",
+            "Stock": "650",
+            "Harga": "Rp10,000",
+            "Keterangan": "Rp6,500,000"
+          },
+          {
+            "NO": "6",
+            "NAMA MATERIAL": "Eko cast L-16",
+            "SUPLLIER": "Mula",
+            "Stock": "950",
+            "Harga": "Rp10,000",
+            "Keterangan": "Rp9,500,000"
+          }
+        ]
+      }
+    },
+    {
+      "sourceFile": "/Users/macbook/Downloads/data_pt_gema/clear/11. Rekon Bank & Petty Cash - NOV 2025.xlsx",
+      "ext": ".xlsx",
+      "category": "rekon-bank",
+      "title": "11. Rekon Bank & Petty Cash - NOV 2025.xlsx",
+      "fields": {
+        "fileName": "11. Rekon Bank & Petty Cash - NOV 2025.xlsx"
+      },
+      "warnings": [
+        "Header row not confidently detected"
+      ],
+      "textSnippet": "REKONSILIASI BANK Periode November 2025 Tanggal Akun Keterangan Debit Kredit Saldo Saldo Awal 1,677,290,690.94 4-Nov-25 Tarik Tunai ATM 2,500,000.00 1,674,790,690.94 Tarik Tunai ATM 2,500,000.00 1,672,290,690.94 Tarik Tunai ATM 2,500,000.00 1,669,790,690.94 Tarik Tunai ATM 1,250,000.00 1,668,540,690.94 Tarik Tunai ATM 1,250,000.00 1,667,290,690.94 Penerimaan dari PT. Vardhana Inti Pratama 35,049,027.00 1,702,339,717.94 Biaya admin 10,000.00 1,702,329,717.94 6-Nov-25 Penerimaan dari Ahmad Royani 513,375.00 1,702,843,092.94 Penerimaan dari PT. Indo Bharat Rayon 9,199,125.00 1,712,042,217.94 8-Nov-25 Pembayaran material CV. Putra Indra Boga 358,141,500.00 1,353,900,717.94 11-Nov-25 Pembayaran material CV. Putra Indra Boga 108,780,000.00 1,245,120,717.94 14-Nov-25 Penerimaan dari PT. Eagle Industry Indonesia 32,953,125.00 1,278,073,842.94 Penerimaan dari PT. Daiki Aluminium Industry Indonesia 813,777,000.00 2,091,850,842.94 Penerimaan dari PT. Cabot Indonesia 55,044,000.00 2,146,894,842.94 15-Nov-25 Tarik Tunai ATM 2,500,000.00 2,144,394,842.94 Tarik Tunai ATM 2,500,000.00 2,141,894,842.94 Tarik Tunai ATM 2,500,000.00 2,139,394,842.94 Tarik Tunai ATM 1,250,000.00 2,138,144,842.94 Tarik",
+      "excel": {
+        "sheets": [
+          "Rekon Bank",
+          "Petty Cash ",
+          "Petty Cash  Gudang"
+        ],
+        "selectedSheet": "Rekon Bank",
+        "headers": [],
+        "sampleRows": []
+      }
+    },
+    {
+      "sourceFile": "/Users/macbook/Downloads/data_pt_gema/clear/200. PO PT.WILLICH MATERIAL BLANKET TEBAL 25MM T1430.xls",
+      "ext": ".xls",
+      "category": "po",
+      "title": "200. PO PT.WILLICH MATERIAL BLANKET TEBAL 25MM T1430.xls",
+      "fields": {
+        "fileName": "200. PO PT.WILLICH MATERIAL BLANKET TEBAL 25MM T1430.xls",
+        "nomor": "NPWP/NPPKP",
+        "grandTotal": 28305000
+      },
+      "warnings": [],
+      "textSnippet": "PT GEMA TEKNIK PERKASA NO NPWP/NPPKP : 83.117.677.1.435.000 Date : 16-Dec-25 Alamat :Jl. Nurushobah II No. 13 RT/RW. 04/03 No : 200/PO/GMT/XII/2025 Setia Mekar Tambun Selatan Bekasi Jawa Barat 17510 Purchase Order Kepada : PT. WILLICH ISOLASI PRATAMA Central Cikini Building Jl. Cikini Raya 60 J, Jakarta 10330 Phone. 021 - 31938065 , Fax. 021 - 31938070 UP/ : Ibu Yulianti Harap Disiapkan Order Kami Sebagai Berikut : No Nama Barang Jumlah Harga/Unit Total harga 1 Ceramic Fibre Blanket \"Cerawil \" Density : 128 kgs/m3 Size : 25mm x 610mm x 7200mm 20 Roll Rp 850,000 Rp 17,000,000 Max. Serv. Temp.1430˚C 2 Ceramic Fibre Blanket \"Cerawil \" Density : 128 kgs/m3 Size : 50mm x 610mm x 3600mm 20 Roll Rp 425,000 Rp 8,500,000 Max. Serv. Temp.1260˚C Total harga Rp 25,500,000 PPN 11 % Rp 2,805,000 Grand Total Rp 28,305,000 Catatan : - Pembayaran cash sebelum material diambil - Mohon dikirimkan rekening bank PT.Willich Isolasi Pratama - Material diambil oleh PT Gema Teknik Perkasa menunggu Dibuat oleh : Disetujui oleh : Diterima oleh Suplier Ening Syamsudin Purchasing Direktur",
+      "excel": {
+        "sheets": [
+          "Sheet3"
+        ],
+        "selectedSheet": "Sheet3",
+        "headers": [
+          "No",
+          "Nama Barang",
+          "",
+          "Jumlah",
+          "",
+          "",
+          "",
+          "Harga/Unit",
+          "",
+          "Total harga",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ],
+        "sampleRows": [
+          {
+            "No": "1",
+            "Nama Barang": "Ceramic Fibre Blanket \"Cerawil \"",
+            "Jumlah": "",
+            "Harga/Unit": "",
+            "Total harga": ""
+          },
+          {
+            "No": "",
+            "Nama Barang": "Density : 128 kgs/m3",
+            "Jumlah": "",
+            "Harga/Unit": "",
+            "Total harga": ""
+          },
+          {
+            "No": "",
+            "Nama Barang": "Size : 25mm x 610mm x 7200mm",
+            "Jumlah": "20",
+            "Harga/Unit": "Rp",
+            "Total harga": "Rp"
+          },
+          {
+            "No": "",
+            "Nama Barang": "Max. Serv. Temp.1430˚C",
+            "Jumlah": "",
+            "Harga/Unit": "",
+            "Total harga": ""
+          },
+          {
+            "No": "2",
+            "Nama Barang": "Ceramic Fibre Blanket \"Cerawil \"",
+            "Jumlah": "",
+            "Harga/Unit": "",
+            "Total harga": ""
+          },
+          {
+            "No": "",
+            "Nama Barang": "Density : 128 kgs/m3",
+            "Jumlah": "",
+            "Harga/Unit": "",
+            "Total harga": ""
+          },
+          {
+            "No": "",
+            "Nama Barang": "Size : 50mm x 610mm x 3600mm",
+            "Jumlah": "20",
+            "Harga/Unit": "Rp",
+            "Total harga": "Rp"
+          }
+        ]
+      }
+    },
+    {
+      "sourceFile": "/Users/macbook/Downloads/data_pt_gema/clear/282.INVOICE PT. GEMILANG MITRA ABADI ANCHOR.xls",
+      "ext": ".xls",
+      "category": "invoice",
+      "title": "282.INVOICE PT. GEMILANG MITRA ABADI ANCHOR.xls",
+      "fields": {
+        "fileName": "282.INVOICE PT. GEMILANG MITRA ABADI ANCHOR.xls",
+        "nomor": "282/TAG/GMT/XII/2025",
+        "grandTotal": 505050000
+      },
+      "warnings": [
+        "Header row not confidently detected"
+      ],
+      "textSnippet": "No : 282/TAG/GMT/XII/2025 CUSTOMER Name : PT. GEMILANG MITRAABADI SEJAHTERA Date : 15-Dec-25 Alamat : Kp. Kedung Gede Jl. Setia Mekar No. 10 Rt 003 Rw 016 PO Number : 107/GMAS/XII/2025 Setia Mekar Tambun Selatan Kab. Bekasi PO Date : 12-Dec-25 Jawa Barat DUE DATE : 30 Hari UP : Accounting Departement Qty DESCRIPTION UNIT PRICE TOTAL PRICE 70 Pcs Angkur Y Spiral SUS 310 Dia 10 x 210 65,000.00 Rp 4,550,000.00 113,750.00 0.00 Sub Total Rp 4,550,000.00 Payment Details PPN 11% Rp 500,500.00 Bank Mandiri Cabang Bulak Kapal Bekasi Grand Total Rp 5,050,500.00 An/. PT.Gema Teknik Perkasa No : 156 - 001 - 340 - 8283 2,869,000 1,434,500 16,590,000 2,500,000 19,459,000 3,934,500 Syamsudin",
+      "excel": {
+        "sheets": [
+          "Invoice"
+        ],
+        "selectedSheet": "Invoice",
+        "headers": [],
+        "sampleRows": []
+      }
+    },
+    {
+      "sourceFile": "/Users/macbook/Downloads/data_pt_gema/clear/45. SURAT JALAN Alat PT. Daiki (Daiki Plant II Rotary Furnace No.2).xlsx",
+      "ext": ".xlsx",
+      "category": "surat-jalan",
+      "title": "45. SURAT JALAN Alat PT. Daiki (Daiki Plant II Rotary Furnace No.2).xlsx",
+      "fields": {
+        "fileName": "45. SURAT JALAN Alat PT. Daiki (Daiki Plant II Rotary Furnace No.2).xlsx",
+        "kepada": ": PT. Daiki Aluminium Industry Indonesia ( Plant II)"
+      },
+      "warnings": [],
+      "textSnippet": "No : 45 /SJ/GMT/IX/2025 Bekasi,30 September 2025 Hal : Surat Jalan Alat Kepada Yth : PT. Daiki Aluminium Industry Indonesia ( Plant II) Jalan Maligi VIII Lot T2 Kawasan Industri KIIC Teluk Jambe Barat, Karawang. UP/ : Dengan hormat, Bersama ini kami kirimkan peralatan sbb : No Nama Barang Jumlah Keterangan 1 Mixer 1 Unit Alat dipinjamkan Ke PT. Daiki Aliminium Industry Indonesia 2 Vibrator 2 Unit sebagai alat kerja. Apabila pekerjaan sudah selesai 3 Trafo Las 1 Unit maka alat akan dikembalikan. 4 Blower 1 Unit 5 Jackhammer TPB 40 3 Unit 6 Jackhammer TCA-7 2 Unit 7 Jackhammer Listrik 2 Unit 8 Selang Angin 3 Roll 9 Gerinda Tangan 2 Unit 10 Jigsaw 1 Pcs 11 Sirkel 1 Pcs 12 Mesin Serut 1 Pcs 13 Bor Tangan 1 Pcs 14 Gergaji Kayu 5 Pcs 15 Meteran 4 Pcs 16 Sendok Semen 10 Pcs 17 Ember Cor 20 Pcs 18 Siku Kayu 2 Pcs 19 Linggis 2 Pcs 20 Water Pas 1 Pcs Demikian surat pengantar ini di buat, untuk dipergunakan sebagaimana mestinya. Atas bantuan dan perhatiannya kami sampaikan terimakasih. Membuat Menyetujui Mengetahui Dewi Ni'in Anwar Ade Suhendar",
+      "excel": {
+        "sheets": [
+          "1"
+        ],
+        "selectedSheet": "1",
+        "headers": [
+          "No",
+          "Nama Barang",
+          "",
+          "",
+          "Jumlah",
+          "",
+          "Keterangan",
+          "",
+          "",
+          ""
+        ],
+        "sampleRows": [
+          {
+            "No": "1",
+            "Nama Barang": "Mixer",
+            "Jumlah": "1",
+            "Keterangan": "Alat dipinjamkan Ke PT. Daiki Aliminium Industry Indonesia"
+          },
+          {
+            "No": "2",
+            "Nama Barang": "Vibrator",
+            "Jumlah": "2",
+            "Keterangan": "sebagai alat kerja. Apabila pekerjaan sudah selesai"
+          },
+          {
+            "No": "3",
+            "Nama Barang": "Trafo Las",
+            "Jumlah": "1",
+            "Keterangan": "maka alat akan dikembalikan."
+          },
+          {
+            "No": "4",
+            "Nama Barang": "Blower",
+            "Jumlah": "1",
+            "Keterangan": ""
+          },
+          {
+            "No": "5",
+            "Nama Barang": "Jackhammer TPB 40",
+            "Jumlah": "3",
+            "Keterangan": ""
+          },
+          {
+            "No": "6",
+            "Nama Barang": "Jackhammer TCA-7",
+            "Jumlah": "2",
+            "Keterangan": ""
+          },
+          {
+            "No": "7",
+            "Nama Barang": "Jackhammer Listrik",
+            "Jumlah": "2",
+            "Keterangan": ""
+          }
+        ]
+      }
+    },
+    {
+      "sourceFile": "/Users/macbook/Downloads/data_pt_gema/clear/62. BAP PT.DAIKI HEKIKAI 450.doc",
+      "ext": ".doc",
+      "category": "bap",
+      "title": "62. BAP PT.DAIKI HEKIKAI 450.doc",
+      "fields": {
+        "fileName": "62. BAP PT.DAIKI HEKIKAI 450.doc",
+        "nomor": "62/BAST/XII/2025"
+      },
+      "warnings": [],
+      "textSnippet": "Bekasi, 17 Desember 2025 B E R I T A - A C A R A ( No : 62/BAST/XII/2025 ) Yang bertanda tangan dibawah ini : Nama : Syamsudin Perusahaan : PT.Gema Teknik Perkasa Alam at : Jl Nurushoba II No 13 Setia Mekar Tambun Bekasi Disebut sebagai pihak pertama Nama : Shintaro Ohtake Perusahaan : PT. Daiki Aluminium Industry Indonesia Alamat : Jl.Maligi VIII Lot T-2 Kawasan Industri KIIC Teluk Jambe Barat Karawang Disebut sebagai pihak kedua. Dengan ini menyatakan bahwa pihak pertama telah menyelesaikan pekerjaan Jasa Install Refractory LCM-450 PT. Hekikai Indonesia Pekerjaan dilakukan pada tanggal 4 s/d 15 Desember 2025. Sesuai dengan No PO : 2-DAI-2511004 tanggal 3 November 2025. Pekerjaan tersebut telah dilaksanakan dan diselesaikan oleh pihak pertama , sesuai dengan kesepakatan dan schedule yang dikeluarkan oleh PT. Daiki Aluminium Industry Indonesia. Demikian berita acara ini kami buat untuk dipergunakan sebagaimana mestinya. Pihak pertama Pihak kedua PT.Gema Teknik Perkasa PT. Daiki Aluminium Industry Indonesia Syamsudin Shintaro Ohtake GEMA TEKNIK PERKASA REFRACTORY FURNACE AND BOILER JL. Nurushoba II No 13 Setia Mekar Tambun Selatan Bekasi 17510 Phone : 085100420221 , 021.88354139 Fax"
+    },
+    {
+      "sourceFile": "/Users/macbook/Downloads/data_pt_gema/clear/66.INVOICE P'TOHI LR M-34 (TRIMITRA).xls",
+      "ext": ".xls",
+      "category": "bap",
+      "title": "66.INVOICE P'TOHI LR M-34 (TRIMITRA).xls",
+      "fields": {
+        "fileName": "66.INVOICE P'TOHI LR M-34 (TRIMITRA).xls",
+        "nomor": "66/TAG/VII/GMT/2025",
+        "grandTotal": 3222000
+      },
+      "warnings": [
+        "Header row not confidently detected"
+      ],
+      "textSnippet": "No :66/TAG/VII/GMT/2025 CUSTOMER Name : Bapak Tohi Date : 16-Dec-25 Alamat : Bekasi PO Number : PO Date : DUE DATE : Cash On Delivery UP : Accounting Departement Qty DESCRIPTION UNIT PRICE TOTAL PRICE 2 Zak Mortar 34 Rp 438,750 Rp 877,500 1 Zak @ 25 Kg 18850 17550 3 Roll Ceramic Fiber Blanket Temp 1260 Rp 781,500 Rp 2,344,500 552500 Ukuran 50x610x3600 Cerawil 7500 560000 Sub Total Rp 3,222,000 Payment Details Bank BCA Cabang Kuningan Jakarta Grand Total Rp 3,222,000 An/. Sri Rahayu No : 217 - 147 - 0392 Syamsudin",
+      "excel": {
+        "sheets": [
+          "inv"
+        ],
+        "selectedSheet": "inv",
+        "headers": [],
+        "sampleRows": []
+      }
+    },
+    {
+      "sourceFile": "/Users/macbook/Downloads/data_pt_gema/clear/Absensi (Cuti ijin Sakit)2025.xls",
+      "ext": ".xls",
+      "category": "absensi",
+      "title": "Absensi (Cuti ijin Sakit)2025.xls",
+      "fields": {
+        "fileName": "Absensi (Cuti ijin Sakit)2025.xls",
+        "totalOrang": 12,
+        "titleAbsensi": "Absensi (Cuti ijin Sakit)2025.xls (Basic Layout)"
+      },
+      "warnings": [
+        "Header row not confidently detected",
+        "Absensi mapper: using basic fallback (Name/Jabatan layout)"
+      ],
+      "textSnippet": "REKAP KEHADIRAN KARYAWAN GEMA TEKNIK PERKASA & TRIJI MITRA PERKASA JANUARI S/D DESEMBER 2025 Nama Bulan Januari Februari Maret April Mei Juni Ijin Sakit Cuti Ijin Sakit Cuti Ijin Sakit Cuti Ijin Sakit Cuti Ijin Sakit Cuti Ijin Sakit Cuti Pribadi Bersama Pribadi Bersama Pribadi Bersama Pribadi Bersama Pribadi Bersama Pribadi Bersama Ening 0 0 0 0 0 0 0 0 0 0 4 0 0 0 0 0 0 0 0 0 0 0 0 1 Angesti 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 Dewi 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 Gema 5 0 0 0 0 0 0 0 1 0 0 0 1 0 0 0 0 0 0 0 0 0 0 1 Aji 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 Soleh 1 0 0 0 0 0 0 0 2 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 Sarji 2 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 Ni'in 14 0 0 0 2 0 0 0 0 0 0 0 2 0 0 0 0 0 0 0 0 0 0 1 Deni 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 Abd. Rohman 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 Rifki 0 0 0 0 1 0 0 0 0 0 0 0 5 0 0 0 0 0 0 0 0 0 0 1 Agus 0 0 0 0 1 0 0 1 Nama Bulan Juli Agustus September Oktober November Desember Ijin Sakit Cuti Ijin Sakit Cuti Ijin Sakit Cuti Ijin Sakit Cuti Ijin Sakit Cuti Ijin Sakit Cuti Pribadi Bersama Pribadi Bersama Pribadi Bersama Pribadi Bersama Pribadi Bersama Pribadi Ber",
+      "excel": {
+        "sheets": [
+          "Sheet1"
+        ],
+        "selectedSheet": "Sheet1",
+        "headers": [],
+        "sampleRows": []
+      },
+      "normalized": {
+        "absensiTkJakon": {
+          "title": "Absensi (Cuti ijin Sakit)2025.xls (Basic Layout)",
+          "sourceSheet": "Sheet1",
+          "columns": [
+            "no",
+            "jenis_identitas",
+            "nomor_identitas",
+            "status",
+            "nama_lengkap",
+            "jenis_kelamin",
+            "tanggal_lahir",
+            "tempat_lahir",
+            "alamat_tinggal",
+            "nama_ibu_kandung",
+            "mulai_bekerja",
+            "no_hp",
+            "jenis_pekerjaan",
+            "nama_pekerjaan_lain"
+          ],
+          "rows": [
+            {
+              "no": 1,
+              "jenis_identitas": "",
+              "nomor_identitas": "",
+              "status": "",
+              "nama_lengkap": "Ening",
+              "jenis_kelamin": "",
+              "tanggal_lahir": "",
+              "tempat_lahir": "",
+              "alamat_tinggal": "",
+              "nama_ibu_kandung": "",
+              "mulai_bekerja": "",
+              "no_hp": "",
+              "jenis_pekerjaan": "",
+              "nama_pekerjaan_lain": ""
+            },
+            {
+              "no": 2,
+              "jenis_identitas": "",
+              "nomor_identitas": "",
+              "status": "",
+              "nama_lengkap": "Angesti",
+              "jenis_kelamin": "",
+              "tanggal_lahir": "",
+              "tempat_lahir": "",
+              "alamat_tinggal": "",
+              "nama_ibu_kandung": "",
+              "mulai_bekerja": "",
+              "no_hp": "",
+              "jenis_pekerjaan": "",
+              "nama_pekerjaan_lain": ""
+            },
+            {
+              "no": 3,
+              "jenis_identitas": "",
+              "nomor_identitas": "",
+              "status": "",
+              "nama_lengkap": "Dewi",
+              "jenis_kelamin": "",
+              "tanggal_lahir": "",
+              "tempat_lahir": "",
+              "alamat_tinggal": "",
+              "nama_ibu_kandung": "",
+              "mulai_bekerja": "",
+              "no_hp": "",
+              "jenis_pekerjaan": "",
+              "nama_pekerjaan_lain": ""
+            },
+            {
+              "no": 4,
+              "jenis_identitas": "",
+              "nomor_identitas": "",
+              "status": "",
+              "nama_lengkap": "Gema",
+              "jenis_kelamin": "",
+              "tanggal_lahir": "",
+              "tempat_lahir": "",
+              "alamat_tinggal": "",
+              "nama_ibu_kandung": "",
+              "mulai_bekerja": "",
+              "no_hp": "",
+              "jenis_pekerjaan": "",
+              "nama_pekerjaan_lain": ""
+            },
+            {
+              "no": 5,
+              "jenis_identitas": "",
+              "nomor_identitas": "",
+              "status": "",
+              "nama_lengkap": "Aji",
+              "jenis_kelamin": "",
+              "tanggal_lahir": "",
+              "tempat_lahir": "",
+              "alamat_tinggal": "",
+              "nama_ibu_kandung": "",
+              "mulai_bekerja": "",
+              "no_hp": "",
+              "jenis_pekerjaan": "",
+              "nama_pekerjaan_lain": ""
+            },
+            {
+              "no": 6,
+              "jenis_identitas": "",
+              "nomor_identitas": "",
+              "status": "",
+              "nama_lengkap": "Soleh",
+              "jenis_kelamin": "",
+              "tanggal_lahir": "",
+              "tempat_lahir": "",
+              "alamat_tinggal": "",
+              "nama_ibu_kandung": "",
+              "mulai_bekerja": "",
+              "no_hp": "",
+              "jenis_pekerjaan": "",
+              "nama_pekerjaan_lain": ""
+            },
+            {
+              "no": 7,
+              "jenis_identitas": "",
+              "nomor_identitas": "",
+              "status": "",
+              "nama_lengkap": "Sarji",
+              "jenis_kelamin": "",
+              "tanggal_lahir": "",
+              "tempat_lahir": "",
+              "alamat_tinggal": "",
+              "nama_ibu_kandung": "",
+              "mulai_bekerja": "",
+              "no_hp": "",
+              "jenis_pekerjaan": "",
+              "nama_pekerjaan_lain": ""
+            },
+            {
+              "no": 8,
+              "jenis_identitas": "",
+              "nomor_identitas": "",
+              "status": "",
+              "nama_lengkap": "Ni'in",
+              "jenis_kelamin": "",
+              "tanggal_lahir": "",
+              "tempat_lahir": "",
+              "alamat_tinggal": "",
+              "nama_ibu_kandung": "",
+              "mulai_bekerja": "",
+              "no_hp": "",
+              "jenis_pekerjaan": "",
+              "nama_pekerjaan_lain": ""
+            },
+            {
+              "no": 9,
+              "jenis_identitas": "",
+              "nomor_identitas": "",
+              "status": "",
+              "nama_lengkap": "Deni",
+              "jenis_kelamin": "",
+              "tanggal_lahir": "",
+              "tempat_lahir": "",
+              "alamat_tinggal": "",
+              "nama_ibu_kandung": "",
+              "mulai_bekerja": "",
+              "no_hp": "",
+              "jenis_pekerjaan": "",
+              "nama_pekerjaan_lain": ""
+            },
+            {
+              "no": 10,
+              "jenis_identitas": "",
+              "nomor_identitas": "",
+              "status": "",
+              "nama_lengkap": "Abd. Rohman",
+              "jenis_kelamin": "",
+              "tanggal_lahir": "",
+              "tempat_lahir": "",
+              "alamat_tinggal": "",
+              "nama_ibu_kandung": "",
+              "mulai_bekerja": "",
+              "no_hp": "",
+              "jenis_pekerjaan": "",
+              "nama_pekerjaan_lain": ""
+            },
+            {
+              "no": 11,
+              "jenis_identitas": "",
+              "nomor_identitas": "",
+              "status": "",
+              "nama_lengkap": "Rifki",
+              "jenis_kelamin": "",
+              "tanggal_lahir": "",
+              "tempat_lahir": "",
+              "alamat_tinggal": "",
+              "nama_ibu_kandung": "",
+              "mulai_bekerja": "",
+              "no_hp": "",
+              "jenis_pekerjaan": "",
+              "nama_pekerjaan_lain": ""
+            },
+            {
+              "no": 12,
+              "jenis_identitas": "",
+              "nomor_identitas": "",
+              "status": "",
+              "nama_lengkap": "Agus",
+              "jenis_kelamin": "",
+              "tanggal_lahir": "",
+              "tempat_lahir": "",
+              "alamat_tinggal": "",
+              "nama_ibu_kandung": "",
+              "mulai_bekerja": "",
+              "no_hp": "",
+              "jenis_pekerjaan": "",
+              "nama_pekerjaan_lain": ""
+            }
+          ],
+          "summary": {
+            "total_orang": 12,
+            "gender_count": {},
+            "pekerjaan_count": {
+              "UNKNOWN": 12
+            }
+          }
+        }
+      }
+    },
+    {
+      "sourceFile": "/Users/macbook/Downloads/data_pt_gema/clear/Grafik Penjualan 2025.xlsx",
+      "ext": ".xlsx",
+      "category": "laporan-penjualan",
+      "title": "Grafik Penjualan 2025.xlsx",
+      "fields": {
+        "fileName": "Grafik Penjualan 2025.xlsx"
+      },
+      "warnings": [
+        "Header row not confidently detected"
+      ],
+      "textSnippet": "GRAFIK PENJUALAN PT. GMT 2025 2025 Bulan Omzet Jan'25 3,984,352,534 Selisih Omzet 2024 & 2025 Feb'25 1,160,903,519 Jan'24 2,404,885,971 Mar'25 3,492,981,000 Feb'24 288,167,769 Apr'25 3,014,919,830 Mar'24 483,963,107 Mei'25 2,476,126,280 Apr'24 623,005,080 Juni'25 386,996,800 Mei'24 1,323,853,118 Juli'25 1,328,433,075 Juni'24 961,832,700 Agust'25 1,878,503,531 Juli'24 514,667,488 Sept'25 1,057,038,680 Agust'24 400,031,702 Okt'25 1,367,074,150 Sept'24 350,282,432 Nov'25 3,373,997,400 Okt'24 353,371,424 Des'25 Nov'24 2,811,425,900 TOTAL 23,521,326,799 Des'24 2024 Bulan Omzet Jan'24 1,579,466,563 Feb'24 872,735,750 Mar'24 3,009,017,893 Apr'24 2,391,914,750 Mei'24 1,152,273,162 Juni'24 1,348,829,500 Juli'24 1,843,100,563 Agust'24 1,478,471,829 Sept'24 1,407,321,112 s Okt'24 1,720,445,574 Nov'24 562,571,500 Des'24 4,654,358,574 TOTAL 22,020,506,770",
+      "excel": {
+        "sheets": [
+          "Grafik Batang Omset",
+          "Mortar M 36 Indoporlen "
+        ],
+        "selectedSheet": "Grafik Batang Omset",
+        "headers": [],
+        "sampleRows": []
+      }
+    },
+    {
+      "sourceFile": "/Users/macbook/Downloads/data_pt_gema/clear/Jan'25 310 Round Bar, Plat,.xlsx",
+      "ext": ".xlsx",
+      "category": "laporan-material",
+      "title": "Jan'25 310 Round Bar, Plat,.xlsx",
+      "fields": {
+        "fileName": "Jan'25 310 Round Bar, Plat,.xlsx"
+      },
+      "warnings": [],
+      "textSnippet": "STOCK MATERIAL PER 1 JANUARI 2024 Rp- GEMA TEKNIK NO NAMA MATERIAL SUPLLIER Stock Harga Keterangan Castable 1 Excelereed ABR Plus HWI 100 Kg Sample Sample 2 Calde Cast LR 68 Indopoerlen 975 Kg Rp11,500 Rp11,212,500 3 Calde Cast LR 25 Indopoerlen 1,125 Kg Rp7,100 Rp7,987,500 4 Calde Cast 40 TR Indopoerlen 25 Kg Rp29,560 Rp739,000 5 Eko Cast L-15 Mula 650 Kg Rp10,000 Rp6,500,000 6 Eko cast L-16 Mula 950 Kg Rp10,000 Rp9,500,000 7 Green Kleen 60 Plus HWI 750 Kg Rp21,700 Rp16,275,000 8 Ultra Express 80 HWI 325 Kg Rp17,500 Rp5,687,500 9 Mizou Plus HWI 350 Kg Rp14,000 Rp4,900,000 10 Green Cast 94 plus HWI 875 Kg Rp24,000 Rp21,000,000 11 KS 4 V Plus HWI 750 Kg Rp17,000 Rp12,750,000 12 Neocast Super Sic 30 Benteng Api 125 Kg Rp2,250 Rp281,250 13 Neocast Super Sic 60 Benteng Api 125 Kg Rp38,500 Rp4,812,500 14 Ekw L-16 Mula 350 Kg Rp6,500 Rp2,275,000 15 Eka Plast 80 B Mula 250 Kg Rp6,500 Rp1,625,000 16 Shiracrete 60 Shinagawa 125 Kg Rp13,000 Rp1,625,000 17 Caprax SC 30 LCF Cafrefindo 50 Kg Rp4,500 Rp225,000 18 Matriphost MMGD 100 Kg Rp48,000 Rp4,800,000 19 Tri Momolithic Morgan 75 Kg Rp- 20 C-16 BRS Indoporlen 100 Kg Rp- 21 Roram 68 Al 5 Indoporlen 250 Kg Rp- 22 Sentinel RC Plus HWI 100 Kg Rp",
+      "excel": {
+        "sheets": [
+          "Stock Jan 2024 ",
+          "SUS 310 Dia 5 mm ",
+          "SUS 310 Dia 6 mm",
+          "SUS 310 Dia 8mm",
+          "SUS 310 Dia 8mm Korea",
+          "SUS 310 Dia 10mm",
+          "SUS 310 Dia 10 mm Korea",
+          "SUS 310 Dia 12mm",
+          "SUS 310 Dia 16mm ",
+          "Sheet1",
+          "Baut 16",
+          "Baut 19",
+          "Plat streep 3x30x6000mm",
+          "Plat Galvanis 2mm 1200x2400",
+          "Plat ss 310 2mm ",
+          "Plat ss 310 3mm",
+          "Plat SS 310 5 mm ",
+          "Plat SS 310 6 mm)",
+          "Plat SS 310 12 mm",
+          "Mortar M 36 Indoporlen "
+        ],
+        "selectedSheet": "Stock Jan 2024 ",
+        "headers": [
+          "NO",
+          "NAMA MATERIAL",
+          "SUPLLIER",
+          "Stock",
+          "",
+          "Harga",
+          "Keterangan",
+          "",
+          "",
+          ""
+        ],
+        "sampleRows": [
+          {
+            "NO": "",
+            "NAMA MATERIAL": "Castable",
+            "SUPLLIER": "",
+            "Stock": "",
+            "Harga": "",
+            "Keterangan": ""
+          },
+          {
+            "NO": "1",
+            "NAMA MATERIAL": "Excelereed ABR Plus",
+            "SUPLLIER": "HWI",
+            "Stock": "100",
+            "Harga": "Sample",
+            "Keterangan": "Sample"
+          },
+          {
+            "NO": "2",
+            "NAMA MATERIAL": "Calde Cast LR 68",
+            "SUPLLIER": "Indopoerlen",
+            "Stock": "975",
+            "Harga": "Rp11,500",
+            "Keterangan": "Rp11,212,500"
+          },
+          {
+            "NO": "3",
+            "NAMA MATERIAL": "Calde Cast LR 25",
+            "SUPLLIER": "Indopoerlen",
+            "Stock": "1,125",
+            "Harga": "Rp7,100",
+            "Keterangan": "Rp7,987,500"
+          },
+          {
+            "NO": "4",
+            "NAMA MATERIAL": "Calde Cast 40 TR",
+            "SUPLLIER": "Indopoerlen",
+            "Stock": "25",
+            "Harga": "Rp29,560",
+            "Keterangan": "Rp739,000"
+          },
+          {
+            "NO": "5",
+            "NAMA MATERIAL": "Eko Cast L-15",
+            "SUPLLIER": "Mula",
+            "Stock": "650",
+            "Harga": "Rp10,000",
+            "Keterangan": "Rp6,500,000"
+          },
+          {
+            "NO": "6",
+            "NAMA MATERIAL": "Eko cast L-16",
+            "SUPLLIER": "Mula",
+            "Stock": "950",
+            "Harga": "Rp10,000",
+            "Keterangan": "Rp9,500,000"
+          }
+        ]
+      }
+    },
+    {
+      "sourceFile": "/Users/macbook/Downloads/data_pt_gema/clear/Jan'25 SUS 304 Round Bar, Plat,  Plat Strep.xlsx",
+      "ext": ".xlsx",
+      "category": "laporan-material",
+      "title": "Jan'25 SUS 304 Round Bar, Plat,  Plat Strep.xlsx",
+      "fields": {
+        "fileName": "Jan'25 SUS 304 Round Bar, Plat,  Plat Strep.xlsx"
+      },
+      "warnings": [],
+      "textSnippet": "STOCK MATERIAL PER 1 JANUARI 2024 Rp- GEMA TEKNIK NO NAMA MATERIAL SUPLLIER Stock Harga Keterangan Castable 1 Excelereed ABR Plus HWI 100 Kg Sample Sample 2 Calde Cast LR 68 Indopoerlen 975 Kg Rp11,500 Rp11,212,500 3 Calde Cast LR 25 Indopoerlen 1,125 Kg Rp7,100 Rp7,987,500 4 Calde Cast 40 TR Indopoerlen 25 Kg Rp29,560 Rp739,000 5 Eko Cast L-15 Mula 650 Kg Rp10,000 Rp6,500,000 6 Eko cast L-16 Mula 950 Kg Rp10,000 Rp9,500,000 7 Green Kleen 60 Plus HWI 750 Kg Rp21,700 Rp16,275,000 8 Ultra Express 80 HWI 325 Kg Rp17,500 Rp5,687,500 9 Mizou Plus HWI 350 Kg Rp14,000 Rp4,900,000 10 Green Cast 94 plus HWI 875 Kg Rp24,000 Rp21,000,000 11 KS 4 V Plus HWI 750 Kg Rp17,000 Rp12,750,000 12 Neocast Super Sic 30 Benteng Api 125 Kg Rp2,250 Rp281,250 13 Neocast Super Sic 60 Benteng Api 125 Kg Rp38,500 Rp4,812,500 14 Ekw L-16 Mula 350 Kg Rp6,500 Rp2,275,000 15 Eka Plast 80 B Mula 250 Kg Rp6,500 Rp1,625,000 16 Shiracrete 60 Shinagawa 125 Kg Rp13,000 Rp1,625,000 17 Caprax SC 30 LCF Cafrefindo 50 Kg Rp4,500 Rp225,000 18 Matriphost MMGD 100 Kg Rp48,000 Rp4,800,000 19 Tri Momolithic Morgan 75 Kg Rp- 20 C-16 BRS Indoporlen 100 Kg Rp- 21 Roram 68 Al 5 Indoporlen 250 Kg Rp- 22 Sentinel RC Plus HWI 100 Kg Rp",
+      "excel": {
+        "sheets": [
+          "Stock Jan 2024 ",
+          "Plat Streep SS 304 3x25x600mm",
+          "Plat Strep 5x25x6000mm",
+          "Plat Strep 5x50x6000mm",
+          "Plat Strep 6x25x6000mm",
+          "Plat Strep 8x25x6000mm",
+          "Plat Streep 5x40x6000",
+          "Carbon Steel 6 mm",
+          "Anchor Hexagonal mesh",
+          "SUS 304 Dia 5",
+          "SUS 304 Dia 6 Korea",
+          "SUS 304 Dia 8 Taiwan ",
+          "SUS 304 Dia 6",
+          "SUS 304 Dia 8 Korea",
+          "SUS 304 Dia 8",
+          "SUS 304 Dia 10",
+          "SUS 304 Dia 10 Korea",
+          "SUS 304 Dia 12",
+          "SUS 304 Dia 16",
+          "SUS 304 Dia 20",
+          "Nut 6 mm",
+          "Plat Inconel 2mm ",
+          "Plat SS 304 0,5x1200x2400mm",
+          "Plat SS 304 2 mm",
+          "Plat SS 304 3",
+          "Plat SS 304 4 mm ",
+          "Plat SS 304 5",
+          "Plat SS 304 2mm",
+          "Plat SS 304 4 mm",
+          "Plat SS 304 5 mm",
+          "Plat SS 304 10mm",
+          "Mortar M 36 Indoporlen "
+        ],
+        "selectedSheet": "Stock Jan 2024 ",
+        "headers": [
+          "NO",
+          "NAMA MATERIAL",
+          "SUPLLIER",
+          "Stock",
+          "",
+          "Harga",
+          "Keterangan",
+          "",
+          "",
+          ""
+        ],
+        "sampleRows": [
+          {
+            "NO": "",
+            "NAMA MATERIAL": "Castable",
+            "SUPLLIER": "",
+            "Stock": "",
+            "Harga": "",
+            "Keterangan": ""
+          },
+          {
+            "NO": "1",
+            "NAMA MATERIAL": "Excelereed ABR Plus",
+            "SUPLLIER": "HWI",
+            "Stock": "100",
+            "Harga": "Sample",
+            "Keterangan": "Sample"
+          },
+          {
+            "NO": "2",
+            "NAMA MATERIAL": "Calde Cast LR 68",
+            "SUPLLIER": "Indopoerlen",
+            "Stock": "975",
+            "Harga": "Rp11,500",
+            "Keterangan": "Rp11,212,500"
+          },
+          {
+            "NO": "3",
+            "NAMA MATERIAL": "Calde Cast LR 25",
+            "SUPLLIER": "Indopoerlen",
+            "Stock": "1,125",
+            "Harga": "Rp7,100",
+            "Keterangan": "Rp7,987,500"
+          },
+          {
+            "NO": "4",
+            "NAMA MATERIAL": "Calde Cast 40 TR",
+            "SUPLLIER": "Indopoerlen",
+            "Stock": "25",
+            "Harga": "Rp29,560",
+            "Keterangan": "Rp739,000"
+          },
+          {
+            "NO": "5",
+            "NAMA MATERIAL": "Eko Cast L-15",
+            "SUPLLIER": "Mula",
+            "Stock": "650",
+            "Harga": "Rp10,000",
+            "Keterangan": "Rp6,500,000"
+          },
+          {
+            "NO": "6",
+            "NAMA MATERIAL": "Eko cast L-16",
+            "SUPLLIER": "Mula",
+            "Stock": "950",
+            "Harga": "Rp10,000",
+            "Keterangan": "Rp9,500,000"
+          }
+        ]
+      }
+    },
+    {
+      "sourceFile": "/Users/macbook/Downloads/data_pt_gema/clear/Januari 2025 Stock Material Brick.xlsx",
+      "ext": ".xlsx",
+      "category": "laporan-material",
+      "title": "Januari 2025 Stock Material Brick.xlsx",
+      "fields": {
+        "fileName": "Januari 2025 Stock Material Brick.xlsx"
+      },
+      "warnings": [],
+      "textSnippet": "STOCK MATERIAL PER 1 JANUARI 2024 Rp- GEMA TEKNIK NO NAMA MATERIAL SUPLLIER Stock Harga Keterangan Castable 1 Excelereed ABR Plus HWI 100 Kg Sample Sample 2 Calde Cast LR 68 Indopoerlen 975 Kg Rp11,500 Rp11,212,500 3 Calde Cast LR 25 Indopoerlen 1,125 Kg Rp7,100 Rp7,987,500 4 Calde Cast 40 TR Indopoerlen 25 Kg Rp29,560 Rp739,000 5 Eko Cast L-15 Mula 650 Kg Rp10,000 Rp6,500,000 6 Eko cast L-16 Mula 950 Kg Rp10,000 Rp9,500,000 7 Green Kleen 60 Plus HWI 750 Kg Rp21,700 Rp16,275,000 8 Ultra Express 80 HWI 325 Kg Rp17,500 Rp5,687,500 9 Mizou Plus HWI 350 Kg Rp14,000 Rp4,900,000 10 Green Cast 94 plus HWI 875 Kg Rp24,000 Rp21,000,000 11 KS 4 V Plus HWI 750 Kg Rp17,000 Rp12,750,000 12 Neocast Super Sic 30 Benteng Api 125 Kg Rp2,250 Rp281,250 13 Neocast Super Sic 60 Benteng Api 125 Kg Rp38,500 Rp4,812,500 14 Ekw L-16 Mula 350 Kg Rp6,500 Rp2,275,000 15 Eka Plast 80 B Mula 250 Kg Rp6,500 Rp1,625,000 16 Shiracrete 60 Shinagawa 125 Kg Rp13,000 Rp1,625,000 17 Caprax SC 30 LCF Cafrefindo 50 Kg Rp4,500 Rp225,000 18 Matriphost MMGD 100 Kg Rp48,000 Rp4,800,000 19 Tri Momolithic Morgan 75 Kg Rp- 20 C-16 BRS Indoporlen 100 Kg Rp- 21 Roram 68 Al 5 Indoporlen 250 Kg Rp- 22 Sentinel RC Plus HWI 100 Kg Rp",
+      "excel": {
+        "sheets": [
+          "Stock Jan 2024 ",
+          "B1 300x300x65 Jarefu",
+          "B1 300x114x65-50",
+          "B1 Standar Jarefu",
+          "B3 Jarefu",
+          "C1 KW",
+          "SK 32 Jarefu",
+          "SK 34 Jarefu",
+          "SK 36 Jarefu ",
+          "SK 34 Y2",
+          "SK 36 Y3 Indoporlen ",
+          "SK -30 Y2",
+          "SK 34 Indoporlen ",
+          "Mortar M 36 Indoporlen "
+        ],
+        "selectedSheet": "Stock Jan 2024 ",
+        "headers": [
+          "NO",
+          "NAMA MATERIAL",
+          "SUPLLIER",
+          "Stock",
+          "",
+          "Harga",
+          "Keterangan",
+          "",
+          "",
+          ""
+        ],
+        "sampleRows": [
+          {
+            "NO": "",
+            "NAMA MATERIAL": "Castable",
+            "SUPLLIER": "",
+            "Stock": "",
+            "Harga": "",
+            "Keterangan": ""
+          },
+          {
+            "NO": "1",
+            "NAMA MATERIAL": "Excelereed ABR Plus",
+            "SUPLLIER": "HWI",
+            "Stock": "100",
+            "Harga": "Sample",
+            "Keterangan": "Sample"
+          },
+          {
+            "NO": "2",
+            "NAMA MATERIAL": "Calde Cast LR 68",
+            "SUPLLIER": "Indopoerlen",
+            "Stock": "975",
+            "Harga": "Rp11,500",
+            "Keterangan": "Rp11,212,500"
+          },
+          {
+            "NO": "3",
+            "NAMA MATERIAL": "Calde Cast LR 25",
+            "SUPLLIER": "Indopoerlen",
+            "Stock": "1,125",
+            "Harga": "Rp7,100",
+            "Keterangan": "Rp7,987,500"
+          },
+          {
+            "NO": "4",
+            "NAMA MATERIAL": "Calde Cast 40 TR",
+            "SUPLLIER": "Indopoerlen",
+            "Stock": "25",
+            "Harga": "Rp29,560",
+            "Keterangan": "Rp739,000"
+          },
+          {
+            "NO": "5",
+            "NAMA MATERIAL": "Eko Cast L-15",
+            "SUPLLIER": "Mula",
+            "Stock": "650",
+            "Harga": "Rp10,000",
+            "Keterangan": "Rp6,500,000"
+          },
+          {
+            "NO": "6",
+            "NAMA MATERIAL": "Eko cast L-16",
+            "SUPLLIER": "Mula",
+            "Stock": "950",
+            "Harga": "Rp10,000",
+            "Keterangan": "Rp9,500,000"
+          }
+        ]
+      }
+    },
+    {
+      "sourceFile": "/Users/macbook/Downloads/data_pt_gema/clear/Januari 2025 Stock Material Castable.xlsx",
+      "ext": ".xlsx",
+      "category": "laporan-material",
+      "title": "Januari 2025 Stock Material Castable.xlsx",
+      "fields": {
+        "fileName": "Januari 2025 Stock Material Castable.xlsx"
+      },
+      "warnings": [
+        "Header row not confidently detected"
+      ],
+      "textSnippet": "STOCK CASTABLE (MATERIAl LAMA) GEMA TEKNIK NO NAMA MATERIAL SUPLLIER Stock Castable 1 Green Kleen 60 Plus HWI 450 Kg 2 Shiracrete 120 Shinagwa 25 Kg 3 Ekw L-16 Mula 275 Kg 4 Shiracrete 60 Shinagawa 50 Kg 5 Tri Momolithic Morgan 75 Kg 6 C-16 BRS Indoporlen 100 Kg 7 Roram 68 Al 5 Indoporlen 250 Kg 8 Sentinel RC Plus HWI 100 Kg 9 Tufcrete 865 Indoporlen 850 KG",
+      "excel": {
+        "sheets": [
+          "Stock Material Lama",
+          "Stock Jan 2024 ",
+          "Sentinel RC Plus",
+          "Roram 68",
+          "Tri Monolithic ",
+          "C-16 BRS",
+          "Silcote ",
+          "Betack 1600S",
+          "IP Caostick ",
+          "IC 13 HS",
+          "Excelerate ABR  (2)",
+          "Silcast 1500",
+          "Grenlite 45 L Plus",
+          "Matriflo 84 HS ACX",
+          "Versagun",
+          "Kast O Lite 97 Plus",
+          "Versafllow",
+          "Armokast 80 Al C adtech",
+          "GreenCast 94",
+          "Matrigun 25 ACX",
+          "Green Kleen 60 Plus",
+          "LR 25",
+          "LR 68",
+          "Kast O Lite 26 Li CG ",
+          "Mizzzou GR Plus",
+          "Mizzzou Plus",
+          "Express 30 Plus",
+          "Shiracast 145",
+          "Shinaref 50 PS",
+          "Capram 70 CT ",
+          "Caprax 1750LCF ",
+          "Capscreed ",
+          "Matriphost 85 AC",
+          "Shiracast 16 gun",
+          "Amortech 65 AL",
+          "Quick Cast 861 ACX",
+          "LW 1300 Plus",
+          "Tufcrete 865",
+          "Shiralite 120 LW",
+          "Shiracrete 50 Kn ",
+          "Super Lw 124",
+          "Sheet1",
+          "Eco Kast L 15",
+          "Coral XL  Rusak)",
+          "Eco Kast L-16",
+          "C-17",
+          "Caprax SC 60",
+          "Mortar M 36",
+          "Coral CXL ",
+          "Mortar M 32",
+          "Mortar M 34",
+          "Mortar 80 SLP",
+          "Mortar N 10 P",
+          "Rigidizer",
+          "Mortar M 36 Indoporlen "
+        ],
+        "selectedSheet": "Stock Material Lama",
+        "headers": [],
+        "sampleRows": []
+      }
+    },
+    {
+      "sourceFile": "/Users/macbook/Downloads/data_pt_gema/clear/LAPORAN KEUANGAN 2025.xls",
+      "ext": ".xls",
+      "category": "laporan-keuangan",
+      "title": "LAPORAN KEUANGAN 2025.xls",
+      "fields": {
+        "fileName": "LAPORAN KEUANGAN 2025.xls"
+      },
+      "warnings": [
+        "Header row not confidently detected"
+      ],
+      "textSnippet": "LAPORAN KEUANGAN MANDIRI BU BOS MAR TAHUN 2025 MAR Saldo Awal Saldo Bulan Sebelumnya 92,893,094.18 Kas Masuk Kas Masuk dari Mandiri GMT 2,250,000,000.00 Kas Masuk dari Mandiri Ratna Sari 4,000,000.00 Kas Masuk dari BCA B'Sri - Kas Masuk dari Mandiri Emma 150,000.00 Kas Masuk dari BCA Siti Khoirunisa - Kas Masuk dari BTN Sri Supriharjanti 13,600,000.00 Kas Masuk dari Mandiri Lilis 550,000.00 Kas Masuk dari BCA Tati Herawati 1,000,000.00 Kas Masuk dari BCA Rozana 2,500,000.00 Kas Masuk dari BRI Nurhayati 525,000.00 Kas Masuk dari Mandiri Nyai Susanti 75,000.00 Bunga Rekening 7,236.88 Total Saldo 2,365,300,331.06 Pengeluaran : Beban Marketing, Iklan dan Promosi (FEE ) 192,414,730.00 Beban Gaji dan THR 341,656,631.00 Beban Pelatihan Karyawan 62,604,000.00 Beban listrik, Air dan Telepon 10,270,000.00 Beban Pemeliharaan dan perbaikan Kendaraan kantor 7,662,904.00 Beban Pemeliharaan dan perbaikan Peralatan kantor 12,932,500.00 Beban Alat-alat Tulis Kantor - Beban Transport 23,500,000.00 Beban Kesehatan Karyawan 2,286,493.00 Beban Ketenagakerjaan Karyawan 6,100,515.00 Beban Rumah Tangga Kantor 48,630,623.00 Beban Operational Direksi 121,067,169.38 Beban Material Project 966,942,658.50 Beba",
+      "excel": {
+        "sheets": [
+          "b'mar",
+          "b'feb",
+          "b'jan",
+          "b'apr",
+          "b'mei",
+          "b'jun",
+          "b'jul",
+          "b'ags",
+          "b'sep",
+          "b'ok",
+          "lap keu mandiri b'bos",
+          "gmt ap",
+          "gmt mar",
+          "gmt feb",
+          "gmt jan",
+          "gmt mei",
+          "gmt juni",
+          "gmt juli",
+          "GMT AGS",
+          "GMT SEP",
+          "GMT OKT",
+          "LAP KEUANGAN GMT",
+          "Sheet1"
+        ],
+        "selectedSheet": "b'mar",
+        "headers": [],
+        "sampleRows": []
+      }
+    },
+    {
+      "sourceFile": "/Users/macbook/Downloads/data_pt_gema/clear/LAPORAN KEWAJIBAN PT.GMT 2025.xlsx",
+      "ext": ".xlsx",
+      "category": "laporan-keuangan",
+      "title": "LAPORAN KEWAJIBAN PT.GMT 2025.xlsx",
+      "fields": {
+        "fileName": "LAPORAN KEWAJIBAN PT.GMT 2025.xlsx"
+      },
+      "warnings": [
+        "Header row not confidently detected"
+      ],
+      "textSnippet": "PT. GEMA TEKNIK PERKASA REKAP DATA HUTANG TAHUN 2022 No Periode Keterangan Jasa Anchor Material Sewa Alat Total 1 JANUARI 33,810,000 9,750,000 2,417,715,416 14,600,000 2,475,875,416 2 FEBRUARI 12,000,000 274,285,000 1,182,031,993 - 1,468,316,993 3 MARET 71,830,000 - 157,800,000 - 229,630,000 4 APRIL 25,000,000 - 2,385,953,740 - 2,410,953,740 5 MEI - - 213,920,500 - 213,920,500 6 JUNI 3,250,000 - 412,206,650 - 415,456,650 7 JULI 2,330,000 - 924,958,315 - 927,288,315 8 AGUSTUS - - 777,944,300 - 777,944,300 9 SEPTEMBER 145,600,000 52,046,500 137,618,875 - 335,265,375 10 OKTOBER 1,200,000 - 527,452,500 - 528,652,500 11 NOPEMBER 47,936,406 32,985,000 876,355,469 - 957,276,875 12 DESEMBER 91,900,000 12,000,000 3,178,322,500 - 3,282,222,500 TOTAL 434,856,406 381,066,500 13,192,280,258 14,600,000 14,022,803,164",
+      "excel": {
+        "sheets": [
+          "REKAP HUTANG",
+          "INV JANUARI",
+          "INV FEBRUARI",
+          "INV MARET",
+          "INV APRIL",
+          "INV MEI",
+          "INV JUNI",
+          "INV JULI",
+          "INV AGUSTUS",
+          "INV SEPTEMBER",
+          "INV OKTOBER",
+          "INV NOVEMBER",
+          "INV DESEMBER"
+        ],
+        "selectedSheet": "REKAP HUTANG",
+        "headers": [],
+        "sampleRows": []
+      }
+    },
+    {
+      "sourceFile": "/Users/macbook/Downloads/data_pt_gema/clear/LAPORAN SALES PPN PT.GMT 2025.xlsx",
+      "ext": ".xlsx",
+      "category": "laporan-penjualan",
+      "title": "LAPORAN SALES PPN PT.GMT 2025.xlsx",
+      "fields": {
+        "fileName": "LAPORAN SALES PPN PT.GMT 2025.xlsx"
+      },
+      "warnings": [
+        "Header row not confidently detected"
+      ],
+      "textSnippet": "PT. GEMA TEKNIK PERKASA REKAP DATA SALES PPN TAHUN 2025 No Periode Keterangan Jasa Anchor Material Sewa Alat Total 1 JANUARI 1,106,775,000 160,937,500 2,716,640,034 - 3,984,352,534 2 FEBRUARI 243,575,000 204,059,993 441,168,525 272,100,000 1,160,903,518 3 MARET 283,720,000 251,056,000 2,936,455,000 - 3,471,231,000 4 APRIL 1,306,533,000 304,829,500 1,093,257,330 310,300,000 3,014,919,830 5 MEI 1,011,453,350 235,111,850 323,524,520 - 1,570,089,720 6 JUNI 40,125,000 146,923,500 158,923,300 - 345,971,800 7 JULI 80,262,000 461,667,500 724,983,000 - 1,266,912,500 8 AGUSTUS 449,900,000 386,631,606 1,103,267,500 - 1,939,799,106 9 SEPTEMBER 449,300,000 416,661,800 190,025,000 1,200,000 1,057,186,800 10 OKTOBER 257,290,000 253,599,150 849,685,000 - 1,360,574,150 11 NOVEMBER 992,127,000 801,065,400 1,580,805,000 - 3,373,997,400 12 DESEMBER 385,600,000 175,061,750 5,887,625,313 - 6,448,287,063 27,922,575,488 SALES 2023 TOTAL 6,606,660,350 3,797,605,549 18,006,359,522 583,600,000 28,994,225,421 2,416,185,452 1,071,649,933 22,793,972,902 SALES 2024 3.70 6,200,252,519.00 27.20",
+      "excel": {
+        "sheets": [
+          "REKAP SALES",
+          "INV JANUARI",
+          "INV FEBRUARI",
+          "INV MARET",
+          "INV APRIL",
+          "INV MEI",
+          "INV JUNI",
+          "INV JULI",
+          "INV AGUSTUS",
+          "INV SEPTEMBER",
+          "INV OKTOBER",
+          "INV NOVEMBER",
+          "INV DESEMBER"
+        ],
+        "selectedSheet": "REKAP SALES",
+        "headers": [],
+        "sampleRows": []
+      }
+    },
+    {
+      "sourceFile": "/Users/macbook/Downloads/data_pt_gema/clear/MEMO PENGAMBILAN LORONG API PT. PAS BB4LH.doc",
+      "ext": ".doc",
+      "category": "bap",
+      "title": "MEMO PENGAMBILAN LORONG API PT. PAS BB4LH.doc",
+      "fields": {
+        "fileName": "MEMO PENGAMBILAN LORONG API PT. PAS BB4LH.doc",
+        "kepada": "PT. Prakarsa Alam Segar Di Bekasi Up/. Bapak Anang Dengan Hormat, Dengan surat ini kami kirimkan ken"
+      },
+      "warnings": [],
+      "textSnippet": "Bekasi, 24 Oktober 2025 Kepada Yth, PT. Prakarsa Alam Segar Di Bekasi Up/. Bapak Anang Dengan Hormat, Dengan surat ini kami kirimkan kendaraan kami : No Kendaraan : B 9880 FAW Nama Sopir : Abdul Rohman No. PO : 3510101323 Untuk mengambil : Furnace Stocker BB4LH sebanyak 1 Unit. Demikian terima kasih. PT. Gema Teknik Perkasa Syamsudin GEMA TEKNIK PERKASA General Suplier & Trading JL. Nurushoba II No 13 Setia Mekar Tambun Selatan Bekasi 17510 Phone : 085100420221 , 021.88354139 Fax : 021.88354139 Email : gemateknik@gmail.com"
+    },
+    {
+      "sourceFile": "/Users/macbook/Downloads/data_pt_gema/clear/Penawaran Equipment PT. Neotek Inovasi Global.xls",
+      "ext": ".xls",
+      "category": "penawaran",
+      "title": "Penawaran Harga Equipment Refractory",
+      "fields": {
+        "fileName": "Penawaran Equipment PT. Neotek Inovasi Global.xls",
+        "nomor": "607/PEN/GMT/XI/2025",
+        "perihal": "Penawaran Harga Equipment Refractory",
+        "kepada": "PT. Neotek Inovasi Global",
+        "grandTotal": 482850000
+      },
+      "warnings": [],
+      "textSnippet": "No : 607/PEN/GMT/XI/2025 Perihal : Penawaran Harga Equipment Refractory Kepada Yth , PT. Neotek Inovasi Global Di Tangerang U/P : Bapak Amri Dengan hormat, Sehubungan dengan permintaan Ibu/Bapak mengenai penawaran equipment refractory, maka dengan ini kami ajukan penawaran sbb : No Nama Barang Harga/unit Jumlah Total harga 1 WZ-3ER Shotcrete Machine Rp 350,000,000 1 Unit Rp 350,000,000 Include : - GZ-3ER Main Machine 1 Set - Pre-dampening Nozzle Assy 1 Set - Conveying Hose ID38mm 50ft. Lenght 1 Pcs - Double - double nozzle tip 2 pcs - Water Hose ID13, L=50m 1 pcs - Rubber Hose Joint ( Long ) 1 pcs - Rubber Hose Joint ( short ) 1 pcs - Quick Coupling 2 pcs - Upper Sealing Plate 1 pcs - Lower Sealing Plate 1 pcs - High Pressure Water Pump 1 set Electric Motor Driven : - Output Capacity 3m³ /h - Max. Horizontal Conveying Distance 200m - Suitable Mix Ratio (Cement/Sand) ≤1:3-5 - Max.Aggregate Size Ø10 mm - Conveying Hose Inner Diameter Ø38/Ø50mm - Conveying Pressure 0,2-0,4MPa(29-58PSI) - Air Consumption for conveying material 5-6m³/min (180-215CFM) - Material Charging Height 0,9m - Rotor Speed 14r/min - Motor Power 3kW(4hp),IP55 - Available Voltage 220V,380V,440V,660V 50Hz/60Hz - Over",
+      "excel": {
+        "sheets": [
+          "pen (6)"
+        ],
+        "selectedSheet": "pen (6)",
+        "headers": [
+          "No",
+          "Nama Barang",
+          "",
+          "",
+          "",
+          "Harga/unit",
+          "",
+          "Jumlah",
+          "",
+          "Total harga",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ],
+        "sampleRows": [
+          {
+            "No": "1",
+            "Nama Barang": "WZ-3ER Shotcrete Machine",
+            "Harga/unit": "Rp",
+            "Jumlah": "1",
+            "Total harga": "Rp"
+          },
+          {
+            "No": "",
+            "Nama Barang": "Include :",
+            "Harga/unit": "",
+            "Jumlah": "",
+            "Total harga": ""
+          },
+          {
+            "No": "",
+            "Nama Barang": "- GZ-3ER Main Machine 1 Set",
+            "Harga/unit": "",
+            "Jumlah": "",
+            "Total harga": ""
+          },
+          {
+            "No": "",
+            "Nama Barang": "- Pre-dampening Nozzle Assy 1 Set",
+            "Harga/unit": "",
+            "Jumlah": "",
+            "Total harga": ""
+          },
+          {
+            "No": "",
+            "Nama Barang": "- Conveying Hose ID38mm 50ft. Lenght 1 Pcs",
+            "Harga/unit": "",
+            "Jumlah": "",
+            "Total harga": ""
+          },
+          {
+            "No": "",
+            "Nama Barang": "- Double - double nozzle tip 2 pcs",
+            "Harga/unit": "",
+            "Jumlah": "",
+            "Total harga": ""
+          },
+          {
+            "No": "",
+            "Nama Barang": "- Water Hose ID13, L=50m 1 pcs",
+            "Harga/unit": "",
+            "Jumlah": "",
+            "Total harga": ""
+          }
+        ]
+      }
+    },
+    {
+      "sourceFile": "/Users/macbook/Downloads/data_pt_gema/clear/Penawaran Jasa PT. Halco Tehnik.xlsx",
+      "ext": ".xlsx",
+      "category": "penawaran",
+      "title": "Revisi Penawaran Harga Jasa Install Refractory Convection Box Assy 3-F-02 RU VII",
+      "fields": {
+        "fileName": "Penawaran Jasa PT. Halco Tehnik.xlsx",
+        "nomor": "11B/PEN/GMT/IV/2025",
+        "perihal": "Revisi Penawaran Harga Jasa Install Refractory Convection Box Assy 3-F-02 RU VII",
+        "kepada": "PT. Halco Tehnik",
+        "grandTotal": 89700000
+      },
+      "warnings": [],
+      "textSnippet": "No : 11B/PEN/GMT/IV/2025 Perihal : Revisi Penawaran Harga Jasa Install Refractory Convection Box Assy 3-F-02 RU VII Kepada Yth , PT. Halco Tehnik Di Bekasi U/P : Bapak Renaldi Dengan hormat, Sehubungan dengan rencana pekerjaan Install Refractory di PT. Halco Tehnik, maka dengan ini kami ajukan penawaran jasa kerja Install Refractory sebagai berikut : No Keterangan Harga/Unit Jumlah Total harga I Jasa Kerja 1 Jasa Pasang Refractory Rp 60,000,000 1 Lot Rp 60,000,000 Total I Rp 60,000,000 II Hand Tool & Safety Equipment 1 Hand Tool & Consumable Rp 2,500,000 1 Lot Rp 2,500,000 2 Begisting Rp 2,500,000 1 Lot Rp 2,500,000 3 Safety Equipment Rp 500,000 7 Orang Rp 3,500,000 Total II Rp 8,500,000 III Equipment 1 Mesin Mixer 1 Unit Rp 350,000 1 Hari Rp 350,000 2 Mesin Vibrator 2 Unit Rp 300,000 1 Hari Rp 300,000 3 Mesin Las 1 Unit Rp 150,000 1 Hari Rp 150,000 Total III Rp 800,000 IV Mob - Demob ( Manpower/Perlengkapan ) 1 Transport ManPower PP (2 kali PP) Rp 1,200,000 7 Org/PP Rp 8,400,000 2 Transport Equipment PP Rp 3,000,000 1 Lot Rp 3,000,000 Total IV Rp 11,400,000 V Akomodasi & Lokal Transport 1 Penginapan Rp 3,000,000 1 Lot Rp 3,000,000 2 Makan 7 Orang Rp 75,000 12 Hari Rp 6,300,000 Tot",
+      "excel": {
+        "sheets": [
+          "Penawaran Up (24)",
+          "Penawaran Up (23)",
+          "Penawaran Up (22)"
+        ],
+        "selectedSheet": "Penawaran Up (24)",
+        "headers": [
+          "No",
+          "Keterangan",
+          "",
+          "",
+          "",
+          "Harga/Unit",
+          "",
+          "Jumlah",
+          "",
+          "Total harga",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ],
+        "sampleRows": [
+          {
+            "No": "I",
+            "Keterangan": "Jasa Kerja",
+            "Harga/Unit": "",
+            "Jumlah": "",
+            "Total harga": ""
+          },
+          {
+            "No": "1",
+            "Keterangan": "Jasa Pasang Refractory",
+            "Harga/Unit": "Rp",
+            "Jumlah": "1",
+            "Total harga": "Rp"
+          },
+          {
+            "No": "",
+            "Keterangan": "",
+            "Harga/Unit": "",
+            "Jumlah": "Total I",
+            "Total harga": "Rp"
+          },
+          {
+            "No": "II",
+            "Keterangan": "Hand Tool & Safety Equipment",
+            "Harga/Unit": "",
+            "Jumlah": "",
+            "Total harga": ""
+          },
+          {
+            "No": "1",
+            "Keterangan": "Hand Tool & Consumable",
+            "Harga/Unit": "Rp",
+            "Jumlah": "1",
+            "Total harga": "Rp"
+          },
+          {
+            "No": "2",
+            "Keterangan": "Begisting",
+            "Harga/Unit": "Rp",
+            "Jumlah": "1",
+            "Total harga": "Rp"
+          },
+          {
+            "No": "3",
+            "Keterangan": "Safety Equipment",
+            "Harga/Unit": "Rp",
+            "Jumlah": "7",
+            "Total harga": "Rp"
+          }
+        ]
+      }
+    },
+    {
+      "sourceFile": "/Users/macbook/Downloads/data_pt_gema/clear/Penawaran Material PT. Halco Tehnik.xls",
+      "ext": ".xls",
+      "category": "penawaran",
+      "title": "Revisi Penawaran Harga Material Convection Box Assy 3-F-02 RU VII",
+      "fields": {
+        "fileName": "Penawaran Material PT. Halco Tehnik.xls",
+        "nomor": "12B/PEN/GMT/IV/2025",
+        "perihal": "Revisi Penawaran Harga Material Convection Box Assy 3-F-02 RU VII",
+        "kepada": "PT. Halco Tehnik",
+        "grandTotal": 85333950
+      },
+      "warnings": [],
+      "textSnippet": "No : 12B/PEN/GMT/IV/2025 Perihal : Revisi Penawaran Harga Material Convection Box Assy 3-F-02 RU VII Kepada Yth , PT. Halco Tehnik Di Bekasi U/P : Bapak Renaldi Dengan hormat, Sehubungan dengan permintaan penawaran harga material dari PT. Halco Tehnik, maka dengan ini kami ajukan penawaran harga material refractory sebagai berikut : No Keterangan Harga/Unit Jumlah Total harga I Material Refractory 1 LW 1300 Plus Rp 18,000 1,000 Kg Rp 18,000,000 2 Ceramic Fiber Blanket 1260o C (7200x610x25mm) Rp 625,000 9 Roll Rp 5,625,000 Density 128 Kg/M3 3 Ceramic Fiber Blanket 1260o C (3600x610x50mm) Rp 625,000 10 Roll Rp 6,250,000 Density 128 Kg/M3 4 Round Bar Stud SUS 304 Dia. 6x38mm + Nut + Washer Rp 29,500 660 Pcs Rp 19,470,000 5 Round Bar Stud SUS 304 Dia. 6x64mm + Nut + Washer Rp 30,500 54 Pcs Rp 1,647,000 6 Round Bar Stud SUS 304 Dia. 6x88mm + Nut + Washer Rp 33,000 502 Pcs Rp 16,566,000 7 Anchor SUS 304 Type V Dia. 6x75mm Rp 7,000 102 Pcs Rp 714,000 8 Rigidizer (20 Kg/Pail) Rp 2,750,000 7 Pail Rp 19,250,000 Total Rp 87,522,000 Kondisi Penawaran : Diskon 2.5% Rp 2,188,050 - Harga Franco Cilegon. Grand Total Rp 85,333,950 - DP 40% saat PO kami terima, sisanya setelah material dikirim. Pena",
+      "excel": {
+        "sheets": [
+          "Penawaran Material Up (20)",
+          "Penawaran Material Up (19)",
+          "Penawaran Material Up (18)"
+        ],
+        "selectedSheet": "Penawaran Material Up (20)",
+        "headers": [
+          "No",
+          "Keterangan",
+          "",
+          "Harga/Unit",
+          "",
+          "Jumlah",
+          "",
+          "Total harga",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ],
+        "sampleRows": [
+          {
+            "No": "I",
+            "Keterangan": "Material Refractory",
+            "Harga/Unit": "",
+            "Jumlah": "",
+            "Total harga": ""
+          },
+          {
+            "No": "1",
+            "Keterangan": "LW 1300 Plus",
+            "Harga/Unit": "Rp",
+            "Jumlah": "1,000",
+            "Total harga": "Rp"
+          },
+          {
+            "No": "2",
+            "Keterangan": "Ceramic Fiber Blanket 1260o C (7200x610x25mm)",
+            "Harga/Unit": "Rp",
+            "Jumlah": "9",
+            "Total harga": "Rp"
+          },
+          {
+            "No": "",
+            "Keterangan": "Density 128 Kg/M3",
+            "Harga/Unit": "",
+            "Jumlah": "",
+            "Total harga": ""
+          },
+          {
+            "No": "3",
+            "Keterangan": "Ceramic Fiber Blanket 1260o C (3600x610x50mm)",
+            "Harga/Unit": "Rp",
+            "Jumlah": "10",
+            "Total harga": "Rp"
+          },
+          {
+            "No": "",
+            "Keterangan": "Density 128 Kg/M3",
+            "Harga/Unit": "",
+            "Jumlah": "",
+            "Total harga": ""
+          },
+          {
+            "No": "4",
+            "Keterangan": "Round Bar Stud SUS 304 Dia. 6x38mm + Nut + Washer",
+            "Harga/Unit": "Rp",
+            "Jumlah": "660",
+            "Total harga": "Rp"
+          }
+        ]
+      }
+    },
+    {
+      "sourceFile": "/Users/macbook/Downloads/data_pt_gema/clear/RAB PT Daiki Lebaran.xlsx",
+      "ext": ".xlsx",
+      "category": "kasbon",
+      "title": "RAB PT Daiki Lebaran.xlsx",
+      "fields": {
+        "fileName": "RAB PT Daiki Lebaran.xlsx",
+        "tanggal": "07/03/2025"
+      },
+      "warnings": [
+        "Header row not confidently detected"
+      ],
+      "textSnippet": "RAB PT. DAIKI (LEBARAN ) JASA KERJA Hand Tool & Consumable SAFETY EQUIPMENT MOB - DEMOB Akomodasi Lain Lain Jumlah Bulan KETERANGAN CASH Jasa Coring Gaji Kasbon Consumable Hand Tool Begisting Safety Jackhammer Mixer Vibrator Mesin Las Cutting Brick Diamond Blade Man Power Equipment Penginapan Makan Transport Lokal Asuransi Pekerja MCU Biaya lain 07/03/2025 Beli 4 Roll Selang Vibrator 38x6M Rp4,400,000 Rp4,400,000 Beli 10 Lusin Masker Rp500,000 Rp500,000 Beli 100 Pcs Earplug Rp100,000 Rp100,000 Beli 104 Pcs Kacamata Rp1,560,000 Rp1,560,000 Beli 50 Lusin sarung Tangan Rp875,000 Rp875,000 Beli Lomh Moil Point 450mm F/TCA-7 (Mata Jackhammer TCA -7) Rp4,641,000 Rp4,641,000 Bei 3 Pcs M4 Moil Point Hex 25mm (mata Jackhammer Listrik) Rp1,845,000 Rp1,845,000 12/03/2025 Beli 10 Pcs Mata jackhammer TPB 60 Rp6,067,748 Rp6,067,748 17/03/2025 Beli 1 Unit Jigsaw (Makita 4327M) Rp1,075,000 Rp1,075,000 Beli 3 Unit Gerinda Tangan 4\" (Makita) Rp2,250,000 Rp2,250,000 18/03/2025 Beli 2 Lbr Plat Esser 12 ml Rp8,260,000 Rp8,260,000 Beli 5 Pcs Pin 3\"x2,5 Rp2,815,000 Rp2,815,000 Beli 4 Btg Siku 5x5 Rp90,000 Rp90,000 Beli 4 Dus Kawat Las 3,2 Rp600,000 Rp600,000 Beli 6 Pcs Cutting 14\" WD Rp270,000 Rp270,000 ",
+      "excel": {
+        "sheets": [
+          "Rab Jasa  ",
+          "Rab Material",
+          "Rab Compressor",
+          "Nota"
+        ],
+        "selectedSheet": "Rab Jasa  ",
+        "headers": [],
+        "sampleRows": []
+      }
+    },
+    {
+      "sourceFile": "/Users/macbook/Downloads/data_pt_gema/clear/SALDO PIUTANG  2025.xlsx",
+      "ext": ".xlsx",
+      "category": "invoice",
+      "title": "SALDO PIUTANG  2025.xlsx",
+      "fields": {
+        "fileName": "SALDO PIUTANG  2025.xlsx"
+      },
+      "warnings": [],
+      "textSnippet": "SALDO PIUTANG 2024 PT. GEMA TEKNIK PERKASA TANGGAL NO. INVOICE NAMA CUSTOMER NILAI AR JUMLAH 5-Apr-24 105/TAG/GMT/IV/2024 PT. Cemindo Gemilang Rp389,832,555 Rp420,912,555 24-Apr-24 114/TAG/GMT/IV/2024 PT. Cemindo Gemilang Rp15,540,000 17-May-24 144/TAG/GMT/V/2024 PT. Cemindo Gemilang Rp15,540,000 TOTAL AR 2024 Rp420,912,555",
+      "excel": {
+        "sheets": [
+          "2024",
+          "NOV",
+          "sep",
+          "AGS",
+          "JUL",
+          "JUN",
+          "2025",
+          "Sheet1"
+        ],
+        "selectedSheet": "2024",
+        "headers": [
+          "TANGGAL",
+          "NO. INVOICE",
+          "NAMA CUSTOMER",
+          "NILAI AR",
+          "JUMLAH"
+        ],
+        "sampleRows": [
+          {
+            "TANGGAL": "5-Apr-24",
+            "NO. INVOICE": "105/TAG/GMT/IV/2024",
+            "NAMA CUSTOMER": "PT. Cemindo Gemilang",
+            "NILAI AR": "Rp389,832,555",
+            "JUMLAH": "Rp420,912,555"
+          },
+          {
+            "TANGGAL": "24-Apr-24",
+            "NO. INVOICE": "114/TAG/GMT/IV/2024",
+            "NAMA CUSTOMER": "PT. Cemindo Gemilang",
+            "NILAI AR": "Rp15,540,000",
+            "JUMLAH": ""
+          },
+          {
+            "TANGGAL": "17-May-24",
+            "NO. INVOICE": "144/TAG/GMT/V/2024",
+            "NAMA CUSTOMER": "PT. Cemindo Gemilang",
+            "NILAI AR": "Rp15,540,000",
+            "JUMLAH": ""
+          },
+          {
+            "TANGGAL": "TOTAL AR 2024",
+            "NO. INVOICE": "",
+            "NAMA CUSTOMER": "",
+            "NILAI AR": "",
+            "JUMLAH": "Rp420,912,555"
+          }
+        ]
+      }
+    },
+    {
+      "sourceFile": "/Users/macbook/Downloads/data_pt_gema/clear/THL PT.GMT NOV'25.xlsx",
+      "ext": ".xlsx",
+      "category": "absensi",
+      "title": "THL PT.GMT NOV'25.xlsx",
+      "fields": {
+        "fileName": "THL PT.GMT NOV'25.xlsx",
+        "totalOrang": 2,
+        "titleAbsensi": "THL PT.GMT NOV'25.xlsx (THL Layout)"
+      },
+      "warnings": [
+        "Absensi mapper: using THL layout fallback"
+      ],
+      "textSnippet": "Nama THL : NIIN U. Makan : 38,000 /Hari Jabatan : HELPER Upah : 20,200 /Jam 36750 NO Tanggal Hari Ket ABSEN Mulai Selesai Istirahat Total Kerja (Jam) Kerja (Jam) Lembur (Jam) Lembur Index (Jam) Upah / Jam Upah (Rp) Lembur (Rp) Uang Makan (Rp) Jumlah 1 1-May-2025 Kamis Kerja 19:00 19:00 7:00 1 11 11 0 - 20,200 222,200 0 38,000 260,200 2 2-May-2025 Jumat Kerja 19:00 19:00 7:00 1 11 11 0 - 20,200 222,200 0 38,000 260,200 3 3-May-2025 Sabtu Kerja 19:00 19:00 7:00 1 11 11 0 - 20,200 222,200 0 38,000 260,200 4 4-May-2025 Minggu Kerja 19:00 19:00 7:00 1 11 11 0 - 20,200 222,200 0 38,000 260,200 5 5-May-2025 Senin Kerja 19:00 19:00 7:00 1 11 11 0 - 20,200 222,200 0 38,000 260,200 6 6-May-2025 Selasa Kerja 19:00 19:00 7:00 1 11 11 0 - 20,200 222,200 0 38,000 260,200 7 7-May-2025 Rabu Kerja 19:00 19:00 7:00 1 11 11 0 - 20,200 222,200 0 38,000 260,200 8 8-May-2025 Kamis Kerja 19:00 19:00 7:00 1 11 11 0 - 20,200 222,200 0 38,000 260,200 9 9-May-2025 Jumat Kerja 19:00 19:00 7:00 1 11 11 0 - 20,200 222,200 0 38,000 260,200 10 10-May-2025 Sabtu Kerja 19:00 19:00 7:00 1 11 11 0 - 20,200 222,200 0 38,000 260,200 11 11-May-2025 Minggu Kerja 19:00 19:00 7:00 1 11 11 0 - 20,200 222,200 0 38,000 260,20",
+      "excel": {
+        "sheets": [
+          "BREAK (2)",
+          "BREAK"
+        ],
+        "selectedSheet": "BREAK (2)",
+        "headers": [
+          "NO",
+          "Tanggal",
+          "Hari",
+          "Ket",
+          "ABSEN",
+          "Mulai",
+          "Selesai",
+          "Istirahat",
+          "Total Kerja (Jam)",
+          "Kerja (Jam)",
+          "Lembur (Jam)",
+          "Lembur Index (Jam)",
+          "Upah / Jam",
+          "Upah (Rp)",
+          "Lembur (Rp)",
+          "Uang Makan (Rp)",
+          "Jumlah",
+          "",
+          ""
+        ],
+        "sampleRows": [
+          {
+            "NO": "1",
+            "Tanggal": "1-May-2025",
+            "Hari": "Kamis",
+            "Ket": "Kerja",
+            "ABSEN": "19:00",
+            "Mulai": "19:00",
+            "Selesai": "7:00",
+            "Istirahat": "1",
+            "Total Kerja (Jam)": "11",
+            "Kerja (Jam)": "11",
+            "Lembur (Jam)": "0",
+            "Lembur Index (Jam)": "-",
+            "Upah / Jam": "20,200",
+            "Upah (Rp)": "222,200",
+            "Lembur (Rp)": "0",
+            "Uang Makan (Rp)": "38,000",
+            "Jumlah": "260,200"
+          },
+          {
+            "NO": "2",
+            "Tanggal": "2-May-2025",
+            "Hari": "Jumat",
+            "Ket": "Kerja",
+            "ABSEN": "19:00",
+            "Mulai": "19:00",
+            "Selesai": "7:00",
+            "Istirahat": "1",
+            "Total Kerja (Jam)": "11",
+            "Kerja (Jam)": "11",
+            "Lembur (Jam)": "0",
+            "Lembur Index (Jam)": "-",
+            "Upah / Jam": "20,200",
+            "Upah (Rp)": "222,200",
+            "Lembur (Rp)": "0",
+            "Uang Makan (Rp)": "38,000",
+            "Jumlah": "260,200"
+          },
+          {
+            "NO": "3",
+            "Tanggal": "3-May-2025",
+            "Hari": "Sabtu",
+            "Ket": "Kerja",
+            "ABSEN": "19:00",
+            "Mulai": "19:00",
+            "Selesai": "7:00",
+            "Istirahat": "1",
+            "Total Kerja (Jam)": "11",
+            "Kerja (Jam)": "11",
+            "Lembur (Jam)": "0",
+            "Lembur Index (Jam)": "-",
+            "Upah / Jam": "20,200",
+            "Upah (Rp)": "222,200",
+            "Lembur (Rp)": "0",
+            "Uang Makan (Rp)": "38,000",
+            "Jumlah": "260,200"
+          },
+          {
+            "NO": "4",
+            "Tanggal": "4-May-2025",
+            "Hari": "Minggu",
+            "Ket": "Kerja",
+            "ABSEN": "19:00",
+            "Mulai": "19:00",
+            "Selesai": "7:00",
+            "Istirahat": "1",
+            "Total Kerja (Jam)": "11",
+            "Kerja (Jam)": "11",
+            "Lembur (Jam)": "0",
+            "Lembur Index (Jam)": "-",
+            "Upah / Jam": "20,200",
+            "Upah (Rp)": "222,200",
+            "Lembur (Rp)": "0",
+            "Uang Makan (Rp)": "38,000",
+            "Jumlah": "260,200"
+          },
+          {
+            "NO": "5",
+            "Tanggal": "5-May-2025",
+            "Hari": "Senin",
+            "Ket": "Kerja",
+            "ABSEN": "19:00",
+            "Mulai": "19:00",
+            "Selesai": "7:00",
+            "Istirahat": "1",
+            "Total Kerja (Jam)": "11",
+            "Kerja (Jam)": "11",
+            "Lembur (Jam)": "0",
+            "Lembur Index (Jam)": "-",
+            "Upah / Jam": "20,200",
+            "Upah (Rp)": "222,200",
+            "Lembur (Rp)": "0",
+            "Uang Makan (Rp)": "38,000",
+            "Jumlah": "260,200"
+          },
+          {
+            "NO": "6",
+            "Tanggal": "6-May-2025",
+            "Hari": "Selasa",
+            "Ket": "Kerja",
+            "ABSEN": "19:00",
+            "Mulai": "19:00",
+            "Selesai": "7:00",
+            "Istirahat": "1",
+            "Total Kerja (Jam)": "11",
+            "Kerja (Jam)": "11",
+            "Lembur (Jam)": "0",
+            "Lembur Index (Jam)": "-",
+            "Upah / Jam": "20,200",
+            "Upah (Rp)": "222,200",
+            "Lembur (Rp)": "0",
+            "Uang Makan (Rp)": "38,000",
+            "Jumlah": "260,200"
+          },
+          {
+            "NO": "7",
+            "Tanggal": "7-May-2025",
+            "Hari": "Rabu",
+            "Ket": "Kerja",
+            "ABSEN": "19:00",
+            "Mulai": "19:00",
+            "Selesai": "7:00",
+            "Istirahat": "1",
+            "Total Kerja (Jam)": "11",
+            "Kerja (Jam)": "11",
+            "Lembur (Jam)": "0",
+            "Lembur Index (Jam)": "-",
+            "Upah / Jam": "20,200",
+            "Upah (Rp)": "222,200",
+            "Lembur (Rp)": "0",
+            "Uang Makan (Rp)": "38,000",
+            "Jumlah": "260,200"
+          }
+        ]
+      },
+      "normalized": {
+        "absensiTkJakon": {
+          "title": "THL PT.GMT NOV'25.xlsx (THL Layout)",
+          "sourceSheet": "BREAK (2)",
+          "columns": [
+            "no",
+            "jenis_identitas",
+            "nomor_identitas",
+            "status",
+            "nama_lengkap",
+            "jenis_kelamin",
+            "tanggal_lahir",
+            "tempat_lahir",
+            "alamat_tinggal",
+            "nama_ibu_kandung",
+            "mulai_bekerja",
+            "no_hp",
+            "jenis_pekerjaan",
+            "nama_pekerjaan_lain"
+          ],
+          "rows": [
+            {
+              "no": 1,
+              "jenis_identitas": "",
+              "nomor_identitas": "",
+              "status": "",
+              "nama_lengkap": "NIIN",
+              "jenis_kelamin": "",
+              "tanggal_lahir": "",
+              "tempat_lahir": "",
+              "alamat_tinggal": "",
+              "nama_ibu_kandung": "",
+              "mulai_bekerja": "",
+              "no_hp": "",
+              "jenis_pekerjaan": "",
+              "nama_pekerjaan_lain": "HELPER"
+            },
+            {
+              "no": 2,
+              "jenis_identitas": "",
+              "nomor_identitas": "",
+              "status": "",
+              "nama_lengkap": "DIRJA",
+              "jenis_kelamin": "",
+              "tanggal_lahir": "",
+              "tempat_lahir": "",
+              "alamat_tinggal": "",
+              "nama_ibu_kandung": "",
+              "mulai_bekerja": "",
+              "no_hp": "",
+              "jenis_pekerjaan": "",
+              "nama_pekerjaan_lain": "HELPER"
+            }
+          ],
+          "summary": {
+            "total_orang": 2,
+            "gender_count": {},
+            "pekerjaan_count": {
+              "HELPER": 2
+            }
+          }
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,1948 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  OWNER
+  SPV
+  ADMIN
+  MANAGER
+  HR
+  PURCHASING
+  USER
+  PRODUKSI
+  SALES
+  FINANCE
+  SUPPLY_CHAIN
+  WAREHOUSE
+  OPERATIONS
+}
+
+model User {
+  id       String  @id @default(uuid())
+  email    String  @unique
+  username String  @unique
+  name     String?
+  phone    String?
+  password String
+  role     Role
+  isActive Boolean @default(true)
+  lastLoginAt DateTime?
+  appSettings AppSettingRecord[]
+  auditLogEntries AuditLogEntry[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model AppEntity {
+  id        String   @id @default(uuid())
+  resource  String
+  entityId  String
+  payload   Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([resource, entityId])
+  @@index([resource])
+}
+
+model Quotation {
+  id               String          @id
+  noPenawaran      String?
+  tanggal          String?
+  status           String?
+  kepada           String?
+  perihal          String?
+  grandTotal       Float?
+  dataCollectionId String?
+  dataCollection   DataCollection? @relation(fields: [dataCollectionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  projects         ProjectRecord[]
+  payload          Json
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  @@index([status])
+  @@index([dataCollectionId])
+  @@index([updatedAt])
+}
+
+model DataCollection {
+  id            String      @id
+  namaResponden String?
+  lokasi        String?
+  tipePekerjaan String?
+  status        String?
+  tanggalSurvey String?
+  payload       Json
+  quotations    Quotation[]
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@index([status])
+  @@index([updatedAt])
+}
+
+model ProjectRecord {
+  id                   String                      @id
+  quotationId          String?
+  customerId           String?
+  payload              Json
+  quotation            Quotation?                  @relation(fields: [quotationId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  customer             CustomerRecord?             @relation(fields: [customerId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  purchaseOrders       PurchaseOrderRecord[]
+  receivings           ReceivingRecord[]
+  workOrders           WorkOrderRecord[]
+  productionReports    ProductionReportRecord[]
+  productionTrackers   ProductionTrackerRecord[]
+  qcInspections        QcInspectionRecord[]
+  materialRequests     MaterialRequestRecord[]
+  spkRecords           SpkRecord[]
+  suratJalan           SuratJalanRecord[]
+  beritaAcara          BeritaAcaraRecord[]
+  suratMasuk           SuratMasukRecord[]
+  suratKeluar          SuratKeluarRecord[]
+  invoices             InvoiceRecord[]
+  attendances          AttendanceRecord[]
+  customerInvoices     CustomerInvoiceRecord[]
+  vendorExpenses       VendorExpenseRecord[]
+  vendorInvoices       VendorInvoiceRecord[]
+  workingExpenseSheets WorkingExpenseSheetRecord[]
+  stockMovements       StockMovementRecord[]
+  stockIns             StockInRecord[]
+  stockOuts            StockOutRecord[]
+  assets               AssetRecord[]
+  maintenances         MaintenanceRecord[]
+  financePoPayments    FinancePoPaymentRecord[]
+  financeBankReconciliations FinanceBankReconciliationRecord[]
+  financePettyCashTransactions FinancePettyCashTransactionRecord[]
+  fleetHealthEntries   FleetHealthEntry[]
+  proofsOfDelivery     ProofOfDeliveryRecord[]
+  kasbons              KasbonRecord[]
+  financeWorkingExpenseSheets FinanceWorkingExpenseSheet[]
+  financeBankReconciliationEntries FinanceBankReconciliation[]
+  financePettyCashEntries FinancePettyCashTransaction[]
+  hrKasbonEntries      HrKasbon[]
+  inventoryStockIns    InventoryStockIn[]
+  inventoryStockOuts   InventoryStockOut[]
+  inventoryMovements   InventoryStockMovement[]
+  productionWorkOrders ProductionWorkOrder[]
+  productionExecutionReports ProductionExecutionReport[]
+  productionTrackerEntries ProductionTrackerEntry[]
+  productionQcInspections ProductionQcInspection[]
+  productionMaterialRequests ProductionMaterialRequest[]
+  logisticsSuratJalan  LogisticsSuratJalan[]
+  logisticsProofsOfDelivery LogisticsProofOfDelivery[]
+  projectBeritaAcara   ProjectBeritaAcara[]
+  projectSpkRecords    ProjectSpkRecord[]
+  procurementPurchaseOrders ProcurementPurchaseOrder[]
+  procurementReceivings ProcurementReceiving[]
+  financeCustomerInvoices FinanceCustomerInvoice[]
+  financeVendorExpenses FinanceVendorExpense[]
+  financeVendorInvoices FinanceVendorInvoice[]
+  createdAt            DateTime                    @default(now())
+  updatedAt            DateTime                    @updatedAt
+
+  @@index([quotationId])
+  @@index([customerId])
+  @@index([updatedAt])
+}
+
+model RevokedToken {
+  id        String   @id @default(uuid())
+  jti       String   @unique
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model ProjectApprovalLog {
+  id          String   @id @default(uuid())
+  projectId   String
+  action      String
+  actorUserId String?
+  actorRole   Role?
+  fromStatus  String?
+  toStatus    String?
+  reason      String?
+  metadata    Json?
+  createdAt   DateTime @default(now())
+
+  @@index([projectId, createdAt])
+  @@index([action])
+}
+
+model QuotationApprovalLog {
+  id          String   @id @default(uuid())
+  quotationId String
+  action      String
+  actorUserId String?
+  actorRole   Role?
+  fromStatus  String?
+  toStatus    String?
+  reason      String?
+  metadata    Json?
+  createdAt   DateTime @default(now())
+
+  @@index([quotationId, createdAt])
+  @@index([action])
+}
+
+model EmployeeRecord {
+  id          String             @id
+  employeeId  String
+  name        String
+  identityType String?
+  identityNumber String?
+  familyStatusCode String?
+  gender      String?
+  birthDate   String?
+  birthPlace  String?
+  motherName  String?
+  occupationTypeCode String?
+  occupationName String?
+  alternativeOccupationName String?
+  startWorkDate String?
+  position    String
+  department  String
+  employmentType String
+  joinDate    String
+  endDate     String?
+  email       String?
+  phone       String?
+  address     String?
+  emergencyContact String?
+  emergencyPhone String?
+  salary      Float?
+  status      String
+  bank        String?
+  bankAccount String?
+  npwp        String?
+  bpjsKesehatan String?
+  bpjsKetenagakerjaan String?
+  leaveQuota  Float?
+  attendances AttendanceRecord[]
+  payrolls    PayrollRecord[]
+  kasbons     KasbonRecord[]
+  financePettyCashTransactions FinancePettyCashTransactionRecord[]
+  financePettyCashEntries FinancePettyCashTransaction[]
+  hrKasbonEntries HrKasbon[]
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  @@index([employeeId])
+  @@index([name])
+  @@index([department])
+  @@index([status])
+}
+
+model AttendanceRecord {
+  id           String         @id
+  employeeId   String
+  projectId    String?
+  employeeName String
+  date         String
+  status       String
+  checkIn      String?
+  checkOut     String?
+  workHours    Float?
+  overtime     Float?
+  location     String?
+  notes        String?
+  employee     EmployeeRecord @relation(fields: [employeeId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  project      ProjectRecord? @relation(fields: [projectId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  @@index([employeeId])
+  @@index([projectId])
+  @@index([date])
+  @@index([status])
+}
+
+model StockItemRecord {
+  id        String   @id
+  payload   Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model StockMovementRecord {
+  id        String         @id
+  projectId String?
+  payload   Json
+  project   ProjectRecord? @relation(fields: [projectId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  @@index([projectId])
+}
+
+model StockInRecord {
+  id        String               @id
+  poId      String?
+  projectId String?
+  payload   Json
+  po        PurchaseOrderRecord? @relation(fields: [poId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  project   ProjectRecord?       @relation(fields: [projectId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  createdAt DateTime             @default(now())
+  updatedAt DateTime             @updatedAt
+
+  @@index([poId])
+  @@index([projectId])
+}
+
+model StockOutRecord {
+  id          String           @id
+  projectId   String?
+  workOrderId String?
+  payload     Json
+  project     ProjectRecord?   @relation(fields: [projectId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  workOrder   WorkOrderRecord? @relation(fields: [workOrderId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  @@index([projectId])
+  @@index([workOrderId])
+}
+
+model StockOpnameRecord {
+  id        String   @id
+  payload   Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model InventoryItem {
+  id                String                   @id
+  code              String                   @unique
+  name              String
+  category          String
+  unit              String
+  location          String
+  minStock          Float                    @default(0)
+  onHandQty         Float                    @default(0)
+  reservedQty       Float                    @default(0)
+  onOrderQty        Float                    @default(0)
+  unitPrice         Float?
+  supplierName      String?
+  status            String?
+  lastStockUpdateAt DateTime?
+  metadata          Json?
+  stockInItems      InventoryStockInItem[]
+  stockOutItems     InventoryStockOutItem[]
+  movementRows      InventoryStockMovement[]
+  opnameItems       InventoryStockOpnameItem[]
+  createdAt         DateTime                 @default(now())
+  updatedAt         DateTime                 @updatedAt
+
+  @@index([category])
+  @@index([location])
+  @@index([supplierName])
+}
+
+model InventoryStockIn {
+  id                String                  @id
+  number            String                  @unique
+  tanggal           DateTime
+  type              String
+  status            String
+  supplierName      String?
+  suratJalanNumber  String?
+  notes             String?
+  createdByName     String?
+  poId              String?
+  projectId         String?
+  legacyPayload     Json?
+  po                PurchaseOrderRecord?    @relation(fields: [poId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  project           ProjectRecord?          @relation(fields: [projectId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  items             InventoryStockInItem[]
+  movementRows      InventoryStockMovement[]
+  createdAt         DateTime                @default(now())
+  updatedAt         DateTime                @updatedAt
+
+  @@index([tanggal])
+  @@index([status])
+  @@index([poId])
+  @@index([projectId])
+}
+
+model InventoryStockInItem {
+  id              String            @id
+  stockInId       String
+  inventoryItemId String?
+  itemCode        String
+  itemName        String
+  qty             Float
+  unit            String
+  batchNo         String?
+  expiryDate      DateTime?
+  notes           String?
+  stockIn         InventoryStockIn  @relation(fields: [stockInId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  inventoryItem   InventoryItem?    @relation(fields: [inventoryItemId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+
+  @@index([stockInId])
+  @@index([inventoryItemId])
+  @@index([itemCode])
+}
+
+model InventoryStockOut {
+  id                String                   @id
+  number            String                   @unique
+  tanggal           DateTime
+  type              String
+  status            String
+  recipientName     String?
+  notes             String?
+  createdByName     String?
+  projectId         String?
+  workOrderId       String?
+  productionReportId String?
+  legacyPayload     Json?
+  project           ProjectRecord?           @relation(fields: [projectId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  workOrder         WorkOrderRecord?         @relation(fields: [workOrderId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  items             InventoryStockOutItem[]
+  movementRows      InventoryStockMovement[]
+  createdAt         DateTime                 @default(now())
+  updatedAt         DateTime                 @updatedAt
+
+  @@index([tanggal])
+  @@index([status])
+  @@index([projectId])
+  @@index([workOrderId])
+}
+
+model InventoryStockOutItem {
+  id              String             @id
+  stockOutId      String
+  inventoryItemId String?
+  itemCode        String
+  itemName        String
+  qty             Float
+  unit            String
+  batchNo         String?
+  notes           String?
+  stockOut        InventoryStockOut  @relation(fields: [stockOutId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  inventoryItem   InventoryItem?     @relation(fields: [inventoryItemId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+
+  @@index([stockOutId])
+  @@index([inventoryItemId])
+  @@index([itemCode])
+}
+
+model InventoryStockMovement {
+  id             String              @id
+  tanggal        DateTime
+  direction      String
+  referenceNo    String
+  referenceType  String
+  inventoryItemId String?
+  itemCode       String
+  itemName       String
+  qty            Float
+  unit           String
+  location       String
+  stockBefore    Float
+  stockAfter     Float
+  batchNo        String?
+  expiryDate     DateTime?
+  supplierName   String?
+  poNumber       String?
+  createdByName  String?
+  projectId      String?
+  stockInId      String?
+  stockOutId     String?
+  stockOpnameId  String?
+  legacyPayload  Json?
+  inventoryItem  InventoryItem?      @relation(fields: [inventoryItemId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  project        ProjectRecord?      @relation(fields: [projectId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  stockIn        InventoryStockIn?   @relation(fields: [stockInId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  stockOut       InventoryStockOut?  @relation(fields: [stockOutId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  stockOpname    InventoryStockOpname? @relation(fields: [stockOpnameId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+
+  @@index([tanggal])
+  @@index([inventoryItemId])
+  @@index([projectId])
+  @@index([stockInId])
+  @@index([stockOutId])
+  @@index([stockOpnameId])
+  @@index([referenceNo])
+}
+
+model InventoryStockOpname {
+  id              String                    @id
+  number          String                    @unique
+  tanggal         DateTime
+  location        String
+  status          String
+  notes           String?
+  createdByName   String?
+  confirmedByName String?
+  confirmedAt     DateTime?
+  legacyPayload   Json?
+  items           InventoryStockOpnameItem[]
+  movementRows    InventoryStockMovement[]
+  createdAt       DateTime                  @default(now())
+  updatedAt       DateTime                  @updatedAt
+
+  @@index([tanggal])
+  @@index([location])
+  @@index([status])
+}
+
+model InventoryStockOpnameItem {
+  id              String                @id
+  stockOpnameId   String
+  inventoryItemId String?
+  itemCode        String
+  itemName        String
+  systemQty       Float
+  physicalQty     Float
+  differenceQty   Float
+  notes           String?
+  stockOpname     InventoryStockOpname  @relation(fields: [stockOpnameId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  inventoryItem   InventoryItem?        @relation(fields: [inventoryItemId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+
+  @@index([stockOpnameId])
+  @@index([inventoryItemId])
+  @@index([itemCode])
+}
+
+model InvoiceRecord {
+  id         String          @id
+  projectId  String?
+  customerId String?
+  noInvoice  String
+  tanggal    String
+  jatuhTempo String
+  customer   String
+  customerName String?
+  alamat     String
+  noPO       String
+  subtotal   Float
+  ppn        Float
+  totalBayar Float
+  paidAmount Float           @default(0)
+  outstandingAmount Float    @default(0)
+  status     String
+  projectName String?
+  noFakturPajak String?
+  perihal    String?
+  termin     String?
+  buktiTransfer String?
+  noKwitansi String?
+  tanggalBayar String?
+  project    ProjectRecord?  @relation(fields: [projectId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  customerRef CustomerRecord? @relation(fields: [customerId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  items      InvoiceItem[]
+  bankReconciliations FinanceBankReconciliationRecord[]
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
+
+  @@index([projectId])
+  @@index([customerId])
+  @@index([status])
+  @@index([tanggal])
+}
+
+model InvoiceItem {
+  id          String        @id @default(uuid())
+  invoiceId   String
+  deskripsi   String
+  qty         Float
+  unit        String
+  hargaSatuan Float
+  total       Float
+  sourceRef   String?
+  batchNo     String?
+  invoice     InvoiceRecord @relation(fields: [invoiceId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@index([invoiceId])
+}
+
+model PurchaseOrderRecord {
+  id              String                   @id
+  projectId       String?
+  vendorId        String?
+  payload         Json
+  project         ProjectRecord?           @relation(fields: [projectId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  vendor          VendorRecord?            @relation(fields: [vendorId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  receivings      ReceivingRecord[]
+  stockIns        StockInRecord[]
+  inventoryStockIns InventoryStockIn[]
+  financePayments FinancePoPaymentRecord[]
+  createdAt       DateTime                 @default(now())
+  updatedAt       DateTime                 @updatedAt
+
+  @@index([projectId])
+  @@index([vendorId])
+}
+
+model ProcurementPurchaseOrder {
+  id              String                     @id
+  projectId       String?
+  vendorId        String?
+  number          String
+  tanggal         DateTime
+  supplierName    String
+  supplierAddress String?
+  supplierPhone   String?
+  supplierFax     String?
+  supplierContact String?
+  attention       String?
+  notes           String?
+  ppnRate         Float                      @default(0)
+  topDays         Int                        @default(0)
+  ref             String?
+  poCode          String?
+  deliveryDate    DateTime?
+  signatoryName   String?
+  totalAmount     Float                      @default(0)
+  status          String
+  project         ProjectRecord?             @relation(fields: [projectId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  vendor          VendorRecord?              @relation(fields: [vendorId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  items           ProcurementPurchaseOrderItem[]
+  receivings      ProcurementReceiving[]
+  vendorInvoices  FinanceVendorInvoice[]
+  createdAt       DateTime                   @default(now())
+  updatedAt       DateTime                   @updatedAt
+
+  @@index([projectId])
+  @@index([vendorId])
+  @@index([status])
+  @@index([tanggal])
+}
+
+model ProcurementPurchaseOrderItem {
+  id              String                   @id
+  purchaseOrderId String
+  itemCode        String?
+  itemName        String
+  qty             Float                    @default(0)
+  unit            String
+  unitPrice       Float                    @default(0)
+  total           Float                    @default(0)
+  qtyReceived     Float                    @default(0)
+  source          String?
+  sourceRef       String?
+  purchaseOrder   ProcurementPurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@index([purchaseOrderId])
+  @@index([itemCode])
+}
+
+model ReceivingRecord {
+  id        String               @id
+  poId      String
+  projectId String?
+  payload   Json
+  po        PurchaseOrderRecord  @relation(fields: [poId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  project   ProjectRecord?       @relation(fields: [projectId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  createdAt DateTime             @default(now())
+  updatedAt DateTime             @updatedAt
+
+  @@index([poId])
+  @@index([projectId])
+}
+
+model ProcurementReceiving {
+  id              String                   @id
+  purchaseOrderId String
+  projectId       String?
+  number          String
+  suratJalanNo    String?
+  suratJalanPhoto String?
+  tanggal         DateTime
+  purchaseOrderNo String?
+  supplierName    String
+  projectName     String?
+  status          String
+  warehouseLocation String?
+  notes           String?
+  purchaseOrder   ProcurementPurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  project         ProjectRecord?           @relation(fields: [projectId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  items           ProcurementReceivingItem[]
+  createdAt       DateTime                 @default(now())
+  updatedAt       DateTime                 @updatedAt
+
+  @@index([purchaseOrderId])
+  @@index([projectId])
+  @@index([status])
+  @@index([tanggal])
+}
+
+model ProcurementReceivingItem {
+  id                String              @id
+  receivingId       String
+  itemCode          String?
+  itemName          String
+  qtyOrdered        Float               @default(0)
+  qtyReceived       Float               @default(0)
+  qtyGood           Float               @default(0)
+  qtyDamaged        Float               @default(0)
+  qtyPreviouslyReceived Float           @default(0)
+  unit              String
+  condition         String?
+  batchNo           String?
+  expiryDate        DateTime?
+  photoUrl          String?
+  notes             String?
+  receiving         ProcurementReceiving @relation(fields: [receivingId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@index([receivingId])
+  @@index([itemCode])
+}
+
+model WorkOrderRecord {
+  id                 String                    @id
+  projectId          String?
+  payload            Json
+  project            ProjectRecord?            @relation(fields: [projectId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  productionReports  ProductionReportRecord[]
+  productionTrackers ProductionTrackerRecord[]
+  qcInspections      QcInspectionRecord[]
+  spkRecords         SpkRecord[]
+  stockOuts          StockOutRecord[]
+  inventoryStockOuts InventoryStockOut[]
+  proofsOfDelivery   ProofOfDeliveryRecord[]
+  createdAt          DateTime                  @default(now())
+  updatedAt          DateTime                  @updatedAt
+
+  @@index([projectId])
+}
+
+model ProductionReportRecord {
+  id          String           @id
+  projectId   String?
+  workOrderId String?
+  payload     Json
+  project     ProjectRecord?   @relation(fields: [projectId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  workOrder   WorkOrderRecord? @relation(fields: [workOrderId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  @@index([projectId])
+  @@index([workOrderId])
+}
+
+model ProductionTrackerRecord {
+  id          String           @id
+  projectId   String?
+  workOrderId String?
+  payload     Json
+  project     ProjectRecord?   @relation(fields: [projectId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  workOrder   WorkOrderRecord? @relation(fields: [workOrderId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  @@index([projectId])
+  @@index([workOrderId])
+}
+
+model QcInspectionRecord {
+  id          String           @id
+  projectId   String?
+  workOrderId String?
+  payload     Json
+  project     ProjectRecord?   @relation(fields: [projectId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  workOrder   WorkOrderRecord? @relation(fields: [workOrderId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  @@index([projectId])
+  @@index([workOrderId])
+}
+
+model MaterialRequestRecord {
+  id        String         @id
+  projectId String?
+  payload   Json
+  project   ProjectRecord? @relation(fields: [projectId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  @@index([projectId])
+}
+
+model ProductionWorkOrder {
+  id                 String                    @id
+  number             String                    @unique
+  projectId          String
+  projectName        String
+  itemToProduce      String
+  targetQty          Float
+  completedQty       Float                     @default(0)
+  status             String
+  priority           String
+  deadline           DateTime?
+  leadTechnician     String
+  machineId          String?
+  startDate          DateTime?
+  endDate            DateTime?
+  workflowStatus     String?
+  project            ProjectRecord             @relation(fields: [projectId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  machine            AssetRecord?              @relation(fields: [machineId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  bomItems           ProductionWorkOrderBom[]
+  productionReports  ProductionExecutionReport[]
+  productionTrackers ProductionTrackerEntry[]
+  qcInspections      ProductionQcInspection[]
+  logisticsProofsOfDelivery LogisticsProofOfDelivery[]
+  projectSpkRecords  ProjectSpkRecord[]
+  createdAt          DateTime                  @default(now())
+  updatedAt          DateTime                  @updatedAt
+
+  @@index([projectId])
+  @@index([machineId])
+  @@index([status])
+  @@index([deadline])
+}
+
+model ProductionWorkOrderBom {
+  id              String              @id
+  workOrderId     String
+  itemCode        String?
+  itemName        String
+  unit            String
+  qty             Float
+  completedQty    Float               @default(0)
+  needsProcurement Boolean            @default(false)
+  stockAvailable  Float?
+  workOrder       ProductionWorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@index([workOrderId])
+  @@index([itemCode])
+}
+
+model ProductionExecutionReport {
+  id            String              @id
+  projectId     String
+  workOrderId   String?
+  tanggal       DateTime
+  shift         String?
+  outputQty     Float               @default(0)
+  rejectQty     Float               @default(0)
+  efficiency    Float?
+  notes         String?
+  workerName    String?
+  activity      String?
+  machineNo     String?
+  startTime     String?
+  endTime       String?
+  unit          String?
+  photoUrl      String?
+  workflowStatus String?
+  project       ProjectRecord       @relation(fields: [projectId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  workOrder     ProductionWorkOrder? @relation(fields: [workOrderId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+
+  @@index([projectId])
+  @@index([workOrderId])
+  @@index([tanggal])
+}
+
+model ProductionTrackerEntry {
+  id             String               @id
+  projectId      String
+  workOrderId    String?
+  customer       String?
+  itemType       String
+  qty            Float                @default(0)
+  startDate      DateTime?
+  finishDate     DateTime?
+  status         String
+  machineId      String?
+  workflowStatus String?
+  project        ProjectRecord        @relation(fields: [projectId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  workOrder      ProductionWorkOrder? @relation(fields: [workOrderId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  machine        AssetRecord?         @relation(fields: [machineId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+
+  @@index([projectId])
+  @@index([workOrderId])
+  @@index([machineId])
+  @@index([status])
+}
+
+model ProductionQcInspection {
+  id               String               @id
+  projectId        String
+  workOrderId      String?
+  tanggal          DateTime
+  batchNo          String?
+  itemName         String
+  qtyInspected     Float                @default(0)
+  qtyPassed        Float                @default(0)
+  qtyRejected      Float                @default(0)
+  inspectorName    String
+  status           String
+  notes            String?
+  visualCheck      Boolean              @default(false)
+  dimensionCheck   Boolean              @default(false)
+  materialCheck    Boolean              @default(false)
+  photoUrl         String?
+  customerName     String?
+  drawingUrl       String?
+  remark           String?
+  workflowStatus   String?
+  project          ProjectRecord        @relation(fields: [projectId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  workOrder        ProductionWorkOrder? @relation(fields: [workOrderId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  dimensions       ProductionQcInspectionDimension[]
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+
+  @@index([projectId])
+  @@index([workOrderId])
+  @@index([tanggal])
+  @@index([status])
+}
+
+model ProductionQcInspectionDimension {
+  id             String                 @id
+  inspectionId   String
+  sortOrder      Int                    @default(0)
+  parameter      String
+  specification  String
+  sample1        String
+  sample2        String
+  sample3        String
+  sample4        String
+  result         String
+  inspection     ProductionQcInspection @relation(fields: [inspectionId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@index([inspectionId])
+  @@index([sortOrder])
+}
+
+model ProductionMaterialRequest {
+  id             String                          @id
+  number         String                          @unique
+  projectId      String
+  projectName    String
+  requestedBy    String
+  requestedAt    DateTime
+  status         String
+  priority       String?
+  project        ProjectRecord                   @relation(fields: [projectId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  items          ProductionMaterialRequestItem[]
+  createdAt      DateTime                        @default(now())
+  updatedAt      DateTime                        @updatedAt
+
+  @@index([projectId])
+  @@index([status])
+  @@index([requestedAt])
+}
+
+model ProductionMaterialRequestItem {
+  id                 String                    @id
+  materialRequestId  String
+  itemCode           String?
+  itemName           String
+  qty                Float
+  unit               String
+  materialRequest    ProductionMaterialRequest @relation(fields: [materialRequestId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@index([materialRequestId])
+  @@index([itemCode])
+}
+
+model LogisticsSuratJalan {
+  id               String                     @id
+  noSurat          String                     @unique
+  tanggal          DateTime
+  sjType           String
+  tujuan           String
+  alamat           String
+  upPerson         String?
+  noPO             String?
+  projectId        String?
+  assetId          String?
+  sopir            String?
+  noPolisi         String?
+  pengirim         String?
+  deliveryStatus   String
+  podName          String?
+  podTime          DateTime?
+  podPhoto         String?
+  podSignature     String?
+  expectedReturnDate DateTime?
+  actualReturnDate DateTime?
+  returnStatus     String?
+  workflowStatus   String
+  project          ProjectRecord?            @relation(fields: [projectId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  asset            AssetRecord?              @relation(fields: [assetId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  items            LogisticsSuratJalanItem[]
+  pods             LogisticsProofOfDelivery[]
+  beritaAcaraRefs  ProjectBeritaAcara[]
+  createdAt        DateTime                  @default(now())
+  updatedAt        DateTime                  @updatedAt
+
+  @@index([projectId])
+  @@index([assetId])
+  @@index([tanggal])
+  @@index([deliveryStatus])
+}
+
+model LogisticsSuratJalanItem {
+  id             String              @id
+  suratJalanId   String
+  itemKode       String?
+  namaItem       String
+  jumlah         Float
+  satuan         String
+  batchNo        String?
+  keterangan     String?
+  suratJalan     LogisticsSuratJalan @relation(fields: [suratJalanId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@index([suratJalanId])
+  @@index([itemKode])
+}
+
+model LogisticsProofOfDelivery {
+  id             String                      @id
+  suratJalanId   String
+  projectId      String?
+  workOrderId    String?
+  status         String
+  receiverName   String
+  deliveredAt    DateTime
+  photo          String?
+  signature      String?
+  noSurat        String?
+  tujuan         String?
+  receiver       String?
+  driver         String?
+  plate          String?
+  note           String?
+  project        ProjectRecord?              @relation(fields: [projectId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  workOrder      ProductionWorkOrder?        @relation(fields: [workOrderId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  suratJalan     LogisticsSuratJalan         @relation(fields: [suratJalanId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  items          LogisticsProofOfDeliveryItem[]
+  createdAt      DateTime                    @default(now())
+  updatedAt      DateTime                    @updatedAt
+
+  @@index([suratJalanId])
+  @@index([projectId])
+  @@index([workOrderId])
+  @@index([deliveredAt])
+}
+
+model LogisticsProofOfDeliveryItem {
+  id               String                   @id
+  proofOfDeliveryId String
+  itemKode         String?
+  namaItem         String
+  jumlah           Float
+  satuan           String
+  batchNo          String?
+  keterangan       String?
+  proofOfDelivery  LogisticsProofOfDelivery @relation(fields: [proofOfDeliveryId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@index([proofOfDeliveryId])
+  @@index([itemKode])
+}
+
+model ProjectBeritaAcara {
+  id                     String         @id
+  noBA                   String         @unique
+  tanggal                DateTime
+  jenisBA                String
+  pihakPertama           String
+  pihakPertamaJabatan    String?
+  pihakPertamaNama       String?
+  pihakKedua             String
+  pihakKeduaJabatan      String?
+  pihakKeduaNama         String?
+  lokasi                 String?
+  contentHTML            String
+  refSuratJalan          String?
+  refProject             String?
+  ttdPihakPertama        String?
+  ttdPihakKedua          String?
+  saksi1                 String?
+  saksi2                 String?
+  createdBy              String?
+  status                 String
+  noPO                   String?
+  tanggalPO              DateTime?
+  tanggalPelaksanaanMulai DateTime?
+  tanggalPelaksanaanSelesai DateTime?
+  approvedBy             String?
+  approvedAt             DateTime?
+  projectId              String?
+  projectName            String?
+  project                ProjectRecord? @relation(fields: [projectId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  suratJalan             LogisticsSuratJalan? @relation(fields: [refSuratJalan], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  createdAt              DateTime       @default(now())
+  updatedAt              DateTime       @updatedAt
+
+  @@index([projectId])
+  @@index([tanggal])
+  @@index([status])
+}
+
+model ProjectSpkRecord {
+  id            String                  @id
+  projectId     String?
+  workOrderId   String?
+  spkNumber     String                  @unique
+  title         String
+  pekerjaan     String?
+  date          DateTime
+  urgent        Boolean                 @default(false)
+  status        String
+  project       ProjectRecord?          @relation(fields: [projectId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  workOrder     ProductionWorkOrder?    @relation(fields: [workOrderId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  technicians   ProjectSpkTechnician[]
+  attachments   ProjectSpkAttachment[]
+  createdAt     DateTime                @default(now())
+  updatedAt     DateTime                @updatedAt
+
+  @@index([projectId])
+  @@index([workOrderId])
+  @@index([date])
+  @@index([status])
+}
+
+model ProjectSpkTechnician {
+  id         String           @id
+  spkId      String
+  name       String
+  spk        ProjectSpkRecord @relation(fields: [spkId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@index([spkId])
+}
+
+model ProjectSpkAttachment {
+  id         String           @id
+  spkId      String
+  url        String
+  spk        ProjectSpkRecord @relation(fields: [spkId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@index([spkId])
+}
+
+model SuratJalanRecord {
+  id        String         @id
+  projectId String?
+  payload   Json
+  project   ProjectRecord? @relation(fields: [projectId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  pods      ProofOfDeliveryRecord[]
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  @@index([projectId])
+}
+
+model BeritaAcaraRecord {
+  id        String         @id
+  projectId String?
+  payload   Json
+  project   ProjectRecord? @relation(fields: [projectId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  @@index([projectId])
+}
+
+model SuratMasukRecord {
+  id        String         @id
+  projectId String?
+  noSurat   String
+  tanggalTerima String
+  tanggalSurat String
+  pengirim  String
+  perihal   String
+  jenisSurat String
+  prioritas String
+  status    String
+  penerima  String
+  kategori  String
+  disposisiKe String?
+  catatan   String?
+  createdBy String?
+  project   ProjectRecord? @relation(fields: [projectId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  @@index([projectId])
+  @@index([status])
+  @@index([tanggalTerima])
+}
+
+model SuratKeluarRecord {
+  id         String              @id
+  projectId  String?
+  templateId String?
+  noSurat    String
+  tanggalSurat String
+  tujuan     String
+  perihal    String
+  jenisSurat String
+  pembuat    String
+  status     String
+  kategori   String
+  isiSurat   String?
+  approvedBy String?
+  reviewedBy String?
+  reviewedAt String?
+  tglKirim   String?
+  notes      String?
+  project    ProjectRecord?      @relation(fields: [projectId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  template   TemplateSuratRecord? @relation(fields: [templateId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  createdAt  DateTime            @default(now())
+  updatedAt  DateTime            @updatedAt
+
+  @@index([projectId])
+  @@index([templateId])
+  @@index([status])
+  @@index([tanggalSurat])
+}
+
+model TemplateSuratRecord {
+  id          String              @id
+  nama        String
+  jenisSurat  String
+  content     String
+  variables   Json?
+  suratKeluar SuratKeluarRecord[]
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  @@index([jenisSurat])
+}
+
+model AssetRecord {
+  id                     String                   @id
+  projectId              String?
+  assetCode              String
+  name                   String
+  category               String
+  location               String
+  status                 String
+  condition              String
+  purchaseDate           String?
+  purchasePrice          Float?
+  rentalPrice            Float?
+  lastMaintenance        String?
+  nextMaintenance        String?
+  operatorName           String?
+  projectName            String?
+  rentedTo               String?
+  notes                  String?
+  project                ProjectRecord?           @relation(fields: [projectId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  maintenances           MaintenanceRecord[]
+  fleetHealthEntries     FleetHealthEntry[]
+  logisticsSuratJalan    LogisticsSuratJalan[]
+  productionWorkOrders   ProductionWorkOrder[]
+  productionTrackerEntries ProductionTrackerEntry[]
+  createdAt              DateTime                 @default(now())
+  updatedAt              DateTime                 @updatedAt
+
+  @@index([projectId])
+  @@index([assetCode])
+  @@index([name])
+  @@index([category])
+  @@index([status])
+}
+
+model MaintenanceRecord {
+  id              String         @id
+  assetId         String?
+  projectId       String?
+  maintenanceNo   String
+  assetCode       String?
+  equipmentName   String
+  maintenanceType String
+  scheduledDate   String?
+  completedDate   String?
+  status          String
+  cost            Float?
+  performedBy     String?
+  notes           String?
+  asset           AssetRecord?   @relation(fields: [assetId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  project         ProjectRecord? @relation(fields: [projectId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  @@index([assetId])
+  @@index([projectId])
+  @@index([maintenanceNo])
+  @@index([status])
+}
+
+model PayrollRecord {
+  id             String          @id
+  employeeId     String?
+  month          String
+  year           Int
+  totalPayroll   Float
+  status         String
+  employeeCount  Int
+  employeeName   String?
+  baseSalary     Float?
+  totalOutput    Float?
+  incentiveTotal Float?
+  allowanceTotal Float?
+  totalGaji      Float?
+  employee       EmployeeRecord? @relation(fields: [employeeId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  @@index([employeeId])
+  @@index([month, year])
+  @@index([status])
+}
+
+model ArchiveRegistryEntry {
+  id          String   @id
+  tanggal     DateTime
+  reference   String
+  description String
+  amount      Float
+  projectName String
+  adminName   String
+  type        String
+  source      String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([tanggal])
+  @@index([type])
+  @@index([source])
+}
+
+model AuditLogEntry {
+  id          String   @id
+  timestamp   DateTime
+  actorUserId String?
+  actorRole   String?
+  userId      String?
+  userName    String?
+  action      String
+  module      String?
+  details     String?
+  status      String?
+  domain      String?
+  resource    String?
+  entityId    String?
+  operation   String?
+  metadata    String?
+  actorUser   User?    @relation(fields: [actorUserId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([timestamp])
+  @@index([actorUserId])
+  @@index([domain])
+  @@index([resource])
+  @@index([operation])
+  @@index([status])
+}
+
+model AppSettingRecord {
+  id              String  @id
+  updatedByUserId String?
+  key             String
+  label           String?
+  description     String?
+  scope           String
+  value           Json?
+  isActive        Boolean @default(true)
+  updatedByUser   User?   @relation(fields: [updatedByUserId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([updatedByUserId])
+  @@index([key])
+  @@index([scope])
+}
+
+model VendorRecord {
+  id             String                @id
+  kodeVendor     String
+  namaVendor     String
+  kategori       String?
+  alamat         String?
+  kota           String?
+  kontak         String?
+  telepon        String?
+  email          String?
+  npwp           String?
+  paymentTerms   String?
+  rating         Int?
+  status         String?
+  purchaseOrders PurchaseOrderRecord[]
+  expenses       VendorExpenseRecord[]
+  invoices       VendorInvoiceRecord[]
+  procurementPurchaseOrders ProcurementPurchaseOrder[]
+  financeVendorExpenses FinanceVendorExpense[]
+  financeVendorInvoices FinanceVendorInvoice[]
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+
+  @@index([kodeVendor])
+  @@index([namaVendor])
+  @@index([status])
+}
+
+model VendorExpenseRecord {
+  id        String         @id
+  vendorId  String?
+  projectId String?
+  payload   Json
+  vendor    VendorRecord?  @relation(fields: [vendorId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  project   ProjectRecord? @relation(fields: [projectId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  @@index([vendorId])
+  @@index([projectId])
+}
+
+model VendorInvoiceRecord {
+  id        String         @id
+  vendorId  String?
+  projectId String?
+  payload   Json
+  vendor    VendorRecord?  @relation(fields: [vendorId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  project   ProjectRecord? @relation(fields: [projectId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  bankReconciliations FinanceBankReconciliationRecord[]
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  @@index([vendorId])
+  @@index([projectId])
+}
+
+model CustomerRecord {
+  id               String                  @id
+  kodeCustomer     String
+  namaCustomer     String
+  alamat           String?
+  kota             String?
+  kontak           String?
+  telepon          String?
+  email            String?
+  npwp             String?
+  paymentTerms     String?
+  rating           Int?
+  status           String?
+  projects         ProjectRecord[]
+  customerInvoices CustomerInvoiceRecord[]
+  invoices         InvoiceRecord[]
+  financeCustomerInvoices FinanceCustomerInvoice[]
+  createdAt        DateTime                @default(now())
+  updatedAt        DateTime                @updatedAt
+
+  @@index([kodeCustomer])
+  @@index([namaCustomer])
+  @@index([status])
+}
+
+model CustomerInvoiceRecord {
+  id         String          @id
+  customerId String?
+  projectId  String?
+  payload    Json
+  customer   CustomerRecord? @relation(fields: [customerId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  project    ProjectRecord?  @relation(fields: [projectId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
+
+  @@index([customerId])
+  @@index([projectId])
+}
+
+model FinanceCustomerInvoice {
+  id                String                        @id
+  customerId        String?
+  projectId         String?
+  number            String
+  tanggal           DateTime
+  dueDate           DateTime?
+  customerName      String
+  projectName       String?
+  perihal           String?
+  subtotal          Float                         @default(0)
+  ppn               Float                         @default(0)
+  pph               Float                         @default(0)
+  totalAmount       Float                         @default(0)
+  paidAmount        Float                         @default(0)
+  outstandingAmount Float                         @default(0)
+  status            String
+  noKontrak         String?
+  noPO              String?
+  termin            String?
+  remark            String?
+  createdBy         String?
+  sentAt            DateTime?
+  customer          CustomerRecord?               @relation(fields: [customerId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  project           ProjectRecord?                @relation(fields: [projectId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  items             FinanceCustomerInvoiceItem[]
+  payments          FinanceCustomerInvoicePayment[]
+  bankReconciliations FinanceBankReconciliation[]
+  createdAt         DateTime                      @default(now())
+  updatedAt         DateTime                      @updatedAt
+
+  @@index([customerId])
+  @@index([projectId])
+  @@index([status])
+  @@index([tanggal])
+}
+
+model FinanceCustomerInvoiceItem {
+  id         String                 @id
+  invoiceId  String
+  description String
+  qty        Float                  @default(0)
+  unit       String
+  unitPrice  Float                  @default(0)
+  amount     Float                  @default(0)
+  invoice    FinanceCustomerInvoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@index([invoiceId])
+}
+
+model FinanceCustomerInvoicePayment {
+  id         String                 @id
+  invoiceId  String
+  tanggal    DateTime
+  nominal    Float                  @default(0)
+  method     String
+  proofNo    String?
+  bankName   String?
+  remark     String?
+  createdBy  String?
+  paidAt     DateTime?
+  invoice    FinanceCustomerInvoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@index([invoiceId])
+  @@index([tanggal])
+}
+
+model FinanceVendorExpense {
+  id            String         @id
+  vendorId      String?
+  projectId     String?
+  number        String
+  tanggal       DateTime
+  vendorName    String
+  projectName   String?
+  rabItemId     String?
+  rabItemName   String?
+  kategori      String?
+  keterangan    String?
+  nominal       Float          @default(0)
+  ppn           Float          @default(0)
+  totalNominal  Float          @default(0)
+  hasKwitansi   Boolean        @default(false)
+  kwitansiUrl   String?
+  noKwitansi    String?
+  metodeBayar   String?
+  status        String
+  remark        String?
+  approvedBy    String?
+  approvedAt    DateTime?
+  rejectedBy    String?
+  rejectedAt    DateTime?
+  rejectReason  String?
+  paidAt        DateTime?
+  createdBy     String?
+  vendor        VendorRecord?  @relation(fields: [vendorId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  project       ProjectRecord? @relation(fields: [projectId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  @@index([vendorId])
+  @@index([projectId])
+  @@index([status])
+  @@index([tanggal])
+}
+
+model FinanceVendorInvoice {
+  id                String                    @id
+  vendorId          String?
+  projectId         String?
+  purchaseOrderId   String?
+  number            String
+  noPO              String?
+  supplierName      String
+  totalAmount       Float                     @default(0)
+  paidAmount        Float                     @default(0)
+  outstandingAmount Float                     @default(0)
+  ppn               Float                     @default(0)
+  status            String
+  tanggal           DateTime?
+  dueDate           DateTime?
+  vendor            VendorRecord?             @relation(fields: [vendorId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  project           ProjectRecord?            @relation(fields: [projectId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  purchaseOrder     ProcurementPurchaseOrder? @relation(fields: [purchaseOrderId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  bankReconciliations FinanceBankReconciliation[]
+  createdAt         DateTime                  @default(now())
+  updatedAt         DateTime                  @updatedAt
+
+  @@index([vendorId])
+  @@index([projectId])
+  @@index([purchaseOrderId])
+  @@index([status])
+}
+
+model FinanceWorkingExpenseSheet {
+  id          String                      @id
+  projectId   String?
+  client      String?
+  projectName String?
+  location    String?
+  date        DateTime
+  noHal       String
+  revisi      String?
+  totalKas    Float                       @default(0)
+  status      String
+  createdBy   String?
+  legacyPayload Json?
+  project     ProjectRecord?              @relation(fields: [projectId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  items       FinanceWorkingExpenseItem[]
+  createdAt   DateTime                    @default(now())
+  updatedAt   DateTime                    @updatedAt
+
+  @@index([projectId])
+  @@index([date])
+  @@index([status])
+}
+
+model FinanceWorkingExpenseItem {
+  id          String                    @id
+  sheetId     String
+  date        DateTime?
+  description String
+  nominal     Float                     @default(0)
+  hasNota     String?
+  remark      String?
+  sheet       FinanceWorkingExpenseSheet @relation(fields: [sheetId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@index([sheetId])
+  @@index([date])
+}
+
+model FinanceBankReconciliation {
+  id                String                 @id
+  projectId         String?
+  customerInvoiceId String?
+  vendorInvoiceId   String?
+  date              DateTime
+  periodLabel       String?
+  account           String?
+  description       String?
+  debit             Float                  @default(0)
+  credit            Float                  @default(0)
+  balance           Float                  @default(0)
+  status            String
+  matchedId         String?
+  note              String?
+  legacyPayload     Json?
+  project           ProjectRecord?         @relation(fields: [projectId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  customerInvoice   FinanceCustomerInvoice? @relation(fields: [customerInvoiceId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  vendorInvoice     FinanceVendorInvoice?  @relation(fields: [vendorInvoiceId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  createdAt         DateTime               @default(now())
+  updatedAt         DateTime               @updatedAt
+
+  @@index([projectId])
+  @@index([customerInvoiceId])
+  @@index([vendorInvoiceId])
+  @@index([date])
+  @@index([status])
+}
+
+model FinancePettyCashTransaction {
+  id             String          @id
+  projectId      String?
+  employeeId     String?
+  date           DateTime
+  ref            String?
+  description    String
+  amount         Float           @default(0)
+  accountCode    String?
+  direction      String
+  projectName    String?
+  adminName      String?
+  transactionType String?
+  sourceKind     String?
+  legacyPayload  Json?
+  project        ProjectRecord?  @relation(fields: [projectId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  employee       EmployeeRecord? @relation(fields: [employeeId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  @@index([projectId])
+  @@index([employeeId])
+  @@index([date])
+}
+
+model HrKasbon {
+  id          String          @id
+  employeeId  String?
+  projectId   String?
+  employeeName String?
+  date        DateTime
+  amount      Float           @default(0)
+  status      String
+  approved    Boolean         @default(false)
+  createdBy   String?
+  legacyPayload Json?
+  employee    EmployeeRecord? @relation(fields: [employeeId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  project     ProjectRecord?  @relation(fields: [projectId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  @@index([employeeId])
+  @@index([projectId])
+  @@index([date])
+}
+
+model WorkingExpenseSheetRecord {
+  id        String         @id
+  projectId String?
+  payload   Json
+  project   ProjectRecord? @relation(fields: [projectId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  @@index([projectId])
+}
+
+model FinanceBankReconciliationRecord {
+  id              String               @id
+  projectId       String?
+  invoiceId       String?
+  vendorInvoiceId String?
+  payload         Json
+  project         ProjectRecord?       @relation(fields: [projectId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  invoice         InvoiceRecord?       @relation(fields: [invoiceId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  vendorInvoice   VendorInvoiceRecord? @relation(fields: [vendorInvoiceId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+
+  @@index([projectId])
+  @@index([invoiceId])
+  @@index([vendorInvoiceId])
+}
+
+model FinancePettyCashTransactionRecord {
+  id         String          @id
+  projectId  String?
+  employeeId String?
+  payload    Json
+  project    ProjectRecord?  @relation(fields: [projectId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  employee   EmployeeRecord? @relation(fields: [employeeId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
+
+  @@index([projectId])
+  @@index([employeeId])
+}
+
+model HrShiftRecord {
+  id        String   @id
+  payload   Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model HrShiftScheduleRecord {
+  id        String   @id
+  payload   Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model HrAttendanceSummaryRecord {
+  id        String   @id
+  payload   Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model HrPerformanceReviewRecord {
+  id        String   @id
+  payload   Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model HrThlContractRecord {
+  id        String   @id
+  payload   Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model HrResignationRecord {
+  id        String   @id
+  payload   Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model HrLeaveRecord {
+  id        String   @id
+  leaveNo   String
+  employeeId String
+  employeeName String
+  leaveType String
+  startDate String
+  endDate   String
+  totalDays Float
+  reason    String
+  status    String
+  notes     String?
+  approvedBy String?
+  approvedDate String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([employeeId])
+  @@index([status])
+  @@index([startDate])
+}
+
+model HrOnlineStatusRecord {
+  id        String   @id
+  employeeId String
+  name      String
+  position  String
+  department String
+  status    String
+  lastSeen  String
+  location  String?
+  activeMinutes Int?
+  email     String?
+  phone     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([employeeId])
+  @@index([status])
+  @@index([department])
+}
+
+model FinanceBpjsPaymentRecord {
+  id        String   @id
+  payload   Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model FinancePph21FilingRecord {
+  id        String   @id
+  payload   Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model FinanceThrDisbursementRecord {
+  id        String   @id
+  payload   Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model FinanceEmployeeAllowanceRecord {
+  id        String   @id
+  payload   Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model FinancePoPaymentRecord {
+  id        String               @id
+  poId      String?
+  projectId String?
+  payload   Json
+  po        PurchaseOrderRecord? @relation(fields: [poId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  project   ProjectRecord?       @relation(fields: [projectId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  createdAt DateTime             @default(now())
+  updatedAt DateTime             @updatedAt
+
+  @@index([poId])
+  @@index([projectId])
+}
+
+model KasbonRecord {
+  id         String          @id
+  employeeId String?
+  projectId  String?
+  payload    Json
+  employee   EmployeeRecord? @relation(fields: [employeeId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  project    ProjectRecord?  @relation(fields: [projectId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
+
+  @@index([employeeId])
+  @@index([projectId])
+}
+
+model FleetHealthEntry {
+  id              String        @id
+  assetId         String
+  projectId       String
+  tanggal         DateTime
+  equipmentName   String
+  hoursUsed       Float
+  operatorName    String
+  fuelConsumption Float?
+  costPerHour     Float
+  status          String
+  notes           String?
+  asset           AssetRecord   @relation(fields: [assetId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  project         ProjectRecord @relation(fields: [projectId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@index([assetId])
+  @@index([projectId])
+  @@index([tanggal])
+  @@index([status])
+}
+
+model ProofOfDeliveryRecord {
+  id          String           @id
+  projectId   String?
+  suratJalanId String?
+  workOrderId String?
+  payload     Json
+  project     ProjectRecord?   @relation(fields: [projectId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  suratJalan  SuratJalanRecord? @relation(fields: [suratJalanId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  workOrder   WorkOrderRecord? @relation(fields: [workOrderId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  @@index([projectId])
+  @@index([suratJalanId])
+  @@index([workOrderId])
+}
+
+model SpkRecord {
+  id          String           @id
+  projectId   String?
+  workOrderId String?
+  payload     Json
+  project     ProjectRecord?   @relation(fields: [projectId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  workOrder   WorkOrderRecord? @relation(fields: [workOrderId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  @@index([projectId])
+  @@index([workOrderId])
+}

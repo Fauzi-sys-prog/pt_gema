@@ -1,0 +1,89 @@
+import axios from "axios";
+import { emitDataSync } from "./dataSyncBus";
+import { toast } from "sonner@2.0.3";
+
+const rawApiBaseUrl = (import.meta as any)?.env?.VITE_API_BASE_URL;
+
+const resolveFallbackApiBaseUrl = (): string => {
+  if (typeof window === "undefined") {
+    return "http://localhost:3000";
+  }
+
+  const host = String(window.location.hostname || "").toLowerCase();
+  if (host === "gemateknik.online" || host.endsWith(".gemateknik.online")) {
+    return "https://api.gemateknik.online";
+  }
+
+  return "http://localhost:3000";
+};
+
+const API_BASE_URL = rawApiBaseUrl && String(rawApiBaseUrl).trim().length > 0
+  ? String(rawApiBaseUrl).trim()
+  : resolveFallbackApiBaseUrl();
+
+const api = axios.create({
+  baseURL: API_BASE_URL,
+  timeout: 20000,
+  headers: {
+    "Content-Type": "application/json",
+  },
+});
+
+// 🔥 AUTO ATTACH TOKEN
+api.interceptors.request.use((config) => {
+  const token = localStorage.getItem("token");
+
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+
+  return config;
+});
+
+api.interceptors.response.use(
+  (response) => {
+    const method = String(response?.config?.method || "get").toUpperCase();
+    if (["POST", "PUT", "PATCH", "DELETE"].includes(method)) {
+      const path = String(response?.config?.url || "");
+      const isAuthPath = path.startsWith("/auth/");
+      const isDirectQuotationMutation =
+        path === "/quotations" || path.startsWith("/quotations/");
+      const isDirectDataCollectionMutation =
+        path === "/data-collections" || path.startsWith("/data-collections/");
+      const isAuditLogMutation =
+        path === "/audit-logs" || path.startsWith("/audit-logs/");
+      if (!isAuthPath && !isDirectQuotationMutation && !isDirectDataCollectionMutation && !isAuditLogMutation) {
+        emitDataSync(`api:${method}:${path}`);
+      }
+    }
+    return response;
+  },
+  (error) => {
+    const status = error?.response?.status;
+    if (status === 401) {
+      const reqUrl = String(error?.config?.url || "");
+      const isLoginRequest = reqUrl.startsWith("/auth/login");
+      const hadAuthHeader = Boolean(error?.config?.headers?.Authorization);
+      const hasStoredToken = Boolean(localStorage.getItem("token"));
+      // Prevent auth-loop on startup race: only force logout when request
+      // actually carried auth header and still got 401.
+      if (hadAuthHeader && !isLoginRequest) {
+        localStorage.removeItem("token");
+      }
+      const shouldForceRelogin = hadAuthHeader || !hasStoredToken;
+      const onLoginPage = window.location.pathname === "/login";
+      const alreadyNotified = sessionStorage.getItem("auth401_notified") === "1";
+      if (shouldForceRelogin && !alreadyNotified) {
+        sessionStorage.setItem("auth401_notified", "1");
+        toast.error("Sesi login habis. Silakan login ulang.");
+      }
+      if (shouldForceRelogin && !onLoginPage && !isLoginRequest) {
+        const next = encodeURIComponent(window.location.pathname + window.location.search);
+        window.location.href = `/login?next=${next}`;
+      }
+    }
+    return Promise.reject(error);
+  }
+);
+
+export default api;

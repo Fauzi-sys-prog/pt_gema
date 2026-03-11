@@ -1,0 +1,1371 @@
+import { Router, Response } from "express";
+import { Prisma, Role } from "@prisma/client";
+import { isDeepStrictEqual } from "node:util";
+import { prisma } from "../prisma";
+import { authenticate } from "../middlewares/auth";
+import { approvalActionLimiter } from "../middlewares/rateLimit";
+import { AuthRequest } from "../types/auth";
+import { sendError } from "../utils/http";
+import { projectBulkSchema, projectSchema } from "../schemas/project";
+import { hasRoleAccess, isOwnerLike } from "../utils/roles";
+
+const PROJECT_RESOURCE = "projects";
+const PATCH_BLOCKED_FIELDS = new Set([
+  "approvedBy",
+  "approvedAt",
+  "rejectedBy",
+  "rejectedAt",
+  "quotationSnapshot",
+  "quotationSnapshotAt",
+  "quotationSnapshotBy",
+]);
+const APPROVED_LOCKED_FIELDS = new Set([
+  "namaProject",
+  "customer",
+  "nilaiKontrak",
+  "quotationId",
+]);
+
+export const projectsRouter = Router();
+const PROJECT_WRITE_ROLES: Role[] = [
+  "OWNER",
+  "SPV",
+  "ADMIN",
+  "MANAGER",
+  "SALES",
+];
+const PROJECT_READ_ROLES: Role[] = [
+  "OWNER",
+  "SPV",
+  "ADMIN",
+  "MANAGER",
+  "SALES",
+  "FINANCE",
+  "SUPPLY_CHAIN",
+  "PRODUKSI",
+  "OPERATIONS",
+  "WAREHOUSE",
+  "PURCHASING",
+  "HR",
+];
+
+function canWriteProject(role?: Role): boolean {
+  return hasRoleAccess(role, PROJECT_WRITE_ROLES);
+}
+
+function canReadProject(role?: Role): boolean {
+  return hasRoleAccess(role, PROJECT_READ_ROLES);
+}
+
+function isOwner(role?: Role): boolean {
+  return isOwnerLike(role);
+}
+
+function isSpv(role?: Role): boolean {
+  return role === "SPV";
+}
+
+function normalizeApprovalToken(value: unknown): string {
+  return String(value || "")
+    .trim()
+    .toUpperCase()
+    .replace(/[\s-]+/g, "_");
+}
+
+function resolveProjectApprovalTransition(
+  role: Role | undefined,
+  currentStatus: string,
+  action: "APPROVE" | "REJECT"
+): { ok: true; toStatus: "Review SPV" | "Approved" | "Rejected"; stage: "SPV_REVIEW" | "OWNER_FINAL" | "REJECT" }
+ | { ok: false; code: string; message: string } {
+  const current = normalizeApprovalToken(currentStatus || "Pending");
+
+  if (action === "APPROVE") {
+    if (isSpv(role)) {
+      if (current === "PENDING") {
+        return { ok: true, toStatus: "Review SPV", stage: "SPV_REVIEW" };
+      }
+      return {
+        ok: false,
+        code: "SPV_APPROVAL_INVALID",
+        message: "SPV hanya bisa approve project dari status Pending ke Review SPV",
+      };
+    }
+
+    if (isOwner(role)) {
+      if (current === "REVIEW_SPV") {
+        return { ok: true, toStatus: "Approved", stage: "OWNER_FINAL" };
+      }
+      if (current === "PENDING") {
+        return {
+          ok: false,
+          code: "SPV_REVIEW_REQUIRED",
+          message: "Project harus melewati approval SPV dulu sebelum final approve OWNER",
+        };
+      }
+      return {
+        ok: false,
+        code: "OWNER_APPROVAL_INVALID",
+        message: "OWNER hanya bisa final approve project dari status Review SPV",
+      };
+    }
+
+    return {
+      ok: false,
+      code: "FORBIDDEN",
+      message: "Hanya SPV atau OWNER yang bisa approve project",
+    };
+  }
+
+  if (isSpv(role)) {
+    if (current === "PENDING") {
+      return { ok: true, toStatus: "Rejected", stage: "REJECT" };
+    }
+    return {
+      ok: false,
+      code: "SPV_REJECT_INVALID",
+      message: "SPV hanya bisa reject project dari status Pending",
+    };
+  }
+
+  if (isOwner(role)) {
+    if (current === "PENDING" || current === "REVIEW_SPV") {
+      return { ok: true, toStatus: "Rejected", stage: "REJECT" };
+    }
+    return {
+      ok: false,
+      code: "OWNER_REJECT_INVALID",
+      message: "OWNER hanya bisa reject project dari status Pending atau Review SPV",
+    };
+  }
+
+  return {
+    ok: false,
+    code: "FORBIDDEN",
+    message: "Hanya SPV atau OWNER yang bisa reject project",
+  };
+}
+
+function buildAuditMetadata(req: AuthRequest, extra?: Record<string, unknown>): Prisma.InputJsonValue {
+  return {
+    ...extra,
+    actorIp: req.ip,
+    actorUserAgent: req.get("user-agent") || null,
+  } as Prisma.InputJsonValue;
+}
+
+function hasOwnerApprovalState(payload: Record<string, unknown>): boolean {
+  const state = String(payload.approvalStatus || "").toUpperCase();
+  return state === "APPROVED" || state === "REJECTED";
+}
+
+function getBlockedPatchKeys(payload: Record<string, unknown>): string[] {
+  return Object.keys(payload).filter((key) => PATCH_BLOCKED_FIELDS.has(key));
+}
+
+function getApprovedLockedKeys(payload: Record<string, unknown>): string[] {
+  return Object.keys(payload).filter((key) => APPROVED_LOCKED_FIELDS.has(key));
+}
+
+function getChangedKeys(
+  incoming: Record<string, unknown>,
+  existing: Record<string, unknown>,
+  keySet: Set<string>
+): string[] {
+  return Object.keys(incoming).filter((key) => keySet.has(key) && !isDeepStrictEqual(incoming[key], existing[key]));
+}
+
+function ensureNoRestrictedFields(
+  payload: Record<string, unknown>,
+  endpointName: string
+): { ok: true } | { ok: false; error: string } {
+  const blockedKeys = getBlockedPatchKeys(payload);
+  if (blockedKeys.length === 0) return { ok: true };
+  return {
+    ok: false,
+    error: `Field tidak boleh di-set dari ${endpointName}: ${blockedKeys.join(
+      ", "
+    )}. Gunakan /projects/:id/approval untuk approval.`,
+  };
+}
+
+function ensureApprovalStatusNotFinal(
+  payload: Record<string, unknown>,
+  endpointName: string
+): { ok: true } | { ok: false; error: string } {
+  const raw = String(payload.approvalStatus || "").trim();
+  if (!raw) return { ok: true };
+  const upper = raw.toUpperCase();
+  if (upper === "PENDING") return { ok: true };
+  return {
+    ok: false,
+    error: `approvalStatus=${raw} tidak boleh di-set dari ${endpointName}. Gunakan /projects/:id/approval.`,
+  };
+}
+
+function asRecord(input: unknown): Record<string, unknown> {
+  return input && typeof input === "object" && !Array.isArray(input)
+    ? (input as Record<string, unknown>)
+    : {};
+}
+
+function readString(payload: Record<string, unknown>, key: string): string | null {
+  const value = payload[key];
+  return typeof value === "string" && value.trim() ? value : null;
+}
+
+function readNumber(payload: Record<string, unknown>, key: string): number | null {
+  const value = payload[key];
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+function normalizeWorkflowStatus(value: unknown): string {
+  return String(value ?? "").trim().toUpperCase();
+}
+
+function toNumber(value: unknown, fallback = 0): number {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return fallback;
+}
+
+function normalizeOptionalId(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+function buildProjectRecordData(payload: Record<string, unknown>) {
+  return {
+    quotationId: normalizeOptionalId(payload.quotationId),
+    customerId: normalizeOptionalId(payload.customerId),
+    payload: payload as Prisma.InputJsonValue,
+  };
+}
+
+async function upsertProjectRecord(
+  tx: Prisma.TransactionClient,
+  projectId: string,
+  payload: Record<string, unknown>
+): Promise<void> {
+  await tx.projectRecord.upsert({
+    where: { id: projectId },
+    create: {
+      id: projectId,
+      ...buildProjectRecordData(payload),
+    },
+    update: buildProjectRecordData(payload),
+  });
+}
+
+async function findProjectIdsByQuotationId(quotationId: string): Promise<string[]> {
+  const rows = await prisma.appEntity.findMany({
+    where: { resource: PROJECT_RESOURCE },
+    select: { entityId: true, payload: true },
+  });
+
+  const ids: string[] = [];
+  for (const row of rows) {
+    const payload = asRecord(row.payload);
+    const linked = readString(payload, "quotationId");
+    if (linked === quotationId) ids.push(row.entityId);
+  }
+  return ids;
+}
+
+async function ensureValidQuotationLink(
+  payload: Record<string, unknown>,
+  currentProjectId?: string
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const quotationId = readString(payload, "quotationId");
+  if (!quotationId) return { ok: true };
+
+  const quotationPayload = await getQuotationPayloadById(quotationId);
+  if (!quotationPayload) {
+    return { ok: false, error: "quotationId tidak valid (quotation tidak ditemukan)" };
+  }
+
+  const quotationStatus = normalizeWorkflowStatus(readString(quotationPayload, "status"));
+  if (!["SENT", "APPROVED"].includes(quotationStatus)) {
+    return {
+      ok: false,
+      error: "Project hanya bisa dilink ke quotation dengan status Sent atau Approved",
+    };
+  }
+
+  const linkedProjectIds = await findProjectIdsByQuotationId(quotationId);
+  const conflicting = linkedProjectIds.filter((id) => id !== currentProjectId);
+  if (conflicting.length > 0) {
+    return {
+      ok: false,
+      error: `Quotation ${quotationId} sudah dipakai oleh project lain (${conflicting[0]})`,
+    };
+  }
+
+  return { ok: true };
+}
+
+async function getQuotationPayloadById(id: string): Promise<Record<string, unknown> | null> {
+  const direct = await prisma.quotation.findUnique({
+    where: { id },
+    select: { payload: true },
+  });
+  if (direct?.payload && typeof direct.payload === "object" && !Array.isArray(direct.payload)) {
+    return direct.payload as Record<string, unknown>;
+  }
+
+  const legacy = await prisma.appEntity.findUnique({
+    where: {
+      resource_entityId: {
+        resource: "quotations",
+        entityId: id,
+      },
+    },
+    select: { payload: true },
+  });
+
+  if (legacy?.payload && typeof legacy.payload === "object" && !Array.isArray(legacy.payload)) {
+    return legacy.payload as Record<string, unknown>;
+  }
+
+  return null;
+}
+
+async function buildQuotationSnapshotForProject(
+  payload: Record<string, unknown>
+): Promise<Record<string, unknown> | null> {
+  const quotationId = readString(payload, "quotationId");
+  if (!quotationId) return null;
+
+  const quotationPayload = await getQuotationPayloadById(quotationId);
+  if (!quotationPayload) return null;
+
+  return {
+    id: quotationId,
+    noPenawaran: readString(quotationPayload, "noPenawaran"),
+    tanggal: readString(quotationPayload, "tanggal"),
+    status: readString(quotationPayload, "status"),
+    kepada: readString(quotationPayload, "kepada"),
+    perusahaan: readString(quotationPayload, "perusahaan"),
+    perihal: readString(quotationPayload, "perihal"),
+    grandTotal: readNumber(quotationPayload, "grandTotal"),
+    marginPercent: readNumber(quotationPayload, "marginPercent"),
+    paymentTerms: asRecord(quotationPayload.paymentTerms),
+    commercialTerms: asRecord(quotationPayload.commercialTerms),
+    pricingConfig: asRecord(quotationPayload.pricingConfig),
+    pricingItems: asRecord(quotationPayload.pricingItems),
+    sourceType: readString(quotationPayload, "sourceType"),
+  };
+}
+
+async function buildQuotationPreviewForProject(
+  payload: Record<string, unknown>
+): Promise<Record<string, unknown> | null> {
+  const quotationId = readString(payload, "quotationId");
+  if (!quotationId) return null;
+
+  const quotationPayload = await getQuotationPayloadById(quotationId);
+  if (!quotationPayload) return null;
+
+  const commercialTerms = asRecord(quotationPayload.commercialTerms);
+  const pricingItems = asRecord(quotationPayload.pricingItems);
+
+  return {
+    id: quotationId,
+    noPenawaran: readString(quotationPayload, "noPenawaran"),
+    tanggal: readString(quotationPayload, "tanggal"),
+    status: readString(quotationPayload, "status"),
+    kepada: readString(quotationPayload, "kepada"),
+    perusahaan: readString(quotationPayload, "perusahaan"),
+    perihal: readString(quotationPayload, "perihal"),
+    grandTotal: readNumber(quotationPayload, "grandTotal"),
+    marginPercent: readNumber(quotationPayload, "marginPercent"),
+    scopeOfWork: Array.isArray(commercialTerms.scopeOfWork) ? commercialTerms.scopeOfWork : [],
+    exclusions: Array.isArray(commercialTerms.exclusions) ? commercialTerms.exclusions : [],
+    pricingItems,
+  };
+}
+
+async function ensureProjectCanBeApproved(
+  payload: Record<string, unknown>
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const quotationId = readString(payload, "quotationId");
+  if (!quotationId) {
+    return { ok: false, error: "Project belum terhubung ke quotation (quotationId wajib sebelum approve)" };
+  }
+
+  const quotationPayload = await getQuotationPayloadById(quotationId);
+  if (!quotationPayload) {
+    return { ok: false, error: `Quotation ${quotationId} tidak ditemukan` };
+  }
+
+  const quotationStatus = normalizeWorkflowStatus(readString(quotationPayload, "status"));
+  if (quotationStatus !== "APPROVED") {
+    return {
+      ok: false,
+      error: `Quotation ${quotationId} harus berstatus Approved sebelum project bisa di-approve`,
+    };
+  }
+
+  return { ok: true };
+}
+
+projectsRouter.get("/projects", authenticate, async (_req: AuthRequest, res: Response) => {
+  if (!canReadProject(_req.user?.role)) {
+    return sendError(res, 403, { code: "FORBIDDEN", message: "Forbidden", legacyError: "Forbidden" });
+  }
+  try {
+    const rows = await prisma.appEntity.findMany({
+      where: { resource: PROJECT_RESOURCE },
+      orderBy: { updatedAt: "desc" },
+      select: {
+        entityId: true,
+        payload: true,
+      },
+    });
+
+    const projects: unknown[] = rows.map((row) => {
+      const payload = row.payload;
+      if (payload && typeof payload === "object" && !Array.isArray(payload)) {
+        return {
+          ...(payload as Record<string, unknown>),
+          id: typeof (payload as Record<string, unknown>).id === "string"
+            ? (payload as Record<string, unknown>).id
+            : row.entityId,
+        };
+      }
+
+      return { id: row.entityId };
+    });
+
+    const parsed = projectBulkSchema.safeParse(projects);
+    if (!parsed.success) {
+      return sendError(res, 500, { code: "DATA_INTEGRITY_ERROR", message: "Stored project data is invalid", legacyError: "Stored project data is invalid" });
+    }
+
+    return res.json(parsed.data);
+  } catch {
+    return sendError(res, 500, { code: "INTERNAL_ERROR", message: "Internal server error", legacyError: "Internal server error" });
+  }
+});
+
+projectsRouter.put("/projects/bulk", authenticate, async (req: AuthRequest, res: Response) => {
+  if (!canWriteProject(req.user?.role)) {
+    return sendError(res, 403, { code: "FORBIDDEN", message: "Forbidden", legacyError: "Forbidden" });
+  }
+
+  const parsed = projectBulkSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return sendError(res, 400, { code: "VALIDATION_ERROR", message: "Validation failed", details: parsed.error.flatten(), legacyError: parsed.error.flatten() });
+  }
+
+  const items = parsed.data;
+  const duplicateIds = items
+    .map((item) => item.id)
+    .filter((id, index, arr) => arr.indexOf(id) !== index);
+  if (duplicateIds.length > 0) {
+    return sendError(res, 400, { code: "DUPLICATE_ID_IN_BULK", message: `Duplicate project id in bulk payload: ${duplicateIds.join(", ")}`, legacyError: `Duplicate project id in bulk payload: ${duplicateIds.join(", ")}` });
+  }
+
+  const ids = items.map((item) => item.id);
+  const existingRows = await prisma.appEntity.findMany({
+    where: {
+      resource: PROJECT_RESOURCE,
+      entityId: { in: ids },
+    },
+    select: { entityId: true, payload: true },
+  });
+  const existingById = new Map(existingRows.map((row) => [row.entityId, asRecord(row.payload)]));
+
+  for (const item of items) {
+    const existing = existingById.get(item.id);
+    if (existing && hasOwnerApprovalState(existing)) {
+      return res.status(400).json({
+        error: `Project ${item.id} sudah final (${String(existing.approvalStatus || "")}), tidak bisa diubah via bulk`,
+      });
+    }
+
+    const check = ensureNoRestrictedFields(item as Record<string, unknown>, "PUT /projects/bulk");
+    if (!check.ok) {
+      return sendError(res, 400, { code: "VALIDATION_ERROR", message: check.error, legacyError: check.error });
+    }
+    const approvalCheck = ensureApprovalStatusNotFinal(
+      item as Record<string, unknown>,
+      "PUT /projects/bulk"
+    );
+    if (!approvalCheck.ok) {
+      return sendError(res, 400, { code: "APPROVAL_RULE_VIOLATION", message: approvalCheck.error, legacyError: approvalCheck.error });
+    }
+    const quotationLinkCheck = await ensureValidQuotationLink(
+      item as Record<string, unknown>,
+      String((item as Record<string, unknown>).id || "")
+    );
+    if (!quotationLinkCheck.ok) {
+      return sendError(res, 400, { code: "QUOTATION_LINK_INVALID", message: quotationLinkCheck.error, legacyError: quotationLinkCheck.error });
+    }
+  }
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      for (const project of items) {
+        await tx.appEntity.upsert({
+          where: {
+            resource_entityId: {
+              resource: PROJECT_RESOURCE,
+              entityId: project.id,
+            },
+          },
+          update: {
+            payload: project as Prisma.InputJsonValue,
+          },
+          create: {
+            resource: PROJECT_RESOURCE,
+            entityId: project.id,
+            payload: project as Prisma.InputJsonValue,
+          },
+        });
+
+        await upsertProjectRecord(tx, project.id, project as Record<string, unknown>);
+      }
+    });
+
+    return res.json({ message: "Projects upserted", count: items.length });
+  } catch {
+    return sendError(res, 500, { code: "INTERNAL_ERROR", message: "Internal server error", legacyError: "Internal server error" });
+  }
+});
+
+projectsRouter.post("/projects", authenticate, async (req: AuthRequest, res: Response) => {
+  if (!canWriteProject(req.user?.role)) {
+    return sendError(res, 403, { code: "FORBIDDEN", message: "Forbidden", legacyError: "Forbidden" });
+  }
+
+  const parsed = projectSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return sendError(res, 400, { code: "VALIDATION_ERROR", message: "Validation failed", details: parsed.error.flatten(), legacyError: parsed.error.flatten() });
+  }
+
+  const project = parsed.data;
+  const check = ensureNoRestrictedFields(project as Record<string, unknown>, "POST /projects");
+  if (!check.ok) {
+    return sendError(res, 400, { code: "VALIDATION_ERROR", message: check.error, legacyError: check.error });
+  }
+  const approvalCheck = ensureApprovalStatusNotFinal(project as Record<string, unknown>, "POST /projects");
+  if (!approvalCheck.ok) {
+    return sendError(res, 400, { code: "APPROVAL_RULE_VIOLATION", message: approvalCheck.error, legacyError: approvalCheck.error });
+  }
+  const quotationLinkCheck = await ensureValidQuotationLink(project as Record<string, unknown>, project.id);
+  if (!quotationLinkCheck.ok) {
+    return sendError(res, 400, { code: "QUOTATION_LINK_INVALID", message: quotationLinkCheck.error, legacyError: quotationLinkCheck.error });
+  }
+
+  try {
+    const saved = await prisma.$transaction(async (tx) => {
+      const row = await tx.appEntity.create({
+        data: {
+          resource: PROJECT_RESOURCE,
+          entityId: project.id,
+          payload: project as Prisma.InputJsonValue,
+        },
+        select: { payload: true },
+      });
+
+      await upsertProjectRecord(tx, project.id, project as Record<string, unknown>);
+      return row;
+    });
+
+    return res.status(201).json(saved.payload);
+  } catch (err) {
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+      return sendError(res, 409, { code: "PROJECT_ID_EXISTS", message: "Project id already exists", legacyError: "Project id already exists" });
+    }
+    return sendError(res, 500, { code: "INTERNAL_ERROR", message: "Internal server error", legacyError: "Internal server error" });
+  }
+});
+
+projectsRouter.get("/projects/:id", authenticate, async (req: AuthRequest, res: Response) => {
+  if (!canReadProject(req.user?.role)) {
+    return sendError(res, 403, { code: "FORBIDDEN", message: "Forbidden", legacyError: "Forbidden" });
+  }
+  const { id } = req.params;
+
+  try {
+    const row = await prisma.appEntity.findUnique({
+      where: {
+        resource_entityId: {
+          resource: PROJECT_RESOURCE,
+          entityId: id,
+        },
+      },
+      select: {
+        entityId: true,
+        payload: true,
+      },
+    });
+
+    if (!row) {
+      return sendError(res, 404, { code: "PROJECT_NOT_FOUND", message: "Project not found", legacyError: "Project not found" });
+    }
+
+    const payload = row.payload;
+    if (payload && typeof payload === "object" && !Array.isArray(payload)) {
+      const withId = {
+        ...(payload as Record<string, unknown>),
+        id:
+          typeof (payload as Record<string, unknown>).id === "string"
+            ? (payload as Record<string, unknown>).id
+            : row.entityId,
+      };
+      const parsed = projectSchema.safeParse(withId);
+      if (!parsed.success) {
+        return sendError(res, 500, { code: "DATA_INTEGRITY_ERROR", message: "Stored project data is invalid", legacyError: "Stored project data is invalid" });
+      }
+      const quotationPreview = await buildQuotationPreviewForProject(withId);
+      return res.json({
+        ...parsed.data,
+        quotationPreview,
+      });
+    }
+
+    return sendError(res, 500, { code: "DATA_INTEGRITY_ERROR", message: "Stored project payload is invalid", legacyError: "Stored project payload is invalid" });
+  } catch {
+    return sendError(res, 500, { code: "INTERNAL_ERROR", message: "Internal server error", legacyError: "Internal server error" });
+  }
+});
+
+projectsRouter.patch("/projects/:id", authenticate, async (req: AuthRequest, res: Response) => {
+  if (!canWriteProject(req.user?.role)) {
+    return sendError(res, 403, { code: "FORBIDDEN", message: "Forbidden", legacyError: "Forbidden" });
+  }
+
+  const { id } = req.params;
+
+  if (!req.body || typeof req.body !== "object" || Array.isArray(req.body)) {
+    return sendError(res, 400, { code: "INVALID_PAYLOAD", message: "Invalid payload", legacyError: "Invalid payload" });
+  }
+
+  try {
+    const existing = await prisma.appEntity.findUnique({
+      where: {
+        resource_entityId: {
+          resource: PROJECT_RESOURCE,
+          entityId: id,
+        },
+      },
+      select: { payload: true },
+    });
+
+    if (!existing || !existing.payload || typeof existing.payload !== "object" || Array.isArray(existing.payload)) {
+      return sendError(res, 404, { code: "PROJECT_NOT_FOUND", message: "Project not found", legacyError: "Project not found" });
+    }
+
+    const existingPayload = existing.payload as Record<string, unknown>;
+    const incomingPayload = req.body as Record<string, unknown>;
+    const blockedKeys = getChangedKeys(incomingPayload, existingPayload, PATCH_BLOCKED_FIELDS);
+    if (blockedKeys.length > 0) {
+      return res.status(400).json({
+        error: `Field tidak boleh diubah dari endpoint ini: ${blockedKeys.join(", ")}. Gunakan /projects/:id/approval untuk approval.`,
+      });
+    }
+
+    const existingApproval = String(existingPayload.approvalStatus || "").toUpperCase();
+    if (existingApproval === "APPROVED") {
+      const lockedKeys = getChangedKeys(incomingPayload, existingPayload, APPROVED_LOCKED_FIELDS);
+      if (lockedKeys.length > 0) {
+        return res.status(400).json({
+          error: `Project sudah Approved. Field inti terkunci: ${lockedKeys.join(", ")}`,
+        });
+      }
+    }
+
+    const merged = {
+      ...existingPayload,
+      ...(req.body as Record<string, unknown>),
+      id,
+    };
+
+    const incomingApproval = (incomingPayload.approvalStatus ?? null) as unknown;
+    if (incomingApproval !== null && incomingApproval !== undefined) {
+      const incomingApprovalUpper = String(incomingApproval).trim().toUpperCase();
+      const existingApprovalUpper = String(existingPayload.approvalStatus ?? "").trim().toUpperCase();
+      if (incomingApprovalUpper !== existingApprovalUpper) {
+        const approvalCheck = ensureApprovalStatusNotFinal(incomingPayload, "PATCH /projects/:id");
+        if (!approvalCheck.ok) {
+          return sendError(res, 400, {
+            code: "APPROVAL_RULE_VIOLATION",
+            message: approvalCheck.error,
+            legacyError: approvalCheck.error,
+          });
+        }
+      }
+    }
+    const quotationLinkCheck = await ensureValidQuotationLink(merged, id);
+    if (!quotationLinkCheck.ok) {
+      return sendError(res, 400, { code: "QUOTATION_LINK_INVALID", message: quotationLinkCheck.error, legacyError: quotationLinkCheck.error });
+    }
+
+    const parsed = projectSchema.safeParse(merged);
+    if (!parsed.success) {
+      return sendError(res, 400, { code: "VALIDATION_ERROR", message: "Validation failed", details: parsed.error.flatten(), legacyError: parsed.error.flatten() });
+    }
+
+    const updated = await prisma.$transaction(async (tx) => {
+      const row = await tx.appEntity.update({
+        where: {
+          resource_entityId: {
+            resource: PROJECT_RESOURCE,
+            entityId: id,
+          },
+        },
+        data: {
+          payload: parsed.data as Prisma.InputJsonValue,
+        },
+        select: {
+          payload: true,
+        },
+      });
+
+      await upsertProjectRecord(tx, id, parsed.data as Record<string, unknown>);
+      return row;
+    });
+
+    return res.json(updated.payload);
+  } catch {
+    return sendError(res, 500, { code: "INTERNAL_ERROR", message: "Internal server error", legacyError: "Internal server error" });
+  }
+});
+
+projectsRouter.delete("/projects/:id", authenticate, async (req: AuthRequest, res: Response) => {
+  if (!canWriteProject(req.user?.role)) {
+    return sendError(res, 403, { code: "FORBIDDEN", message: "Forbidden", legacyError: "Forbidden" });
+  }
+
+  const { id } = req.params;
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      await tx.appEntity.delete({
+        where: {
+          resource_entityId: {
+            resource: PROJECT_RESOURCE,
+            entityId: id,
+          },
+        },
+      });
+      await tx.projectRecord.deleteMany({
+        where: { id },
+      });
+    });
+
+    return res.status(204).send();
+  } catch (err) {
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2025") {
+      return sendError(res, 404, { code: "PROJECT_NOT_FOUND", message: "Project not found", legacyError: "Project not found" });
+    }
+
+    return sendError(res, 500, { code: "INTERNAL_ERROR", message: "Internal server error", legacyError: "Internal server error" });
+  }
+});
+
+projectsRouter.patch(
+  "/projects/:id/approval",
+  authenticate,
+  approvalActionLimiter,
+  async (req: AuthRequest, res: Response) => {
+  if (!isOwner(req.user?.role) && !isSpv(req.user?.role)) {
+    return sendError(res, 403, { code: "FORBIDDEN", message: "Only SPV/OWNER can approve or reject project", legacyError: "Only SPV/OWNER can approve or reject project" });
+  }
+
+  const { id } = req.params;
+  const body = (req.body as Record<string, unknown>) || {};
+  const action = String(body.action || "").toUpperCase();
+  const reason = String(body.reason || "").trim();
+  if (!["APPROVE", "REJECT"].includes(action)) {
+    return sendError(res, 400, { code: "INVALID_ACTION", message: "Invalid action. Use APPROVE or REJECT.", legacyError: "Invalid action. Use APPROVE or REJECT." });
+  }
+  if (action === "REJECT" && reason.length < 5) {
+    return sendError(res, 400, { code: "REJECT_REASON_REQUIRED", message: "Reject membutuhkan alasan minimal 5 karakter", legacyError: "Reject membutuhkan alasan minimal 5 karakter" });
+  }
+
+  try {
+    const existing = await prisma.appEntity.findUnique({
+      where: {
+        resource_entityId: {
+          resource: PROJECT_RESOURCE,
+          entityId: id,
+        },
+      },
+      select: { payload: true },
+    });
+
+    if (!existing || !existing.payload || typeof existing.payload !== "object" || Array.isArray(existing.payload)) {
+      return sendError(res, 404, { code: "PROJECT_NOT_FOUND", message: "Project not found", legacyError: "Project not found" });
+    }
+
+    const now = new Date().toISOString();
+    const payload = existing.payload as Record<string, unknown>;
+    const fromStatus = String(payload.approvalStatus || "Pending");
+    const fromUpper = normalizeApprovalToken(fromStatus);
+    const actionApprove = action === "APPROVE";
+    if (actionApprove && fromUpper === "APPROVED") {
+      return sendError(res, 409, { code: "PROJECT_ALREADY_APPROVED", message: "Project already approved", legacyError: "Project already approved" });
+    }
+    if (!actionApprove && fromUpper === "REJECTED") {
+      return sendError(res, 409, { code: "PROJECT_ALREADY_REJECTED", message: "Project already rejected", legacyError: "Project already rejected" });
+    }
+    if (actionApprove && fromUpper === "REJECTED") {
+      return sendError(res, 409, { code: "PROJECT_REQUIRES_UNLOCK", message: "Project rejected harus di-unlock dulu sebelum approve", legacyError: "Project rejected harus di-unlock dulu sebelum approve" });
+    }
+    if (!actionApprove && fromUpper === "APPROVED") {
+      return sendError(res, 409, { code: "PROJECT_REQUIRES_UNLOCK", message: "Project approved harus di-unlock dulu sebelum reject", legacyError: "Project approved harus di-unlock dulu sebelum reject" });
+    }
+    const transition = resolveProjectApprovalTransition(req.user?.role, fromStatus, actionApprove ? "APPROVE" : "REJECT");
+    if (!transition.ok) {
+      return sendError(res, 403, { code: transition.code, message: transition.message, legacyError: transition.message });
+    }
+    if (actionApprove && transition.toStatus === "Approved") {
+      const approvalReadiness = await ensureProjectCanBeApproved(payload);
+      if (!approvalReadiness.ok) {
+        return sendError(res, 400, { code: "APPROVAL_READINESS_INVALID", message: approvalReadiness.error, legacyError: approvalReadiness.error });
+      }
+    }
+    const quotationSnapshot =
+      actionApprove && transition.toStatus === "Approved"
+        ? await buildQuotationSnapshotForProject(payload)
+        : null;
+
+    const merged = {
+      ...payload,
+      id,
+      approvalStatus: transition.toStatus,
+      approvedBy: transition.toStatus === "Approved" ? req.user?.id || "OWNER" : payload.approvedBy ?? null,
+      approvedAt: transition.toStatus === "Approved" ? now : payload.approvedAt ?? null,
+      rejectedBy: transition.toStatus === "Rejected" ? req.user?.id || req.user?.role || "MANAGEMENT" : payload.rejectedBy ?? null,
+      rejectedAt: transition.toStatus === "Rejected" ? now : payload.rejectedAt ?? null,
+      spvApprovedBy: transition.toStatus === "Review SPV" ? req.user?.id || "SPV" : payload.spvApprovedBy ?? null,
+      spvApprovedAt: transition.toStatus === "Review SPV" ? now : payload.spvApprovedAt ?? null,
+      ...(transition.toStatus === "Rejected"
+        ? {
+            approvedBy: null,
+            approvedAt: null,
+          }
+        : {}),
+      ...(transition.toStatus === "Review SPV"
+        ? {
+            approvedBy: null,
+            approvedAt: null,
+            rejectedBy: null,
+            rejectedAt: null,
+          }
+        : {}),
+      ...(transition.toStatus === "Approved"
+        ? {
+            quotationSnapshot,
+            quotationSnapshotAt: now,
+            quotationSnapshotBy: req.user?.id || "OWNER",
+          }
+        : {}),
+    };
+
+    const parsed = projectSchema.safeParse(merged);
+    if (!parsed.success) {
+      return sendError(res, 400, { code: "VALIDATION_ERROR", message: "Validation failed", details: parsed.error.flatten(), legacyError: parsed.error.flatten() });
+    }
+
+    const updated = await prisma.$transaction(async (tx) => {
+      const row = await tx.appEntity.update({
+        where: {
+          resource_entityId: {
+            resource: PROJECT_RESOURCE,
+            entityId: id,
+          },
+        },
+        data: {
+          payload: parsed.data as Prisma.InputJsonValue,
+        },
+        select: { payload: true },
+      });
+
+      await upsertProjectRecord(tx, id, parsed.data as Record<string, unknown>);
+
+      await tx.projectApprovalLog.create({
+        data: {
+          projectId: id,
+          action:
+            transition.stage === "SPV_REVIEW"
+              ? "APPROVE"
+              : transition.stage === "OWNER_FINAL"
+                ? "APPROVE"
+                : "REJECT",
+          actorUserId: req.user?.id || null,
+          actorRole: req.user?.role || null,
+          fromStatus,
+          toStatus: transition.toStatus,
+          reason: transition.toStatus === "Rejected" ? reason : null,
+          metadata: buildAuditMetadata(req, {
+            quotationId: readString(payload, "quotationId"),
+            quotationSnapshotAt: transition.toStatus === "Approved" ? now : null,
+            approvalStage: transition.stage,
+          }),
+        },
+      });
+
+      return row;
+    });
+
+    return res.json(updated.payload);
+  } catch {
+    return sendError(res, 500, { code: "INTERNAL_ERROR", message: "Internal server error", legacyError: "Internal server error" });
+  }
+  }
+);
+
+projectsRouter.post(
+  "/projects/:id/unlock",
+  authenticate,
+  approvalActionLimiter,
+  async (req: AuthRequest, res: Response) => {
+  if (!isOwner(req.user?.role)) {
+    return sendError(res, 403, { code: "OWNER_ONLY", message: "Only OWNER/SPV can unlock project", legacyError: "Only OWNER/SPV can unlock project" });
+  }
+
+  const { id } = req.params;
+  const reason = String((req.body as Record<string, unknown>)?.reason || "").trim();
+
+  try {
+    const existing = await prisma.appEntity.findUnique({
+      where: {
+        resource_entityId: {
+          resource: PROJECT_RESOURCE,
+          entityId: id,
+        },
+      },
+      select: { payload: true },
+    });
+
+    if (!existing || !existing.payload || typeof existing.payload !== "object" || Array.isArray(existing.payload)) {
+      return sendError(res, 404, { code: "PROJECT_NOT_FOUND", message: "Project not found", legacyError: "Project not found" });
+    }
+
+    const now = new Date().toISOString();
+    const payload = existing.payload as Record<string, unknown>;
+    const currentApproval = String(payload.approvalStatus || "Pending").toUpperCase();
+    if (!["APPROVED", "REJECTED"].includes(currentApproval)) {
+      return sendError(res, 400, {
+        code: "PROJECT_NOT_FINAL",
+        message: "Project belum final (Approved/Rejected), tidak perlu unlock",
+        legacyError: "Project belum final (Approved/Rejected), tidak perlu unlock",
+      });
+    }
+
+    const merged = {
+      ...payload,
+      id,
+      approvalStatus: "Pending",
+      approvedBy: null,
+      approvedAt: null,
+      spvApprovedBy: null,
+      spvApprovedAt: null,
+      rejectedBy: null,
+      rejectedAt: null,
+      unlockBy: req.user?.id || "OWNER",
+      unlockAt: now,
+      unlockReason: reason || null,
+      lastApprovedSnapshotAt: payload.quotationSnapshotAt || null,
+      lastApprovedSnapshotBy: payload.quotationSnapshotBy || null,
+    };
+
+    const parsed = projectSchema.safeParse(merged);
+    if (!parsed.success) {
+      return sendError(res, 400, { code: "VALIDATION_ERROR", message: "Validation failed", details: parsed.error.flatten(), legacyError: parsed.error.flatten() });
+    }
+
+    const updated = await prisma.$transaction(async (tx) => {
+      const row = await tx.appEntity.update({
+        where: {
+          resource_entityId: {
+            resource: PROJECT_RESOURCE,
+            entityId: id,
+          },
+        },
+        data: {
+          payload: parsed.data as Prisma.InputJsonValue,
+        },
+        select: { payload: true },
+      });
+
+      await upsertProjectRecord(tx, id, parsed.data as Record<string, unknown>);
+
+      await tx.projectApprovalLog.create({
+        data: {
+          projectId: id,
+          action: "UNLOCK",
+          actorUserId: req.user?.id || null,
+          actorRole: req.user?.role || null,
+          fromStatus: currentApproval === "REJECTED" ? "Rejected" : "Approved",
+          toStatus: "Pending",
+          reason: reason || null,
+          metadata: buildAuditMetadata(req, {
+            lastApprovedSnapshotAt: payload.quotationSnapshotAt || null,
+            lastApprovedSnapshotBy: payload.quotationSnapshotBy || null,
+          }),
+        },
+      });
+
+      return row;
+    });
+
+    return res.json(updated.payload);
+  } catch {
+    return sendError(res, 500, { code: "INTERNAL_ERROR", message: "Internal server error", legacyError: "Internal server error" });
+  }
+  }
+);
+
+projectsRouter.post(
+  "/projects/:id/relock",
+  authenticate,
+  approvalActionLimiter,
+  async (req: AuthRequest, res: Response) => {
+  if (!isOwner(req.user?.role)) {
+    return sendError(res, 403, { code: "OWNER_ONLY", message: "Only OWNER/SPV can relock project", legacyError: "Only OWNER/SPV can relock project" });
+  }
+
+  const { id } = req.params;
+  try {
+    const existing = await prisma.appEntity.findUnique({
+      where: {
+        resource_entityId: {
+          resource: PROJECT_RESOURCE,
+          entityId: id,
+        },
+      },
+      select: { payload: true },
+    });
+
+    if (!existing || !existing.payload || typeof existing.payload !== "object" || Array.isArray(existing.payload)) {
+      return sendError(res, 404, { code: "PROJECT_NOT_FOUND", message: "Project not found", legacyError: "Project not found" });
+    }
+
+    const now = new Date().toISOString();
+    const payload = existing.payload as Record<string, unknown>;
+    const currentApproval = String(payload.approvalStatus || "Pending").toUpperCase();
+    if (currentApproval === "APPROVED") {
+      return sendError(res, 409, {
+        code: "PROJECT_ALREADY_APPROVED",
+        message: "Project already approved",
+        legacyError: "Project already approved",
+      });
+    }
+    if (currentApproval === "REJECTED") {
+      return sendError(res, 409, {
+        code: "PROJECT_REQUIRES_UNLOCK",
+        message: "Project rejected harus di-unlock dulu sebelum relock",
+        legacyError: "Project rejected harus di-unlock dulu sebelum relock",
+      });
+    }
+    if (currentApproval !== "PENDING") {
+      return sendError(res, 400, {
+        code: "PROJECT_INVALID_STATUS",
+        message: "Project hanya bisa di-relock dari status Pending",
+        legacyError: "Project hanya bisa di-relock dari status Pending",
+      });
+    }
+    if (!payload.unlockAt) {
+      return sendError(res, 400, {
+        code: "PROJECT_NOT_UNLOCKED",
+        message: "Project belum di-unlock, tidak bisa relock",
+        legacyError: "Project belum di-unlock, tidak bisa relock",
+      });
+    }
+
+    const approvalReadiness = await ensureProjectCanBeApproved(payload);
+    if (!approvalReadiness.ok) {
+      return sendError(res, 400, { code: "APPROVAL_READINESS_INVALID", message: approvalReadiness.error, legacyError: approvalReadiness.error });
+    }
+    const quotationSnapshot = await buildQuotationSnapshotForProject(payload);
+    const merged = {
+      ...payload,
+      id,
+      approvalStatus: "Approved",
+      approvedBy: req.user?.id || "OWNER",
+      approvedAt: now,
+      spvApprovedBy: payload.spvApprovedBy ?? null,
+      spvApprovedAt: payload.spvApprovedAt ?? null,
+      rejectedBy: null,
+      rejectedAt: null,
+      quotationSnapshot,
+      quotationSnapshotAt: now,
+      quotationSnapshotBy: req.user?.id || "OWNER",
+      relockBy: req.user?.id || "OWNER",
+      relockAt: now,
+    };
+
+    const parsed = projectSchema.safeParse(merged);
+    if (!parsed.success) {
+      return sendError(res, 400, { code: "VALIDATION_ERROR", message: "Validation failed", details: parsed.error.flatten(), legacyError: parsed.error.flatten() });
+    }
+
+    const updated = await prisma.$transaction(async (tx) => {
+      const row = await tx.appEntity.update({
+        where: {
+          resource_entityId: {
+            resource: PROJECT_RESOURCE,
+            entityId: id,
+          },
+        },
+        data: {
+          payload: parsed.data as Prisma.InputJsonValue,
+        },
+        select: { payload: true },
+      });
+
+      await upsertProjectRecord(tx, id, parsed.data as Record<string, unknown>);
+
+      await tx.projectApprovalLog.create({
+        data: {
+          projectId: id,
+          action: "RELOCK",
+          actorUserId: req.user?.id || null,
+          actorRole: req.user?.role || null,
+          fromStatus: String(payload.approvalStatus || "Pending"),
+          toStatus: "Approved",
+          reason: null,
+          metadata: buildAuditMetadata(req, {
+            quotationId: readString(payload, "quotationId"),
+            quotationSnapshotAt: now,
+          }),
+        },
+      });
+
+      return row;
+    });
+
+    return res.json(updated.payload);
+  } catch {
+    return sendError(res, 500, { code: "INTERNAL_ERROR", message: "Internal server error", legacyError: "Internal server error" });
+  }
+  }
+);
+
+projectsRouter.get("/projects/:id/approval-logs", authenticate, async (req: AuthRequest, res: Response) => {
+  if (!hasRoleAccess(req.user?.role, ["OWNER", "ADMIN"])) {
+    return sendError(res, 403, { code: "FORBIDDEN", message: "Only OWNER/ADMIN can view project approval logs", legacyError: "Only OWNER/ADMIN can view project approval logs" });
+  }
+
+  const { id } = req.params;
+  try {
+    const rows = await prisma.projectApprovalLog.findMany({
+      where: { projectId: id },
+      orderBy: { createdAt: "desc" },
+    });
+    return res.json(rows);
+  } catch {
+    return sendError(res, 500, { code: "INTERNAL_ERROR", message: "Internal server error", legacyError: "Internal server error" });
+  }
+});
+
+projectsRouter.get("/projects/metrics/summary", authenticate, async (req: AuthRequest, res: Response) => {
+  if (!canReadProject(req.user?.role)) {
+    return sendError(res, 403, { code: "FORBIDDEN", message: "Forbidden", legacyError: "Forbidden" });
+  }
+
+  try {
+    const rows = await prisma.appEntity.findMany({
+      where: { resource: PROJECT_RESOURCE },
+      select: { entityId: true, payload: true, updatedAt: true },
+      orderBy: { updatedAt: "desc" },
+    });
+
+    const projects = rows.map((row) => {
+      const payload = asRecord(row.payload);
+      const id = readString(payload, "id") || row.entityId;
+      return {
+        id,
+        status: String(readString(payload, "status") || ""),
+        approvalStatus: String(readString(payload, "approvalStatus") || "Pending"),
+        nilaiKontrak: toNumber(payload.nilaiKontrak, 0),
+        progress: toNumber(payload.progress, 0),
+      };
+    });
+
+    const totalContractValue = projects.reduce((sum, p) => sum + p.nilaiKontrak, 0);
+    const activeProjects = projects.filter((p) => String(p.status).toUpperCase() !== "COMPLETED").length;
+    const approvedProjects = projects.filter((p) => String(p.approvalStatus).toUpperCase() === "APPROVED").length;
+    const rejectedProjects = projects.filter((p) => String(p.approvalStatus).toUpperCase() === "REJECTED").length;
+    const avgProgress =
+      projects.length > 0
+        ? projects.reduce((sum, p) => sum + p.progress, 0) / projects.length
+        : 0;
+
+    return res.json({
+      generatedAt: new Date().toISOString(),
+      metrics: {
+        totalProjects: projects.length,
+        activeProjects,
+        approvedProjects,
+        rejectedProjects,
+        totalContractValue,
+        avgProgress,
+      },
+      lastUpdatedAt: rows[0]?.updatedAt?.toISOString() || null,
+    });
+  } catch {
+    return sendError(res, 500, { code: "INTERNAL_ERROR", message: "Internal server error", legacyError: "Internal server error" });
+  }
+});
+
+projectsRouter.get("/projects/:id/financials", authenticate, async (req: AuthRequest, res: Response) => {
+  if (!canReadProject(req.user?.role)) {
+    return sendError(res, 403, { code: "FORBIDDEN", message: "Forbidden", legacyError: "Forbidden" });
+  }
+
+  const { id } = req.params;
+
+  try {
+    const [projectRow, poRows, stockOutRows, stockItemRows, attendanceRows, employeeRows] = await Promise.all([
+      prisma.appEntity.findUnique({
+        where: {
+          resource_entityId: {
+            resource: PROJECT_RESOURCE,
+            entityId: id,
+          },
+        },
+        select: { entityId: true, payload: true, updatedAt: true },
+      }),
+      prisma.appEntity.findMany({
+        where: { resource: "purchase-orders" },
+        select: { payload: true, updatedAt: true },
+      }),
+      prisma.appEntity.findMany({
+        where: { resource: "stock-outs" },
+        select: { payload: true, updatedAt: true },
+      }),
+      prisma.appEntity.findMany({
+        where: { resource: "stock-items" },
+        select: { payload: true, updatedAt: true },
+      }),
+      prisma.attendanceRecord.findMany({
+        select: { employeeId: true, projectId: true, workHours: true, overtime: true, updatedAt: true },
+        orderBy: { updatedAt: "desc" },
+      }),
+      prisma.employeeRecord.findMany({
+        select: { id: true, salary: true, updatedAt: true },
+        orderBy: { updatedAt: "desc" },
+      }),
+    ]);
+
+    if (!projectRow || !projectRow.payload || typeof projectRow.payload !== "object" || Array.isArray(projectRow.payload)) {
+      return sendError(res, 404, { code: "PROJECT_NOT_FOUND", message: "Project not found", legacyError: "Project not found" });
+    }
+
+    const project = asRecord(projectRow.payload);
+    const contractValue = toNumber(project.nilaiKontrak, 0);
+
+    const workingExpenses = Array.isArray(project.workingExpenses) ? project.workingExpenses : [];
+    const pettyCash = workingExpenses.reduce((sum, e) => sum + toNumber(asRecord(e).nominal, 0), 0);
+
+    const poCommitted = poRows
+      .map((r) => asRecord(r.payload))
+      .filter((po) => readString(po, "projectId") === id && String(readString(po, "status") || "").toUpperCase() !== "REJECTED")
+      .reduce((sum, po) => sum + (toNumber(po.total, 0) || toNumber(po.totalAmount, 0)), 0);
+
+    const stockPriceByKode = new Map<string, number>();
+    for (const row of stockItemRows) {
+      const item = asRecord(row.payload);
+      const kode = readString(item, "kode");
+      if (!kode) continue;
+      stockPriceByKode.set(kode, toNumber(item.hargaSatuan, 0));
+    }
+
+    const stockUsage = stockOutRows
+      .map((r) => asRecord(r.payload))
+      .filter((so) => readString(so, "projectId") === id)
+      .reduce((sum, so) => {
+        const items = Array.isArray(so.items) ? so.items : [];
+        const itemValue = items.reduce((itemSum, raw) => {
+          const it = asRecord(raw);
+          const kode = readString(it, "kode") || "";
+          const qty = toNumber(it.qty, 0);
+          const unitPrice = stockPriceByKode.get(kode) || 0;
+          return itemSum + qty * unitPrice;
+        }, 0);
+        return sum + itemValue;
+      }, 0);
+
+    const salaryByEmployeeId = new Map<string, number>();
+    for (const row of employeeRows) {
+      const employeeId = row.id;
+      if (!employeeId) continue;
+      salaryByEmployeeId.set(employeeId, toNumber(row.salary, 0));
+    }
+
+    const laborCost = attendanceRows
+      .filter((att) => att.projectId === id)
+      .reduce((sum, att) => {
+        const employeeId = att.employeeId || "";
+        const salary = salaryByEmployeeId.get(employeeId) || 0;
+        const hourlyRate = salary / 176;
+        const workHours = toNumber(att.workHours, 0);
+        const overtime = toNumber(att.overtime, 0);
+        return sum + (workHours * hourlyRate) + (overtime * hourlyRate * 1.5);
+      }, 0);
+
+    const equipmentUsage = await prisma.fleetHealthEntry.findMany({
+      where: { projectId: id },
+      select: { hoursUsed: true, costPerHour: true },
+    });
+    const equipmentCost = equipmentUsage.reduce(
+      (sum, item) => sum + (toNumber(item.hoursUsed, 0) * toNumber(item.costPerHour, 0)),
+      0,
+    );
+
+    const actualSpent = pettyCash + poCommitted + stockUsage + laborCost + equipmentCost;
+    const marginNominal = contractValue - actualSpent;
+    const marginPercent = contractValue > 0 ? (marginNominal / contractValue) * 100 : 0;
+    const budgetUtilizationPercent = contractValue > 0 ? (actualSpent / contractValue) * 100 : 0;
+
+    const boq = Array.isArray(project.boq) ? project.boq : [];
+    const boqBudget = boq.reduce((sum, raw) => {
+      const item = asRecord(raw);
+      return sum + (toNumber(item.qtyEstimate, 0) * toNumber(item.unitPrice, 0));
+    }, 0);
+    const materialRequests = Array.isArray(project.materialRequests) ? project.materialRequests : [];
+    const materialRequestEstimated = materialRequests.reduce((sum, raw) => {
+      const item = asRecord(raw);
+      return sum + toNumber(item.estimatedCost, 0);
+    }, 0);
+    const materialRequestUsagePercent = boqBudget > 0 ? (materialRequestEstimated / boqBudget) * 100 : 0;
+
+    return res.json({
+      generatedAt: new Date().toISOString(),
+      projectId: id,
+      financials: {
+        contractValue,
+        pettyCash,
+        poCommitted,
+        stockUsage,
+        laborCost,
+        equipmentCost,
+        actualSpent,
+        marginNominal,
+        marginPercent,
+        budgetUtilizationPercent,
+        boqBudget,
+        materialRequestEstimated,
+        materialRequestUsagePercent,
+      },
+      lastUpdatedAt: projectRow.updatedAt.toISOString(),
+    });
+  } catch {
+    return sendError(res, 500, { code: "INTERNAL_ERROR", message: "Internal server error", legacyError: "Internal server error" });
+  }
+});

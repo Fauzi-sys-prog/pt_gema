@@ -1,0 +1,69 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: postgres_db
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: gemadb
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d gemadb"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  backend:
+    image: node:20
+    container_name: backend_app
+    working_dir: /app
+    restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/gemadb
+      PORT: 3000
+      JWT_SECRET: supersecretproductionkey_min32_chars_2026_secure
+      PRISMA_DEBUG: "0"
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    command: sh -c "npm install --no-audit --no-fund --silent && npx prisma generate && npx prisma migrate deploy && npm run dev"
+
+  prisma-studio:
+    image: node:20
+    container_name: prisma_studio
+    working_dir: /app
+    restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+      backend:
+        condition: service_started
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/gemadb
+    command: sh -c "npm install --no-audit --no-fund --silent && npx prisma generate && npx prisma studio --port 5555 --browser none --hostname 0.0.0.0"
+    ports:
+      - "5555:5555"
+
+  frontend:
+    build: ./frontend
+    container_name: frontend_app
+    restart: always
+    ports:
+      - "5173:80"
+    depends_on:
+      - backend
+
+volumes:
+  pgdata:
