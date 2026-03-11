@@ -20,3 +20,9 @@ coverage/
 
 .smoke.tokens.env
 .smoke.tokens.env.bak
+
+backend/imports/tk-clear/
+backend/imports/tk-sample/
+backend/imports/**/.~*
+frontend/src/contexts.zip
+frontend/src/pages/*.zip
