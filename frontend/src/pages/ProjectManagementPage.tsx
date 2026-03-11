@@ -175,10 +175,17 @@ export default function ProjectManagementPage() {
   const productionReportList = serverProductionReportList ?? ctxProductionReportList;
   const fleetHealthList = serverFleetHealthList ?? [];
 
-  // Get approved quotations for project creation
+  const linkedQuotationIds = new Set(
+    projectList
+      .map((project) => String(project.quotationId || "").trim())
+      .filter((id) => id.length > 0)
+  );
+
+  // Only show quotations that are eligible and not already linked to another project.
   const approvedQuotations = quotationList.filter((q) => {
     const status = String(q.status || "").toUpperCase();
-    return status === "SENT" || status === "APPROVED";
+    if (!["SENT", "APPROVED"].includes(status)) return false;
+    return !linkedQuotationIds.has(String(q.id || "").trim());
   });
 
   const normalizeEntityRows = <T,>(rows: any[]): T[] =>
@@ -1303,7 +1310,7 @@ export default function ProjectManagementPage() {
                   <DollarSign size={32} />
                 </div>
                 <div>
-                  <h2 className="text-2xl font-black uppercase italic tracking-tight">Select Quotation (Draft/Sent)</h2>
+                  <h2 className="text-2xl font-black uppercase italic tracking-tight">Select Quotation (Sent/Approved)</h2>
                   <p className="text-[10px] font-bold uppercase tracking-[0.2em] mt-1 opacity-90">Convert Quotation to Project</p>
                 </div>
               </div>
@@ -1321,7 +1328,7 @@ export default function ProjectManagementPage() {
                 <div className="text-center py-20">
                   <FileText size={64} className="mx-auto text-slate-200 mb-4" />
                   <p className="text-slate-400 font-bold uppercase text-sm">No quotations available</p>
-                  <p className="text-slate-400 text-xs mt-2">Buat quotation dulu dari Data Collection atau Manual</p>
+                  <p className="text-slate-400 text-xs mt-2">Buat quotation dulu atau pastikan quotation belum dipakai project lain</p>
                 </div>
               ) : (
                 <div className="grid grid-cols-1 gap-4">

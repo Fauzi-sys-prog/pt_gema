@@ -189,6 +189,7 @@ function generateFallbackNoPenawaran(id: string, tanggal: string | null): string
 function normalizeWorkflowStatus(value: unknown): WorkflowStatus {
   const raw = String(value || "").toUpperCase();
   if (raw === "SENT") return "Sent";
+  if (raw === "REVIEW" || raw === "REVIEW_SPV") return "Review";
   if (raw === "APPROVED") return "Approved";
   if (raw === "REJECTED") return "Rejected";
   return "Draft";

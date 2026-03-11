@@ -44,7 +44,7 @@ export default function QuotationPage() {
   const [filterStatus, setFilterStatus] = useState<string>('All');
   const [creationMode, setCreationMode] = useState<'from-survey' | 'manual'>('from-survey');
   const [selectedSurvey, setSelectedSurvey] = useState<any>(null);
-  const [showAdvancedQuotationEditor, setShowAdvancedQuotationEditor] = useState(!isOwner);
+  const [showAdvancedQuotationEditor, setShowAdvancedQuotationEditor] = useState(true);
   const [serverQuotationList, setServerQuotationList] = useState<any[] | null>(null);
   const [exportingQuotationId, setExportingQuotationId] = useState<string | null>(null);
 
@@ -633,7 +633,7 @@ export default function QuotationPage() {
     });
     setPaymentTerms(quotation.paymentTerms || paymentTerms);
     setCommercialTerms(quotation.commercialTerms || commercialTerms);
-    setShowAdvancedQuotationEditor(!isOwner);
+    setShowAdvancedQuotationEditor(true);
     setShowCreateModal(true);
   };
 
@@ -730,7 +730,7 @@ export default function QuotationPage() {
         // Auto-open modal and load data
         setCreationMode('from-survey');
         loadFromSurvey(dataCollection);
-        setShowAdvancedQuotationEditor(!isOwner);
+        setShowAdvancedQuotationEditor(true);
         setShowCreateModal(true);
         
         // Clear location state to prevent re-triggering
@@ -837,7 +837,7 @@ export default function QuotationPage() {
     setCommercialTerms(sample.commercialTerms || commercialTerms);
     
     setCreationMode('manual');
-    setShowAdvancedQuotationEditor(!isOwner);
+    setShowAdvancedQuotationEditor(true);
     setShowCreateModal(true);
 
     toast.success('Contoh quotation berhasil dimuat', {
@@ -1135,7 +1135,7 @@ export default function QuotationPage() {
         <button
           onClick={() => {
             setCreationMode('manual');
-            setShowAdvancedQuotationEditor(!isOwner);
+            setShowAdvancedQuotationEditor(true);
             setShowCreateModal(true);
           }}
           className="flex-1 bg-white text-gray-700 px-4 py-3 rounded-lg border-2 border-gray-300 hover:border-blue-500 hover:bg-blue-50 transition-all flex items-center justify-center gap-2 font-medium"
@@ -1411,7 +1411,7 @@ export default function QuotationPage() {
                       className="border border-gray-200 rounded-lg p-4 hover:border-blue-500 hover:bg-blue-50 cursor-pointer transition-all group"
                       onClick={() => {
                         loadFromSurvey(survey);
-                        setShowAdvancedQuotationEditor(!isOwner);
+                        setShowAdvancedQuotationEditor(true);
                         setShowCreateModal(true);
                       }}
                     >
@@ -1513,7 +1513,7 @@ export default function QuotationPage() {
                   <div className="mb-4 flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
                     <div>
                       <p className="text-sm font-semibold text-slate-800">
-                        {isOwner ? 'Mode Ringkas Owner' : 'Mode Editor Detail'}
+                        {isOwner ? 'Mode Detail Owner' : 'Mode Editor Detail'}
                       </p>
                       <p className="text-xs text-slate-500">
                         {showAdvancedQuotationEditor
