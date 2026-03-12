@@ -84,10 +84,13 @@ export default function SalesAnalyticsPage() {
       ]);
       const invoiceRows = Array.isArray(invoiceRes.data) ? invoiceRes.data : [];
       const customerInvoiceRows = Array.isArray(customerInvoiceRes.data) ? customerInvoiceRes.data : [];
-      const invoices = [
+      const mergedInvoices = [
         ...normalizeInvoiceRows(invoiceRows),
         ...normalizeInvoiceRows(customerInvoiceRows),
       ];
+      const invoices = Array.from(
+        new Map(mergedInvoices.map((row) => [row.id, row])).values()
+      );
       const quotations = Array.isArray(quotationRes.data) ? (quotationRes.data as Quotation[]) : [];
       setServerInvoiceList(invoices);
       setServerQuotationList(quotations);

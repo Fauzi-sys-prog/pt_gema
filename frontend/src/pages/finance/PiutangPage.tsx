@@ -40,10 +40,10 @@ import {
 } from 'recharts';
 
 export default function PiutangPage() {
-  const { updateInvoice, addAuditLog, currentUser } = useApp();
+  const { updateInvoice, addAuditLog, currentUser, invoiceList } = useApp();
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<'All' | 'Unpaid' | 'Paid' | 'Overdue'>('All');
-  const [serverInvoices, setServerInvoices] = useState<Invoice[]>([]);
+  const [serverInvoices, setServerInvoices] = useState<Invoice[] | null>(null);
   const [summaryMetrics, setSummaryMetrics] = useState<{
     totalAR: number;
     totalInvoiced: number;
@@ -57,7 +57,8 @@ export default function PiutangPage() {
     activeInvoiceCount?: number;
   } | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const safeInvoices = useMemo(() => (serverInvoices || []).filter(Boolean), [serverInvoices]);
+  const effectiveInvoices = serverInvoices ?? invoiceList;
+  const safeInvoices = useMemo(() => (effectiveInvoices || []).filter(Boolean), [effectiveInvoices]);
 
   const fetchInvoices = async () => {
     try {
@@ -74,7 +75,7 @@ export default function PiutangPage() {
         : [];
       setServerInvoices(rows);
     } catch {
-      setServerInvoices([]);
+      setServerInvoices(null);
     } finally {
       setIsRefreshing(false);
     }

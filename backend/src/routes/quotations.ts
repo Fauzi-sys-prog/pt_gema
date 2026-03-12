@@ -26,7 +26,7 @@ function canWriteQuotation(role?: Role): boolean {
 }
 
 function canViewQuotationApprovalLogs(role?: Role): boolean {
-  return hasRoleAccess(role, ["OWNER", "ADMIN", "MANAGER"]);
+  return hasRoleAccess(role, ["OWNER", "SPV", "ADMIN", "MANAGER"]);
 }
 
 function buildAuditMetadata(req: AuthRequest, extra?: Record<string, unknown>): Record<string, unknown> {
@@ -91,15 +91,79 @@ function toQuotationMeta(item: Record<string, unknown>) {
   };
 }
 
+type QuotationReadRow = {
+  id: string;
+  noPenawaran: string | null;
+  tanggal: string | null;
+  status: string | null;
+  kepada: string | null;
+  perihal: string | null;
+  grandTotal: number | null;
+  dataCollectionId: string | null;
+  payload: Prisma.JsonValue;
+};
+
+function toProjectRecordMeta(projectId: string, payload: Record<string, unknown>, quotationId: string) {
+  return {
+    quotationId,
+    kodeProject: readString(payload, "kodeProject") || projectId,
+    namaProject: readString(payload, "namaProject") || readString(payload, "projectName"),
+    customerName: readString(payload, "customerName") || readString(payload, "customer"),
+    status: readString(payload, "status"),
+    approvalStatus: readString(payload, "approvalStatus"),
+    nilaiKontrak: readNumber(payload, "nilaiKontrak") || readNumber(payload, "contractValue") || readNumber(payload, "totalContractValue"),
+    progress: readNumber(payload, "progress"),
+  };
+}
+
+function hydrateQuotationPayload(row: QuotationReadRow): QuotationPayload {
+  const payload = asRecord(row.payload);
+  return normalizeQuotationPayload(row.id, {
+    ...payload,
+    id: row.id,
+    noPenawaran: row.noPenawaran ?? readString(payload, "noPenawaran") ?? undefined,
+    tanggal: row.tanggal ?? readString(payload, "tanggal") ?? undefined,
+    status: row.status ?? readString(payload, "status") ?? undefined,
+    kepada: row.kepada ?? readString(payload, "kepada") ?? undefined,
+    perihal: row.perihal ?? readString(payload, "perihal") ?? undefined,
+    grandTotal: row.grandTotal ?? readNumber(payload, "grandTotal") ?? undefined,
+    dataCollectionId:
+      row.dataCollectionId ?? readString(payload, "dataCollectionId") ?? undefined,
+  });
+}
+
 async function getApprovedProjectLockForQuotation(
   quotationId: string
 ): Promise<{ projectId: string; kodeProject: string | null } | null> {
-  const projects = await prisma.appEntity.findMany({
-    where: { resource: PROJECT_RESOURCE },
-    select: { entityId: true, payload: true },
-  });
+  const [projects, legacyProjects] = await Promise.all([
+    prisma.projectRecord.findMany({
+      select: {
+        id: true,
+        quotationId: true,
+        kodeProject: true,
+        approvalStatus: true,
+        payload: true,
+      },
+    }),
+    prisma.appEntity.findMany({
+      where: { resource: PROJECT_RESOURCE },
+      select: { entityId: true, payload: true },
+    }),
+  ]);
 
   for (const row of projects) {
+    const payload = asRecord(row.payload);
+    const linkedQuotationId = row.quotationId || readString(payload, "quotationId");
+    const approvalStatus = String(row.approvalStatus || payload.approvalStatus || "").toUpperCase();
+    if (linkedQuotationId === quotationId && approvalStatus === "APPROVED") {
+      return {
+        projectId: row.id,
+        kodeProject: row.kodeProject || readString(payload, "kodeProject"),
+      };
+    }
+  }
+
+  for (const row of legacyProjects) {
     const payload = asRecord(row.payload);
     const linkedQuotationId = readString(payload, "quotationId");
     const approvalStatus = String(payload.approvalStatus || "").toUpperCase();
@@ -115,12 +179,29 @@ async function getApprovedProjectLockForQuotation(
 }
 
 async function getApprovedProjectLockedQuotationIds(): Promise<Set<string>> {
-  const projects = await prisma.appEntity.findMany({
-    where: { resource: PROJECT_RESOURCE },
-    select: { payload: true },
-  });
+  const [projects, legacyProjects] = await Promise.all([
+    prisma.projectRecord.findMany({
+      select: {
+        quotationId: true,
+        approvalStatus: true,
+        payload: true,
+      },
+    }),
+    prisma.appEntity.findMany({
+      where: { resource: PROJECT_RESOURCE },
+      select: { payload: true },
+    }),
+  ]);
   const locked = new Set<string>();
   for (const row of projects) {
+    const payload = asRecord(row.payload);
+    const linkedQuotationId = row.quotationId || readString(payload, "quotationId");
+    const approvalStatus = String(row.approvalStatus || payload.approvalStatus || "").toUpperCase();
+    if (linkedQuotationId && approvalStatus === "APPROVED") {
+      locked.add(linkedQuotationId);
+    }
+  }
+  for (const row of legacyProjects) {
     const payload = asRecord(row.payload);
     const linkedQuotationId = readString(payload, "quotationId");
     const approvalStatus = String(payload.approvalStatus || "").toUpperCase();
@@ -206,17 +287,30 @@ async function generateFinalNoPenawaran(excludeId: string, tanggal: string | nul
   const year = date.getFullYear();
   const monthRoman = monthToRoman(date.getMonth() + 1);
 
-  const rows = await prisma.quotation.findMany({
-    select: { id: true, noPenawaran: true, payload: true },
-  });
+  const [rows, legacyRows] = await Promise.all([
+    prisma.quotation.findMany({
+      select: { id: true, noPenawaran: true, payload: true },
+    }),
+    prisma.appEntity.findMany({
+      where: { resource: QUOTATION_RESOURCE },
+      select: { entityId: true, payload: true },
+    }),
+  ]);
 
   let maxSeq = 0;
   const pattern = /^(\d{1,4})\/PEN\/GMT\/([IVXLC]+)\/(\d{4})$/;
-  for (const row of rows) {
+  const allRows = [
+    ...legacyRows.map((row) => ({ id: row.entityId, noPenawaran: null as string | null, payload: row.payload })),
+    ...rows,
+  ];
+
+  for (const row of allRows) {
     if (row.id === excludeId) continue;
-    const no = row.noPenawaran || (row.payload && typeof row.payload === "object" && !Array.isArray(row.payload)
-      ? String((row.payload as Record<string, unknown>).noPenawaran || "")
-      : "");
+    const no =
+      row.noPenawaran ||
+      (row.payload && typeof row.payload === "object" && !Array.isArray(row.payload)
+        ? String((row.payload as Record<string, unknown>).noPenawaran || "")
+        : "");
     const match = no.match(pattern);
     if (!match) continue;
     const seq = Number(match[1]);
@@ -450,25 +544,29 @@ async function upsertProjectFromQuotation(payload: QuotationPayload): Promise<vo
   const validityDays = toNumber(payload.validityDays, 30);
   const grandTotal = toNumber(payload.grandTotal, 0);
 
-  const rows = await prisma.appEntity.findMany({
-    where: { resource: PROJECT_RESOURCE },
-    select: { entityId: true, payload: true },
+  const rows = await prisma.projectRecord.findMany({
+    select: {
+      id: true,
+      quotationId: true,
+      approvalStatus: true,
+      payload: true,
+    },
   });
 
   const existing = rows.find((row) => {
-    const p = row.payload;
-    return !!p && typeof p === "object" && !Array.isArray(p) && (p as Record<string, unknown>).quotationId === quotationId;
+    const p = asRecord(row.payload);
+    return (row.quotationId || readString(p, "quotationId")) === quotationId;
   });
 
   // Do not create brand-new project from quotation that is already final negative.
   if (!existing && ["REJECTED", "CANCELLED", "LOST"].includes(status)) return;
 
-  const projectId = existing?.entityId ?? toProjectIdFromQuotation(quotationId);
+  const projectId = existing?.id ?? toProjectIdFromQuotation(quotationId);
   const existingPayload =
     existing?.payload && typeof existing.payload === "object" && !Array.isArray(existing.payload)
       ? (existing.payload as Record<string, unknown>)
       : {};
-  const existingApproval = String(existingPayload.approvalStatus || "Pending").toUpperCase();
+  const existingApproval = String(existing?.approvalStatus || existingPayload.approvalStatus || "Pending").toUpperCase();
   const mappedProjectStatus =
     status === "APPROVED"
       ? "Planning"
@@ -510,6 +608,7 @@ async function upsertProjectFromQuotation(payload: QuotationPayload): Promise<vo
     quotationSnapshotAt: new Date().toISOString(),
     quotationSnapshotBy: "SYSTEM_QUOTATION_SYNC",
   };
+  const projectRecordMeta = toProjectRecordMeta(projectId, projectPayload, quotationId);
 
   await prisma.$transaction(async (tx) => {
     await tx.appEntity.upsert({
@@ -533,11 +632,11 @@ async function upsertProjectFromQuotation(payload: QuotationPayload): Promise<vo
       where: { id: projectId },
       create: {
         id: projectId,
-        quotationId,
+        ...projectRecordMeta,
         payload: projectPayload as Prisma.InputJsonValue,
       },
       update: {
-        quotationId,
+        ...projectRecordMeta,
         payload: projectPayload as Prisma.InputJsonValue,
       },
     });
@@ -546,27 +645,46 @@ async function upsertProjectFromQuotation(payload: QuotationPayload): Promise<vo
 
 quotationsRouter.get("/quotations", authenticate, async (_req: AuthRequest, res: Response) => {
   try {
-    const rows = await prisma.quotation.findMany({
-      orderBy: { updatedAt: "desc" },
-      select: {
-        id: true,
-        payload: true,
-      },
-    });
+    const [rows, legacyRows] = await Promise.all([
+      prisma.quotation.findMany({
+        orderBy: { updatedAt: "desc" },
+        select: {
+          id: true,
+          noPenawaran: true,
+          tanggal: true,
+          status: true,
+          kepada: true,
+          perihal: true,
+          grandTotal: true,
+          dataCollectionId: true,
+          payload: true,
+          updatedAt: true,
+        },
+      }),
+      prisma.appEntity.findMany({
+        where: { resource: QUOTATION_RESOURCE },
+        orderBy: { updatedAt: "desc" },
+        select: { entityId: true, payload: true, updatedAt: true },
+      }),
+    ]);
 
-    // Backward compatibility during migration from AppEntity.
-    const sourceRows =
-      rows.length > 0
-        ? rows.map((row) => ({ id: row.id, payload: row.payload }))
-        : (
-            await prisma.appEntity.findMany({
-              where: { resource: QUOTATION_RESOURCE },
-              orderBy: { updatedAt: "desc" },
-              select: { entityId: true, payload: true },
-            })
-          ).map((row) => ({ id: row.entityId, payload: row.payload }));
+    const merged = new Map<string, { payload: QuotationPayload; updatedAt: Date }>();
+    for (const row of legacyRows) {
+      merged.set(row.entityId, {
+        payload: normalizeQuotationPayload(row.entityId, row.payload),
+        updatedAt: row.updatedAt,
+      });
+    }
+    for (const row of rows) {
+      merged.set(row.id, {
+        payload: hydrateQuotationPayload(row),
+        updatedAt: row.updatedAt,
+      });
+    }
 
-    const items: unknown[] = sourceRows.map((row) => normalizeQuotationPayload(row.id, row.payload));
+    const items: unknown[] = Array.from(merged.values())
+      .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
+      .map((row) => row.payload);
 
     const parsed = quotationBulkSchema.safeParse(items);
     if (!parsed.success) {
@@ -583,13 +701,37 @@ quotationsRouter.get("/quotations/sample", authenticate, async (_req: AuthReques
   try {
     const latestQuotation = await prisma.quotation.findFirst({
       orderBy: { updatedAt: "desc" },
-      select: { id: true, payload: true },
+      select: {
+        id: true,
+        noPenawaran: true,
+        tanggal: true,
+        status: true,
+        kepada: true,
+        perihal: true,
+        grandTotal: true,
+        dataCollectionId: true,
+        payload: true,
+      },
     });
 
-    if (latestQuotation?.payload && typeof latestQuotation.payload === "object" && !Array.isArray(latestQuotation.payload)) {
-      const normalized = normalizeQuotationPayload(latestQuotation.id, latestQuotation.payload);
+    if (latestQuotation) {
+      const normalized = hydrateQuotationPayload(latestQuotation);
       return res.json({
         source: "latest-quotation",
+        sample: normalized,
+      });
+    }
+
+    const legacyQuotation = await prisma.appEntity.findFirst({
+      where: { resource: QUOTATION_RESOURCE },
+      orderBy: { updatedAt: "desc" },
+      select: { entityId: true, payload: true },
+    });
+
+    if (legacyQuotation) {
+      const normalized = normalizeQuotationPayload(legacyQuotation.entityId, legacyQuotation.payload);
+      return res.json({
+        source: "legacy-quotation",
         sample: normalized,
       });
     }
@@ -599,6 +741,24 @@ quotationsRouter.get("/quotations/sample", authenticate, async (_req: AuthReques
       select: { id: true, namaResponden: true, lokasi: true, tipePekerjaan: true },
     });
 
+    let latestDataCollectionFallback = latestDataCollection;
+    if (!latestDataCollectionFallback) {
+      const legacyDataCollection = await prisma.appEntity.findFirst({
+        where: { resource: "data-collections" },
+        orderBy: { updatedAt: "desc" },
+        select: { entityId: true, payload: true },
+      });
+      if (legacyDataCollection) {
+        const payload = ensurePayloadWithId(legacyDataCollection.entityId, legacyDataCollection.payload);
+        latestDataCollectionFallback = {
+          id: legacyDataCollection.entityId,
+          namaResponden: readString(payload, "namaResponden"),
+          lokasi: readString(payload, "lokasi"),
+          tipePekerjaan: readString(payload, "tipePekerjaan"),
+        };
+      }
+    }
+
     const now = new Date();
     const fallback = {
       id: `QUO-SAMPLE-${now.getTime()}`,
@@ -606,13 +766,13 @@ quotationsRouter.get("/quotations/sample", authenticate, async (_req: AuthReques
       revisi: "A",
       tanggal: now.toISOString().slice(0, 10),
       jenisQuotation: "Jasa",
-      kepada: latestDataCollection?.namaResponden || "PT Contoh Customer",
-      perusahaan: latestDataCollection?.namaResponden || "PT Contoh Customer",
-      lokasi: latestDataCollection?.lokasi || "Bekasi",
+      kepada: latestDataCollectionFallback?.namaResponden || "PT Contoh Customer",
+      perusahaan: latestDataCollectionFallback?.namaResponden || "PT Contoh Customer",
+      lokasi: latestDataCollectionFallback?.lokasi || "Bekasi",
       up: "",
       lampiran: "-",
-      perihal: latestDataCollection?.tipePekerjaan
-        ? `Penawaran ${latestDataCollection.tipePekerjaan}`
+      perihal: latestDataCollectionFallback?.tipePekerjaan
+        ? `Penawaran ${latestDataCollectionFallback.tipePekerjaan}`
         : "Penawaran Pekerjaan",
       validityDays: 30,
       unitCount: 1,
@@ -675,18 +835,42 @@ quotationsRouter.get("/quotations/:id", authenticate, async (req: AuthRequest, r
   try {
     const row = await prisma.quotation.findUnique({
       where: { id },
-      select: { payload: true },
+      select: {
+        id: true,
+        noPenawaran: true,
+        tanggal: true,
+        status: true,
+        kepada: true,
+        perihal: true,
+        grandTotal: true,
+        dataCollectionId: true,
+        payload: true,
+      },
     });
 
     if (!row) {
-      return sendError(res, 404, {
-        code: "QUOTATION_NOT_FOUND",
-        message: "Quotation not found",
-        legacyError: "Quotation not found",
+      const legacy = await prisma.appEntity.findUnique({
+        where: {
+          resource_entityId: {
+            resource: QUOTATION_RESOURCE,
+            entityId: id,
+          },
+        },
+        select: { payload: true },
       });
+      if (!legacy) {
+        return sendError(res, 404, {
+          code: "QUOTATION_NOT_FOUND",
+          message: "Quotation not found",
+          legacyError: "Quotation not found",
+        });
+      }
+
+      const payload = normalizeQuotationPayload(id, legacy.payload);
+      return res.json(payload);
     }
 
-    const payload = normalizeQuotationPayload(id, row.payload);
+    const payload = hydrateQuotationPayload(row);
     return res.json(payload);
   } catch {
     return sendError(res, 500, {
@@ -715,20 +899,37 @@ quotationsRouter.put("/quotations/bulk", authenticate, async (req: AuthRequest, 
     return sendError(res, 400, { code: "DUPLICATE_ID_IN_BULK", message: `Duplicate quotation id in bulk payload: ${duplicateIds.join(", ")}`, legacyError: `Duplicate quotation id in bulk payload: ${duplicateIds.join(", ")}` });
   }
 
-  const existingRows = await prisma.quotation.findMany({
-    where: { id: { in: items.map((item) => item.id) } },
-    select: { id: true, payload: true },
-  });
-  const finalLockedIds = existingRows
-    .filter((row) => {
-      const payload = asRecord(row.payload);
-      const status = normalizeWorkflowStatus(payload.status);
-      return status === "Approved" || status === "Rejected";
-    })
-    .map((row) => row.id);
-  if (finalLockedIds.length > 0) {
+  const [existingRows, legacyRows] = await Promise.all([
+    prisma.quotation.findMany({
+      where: { id: { in: items.map((item) => item.id) } },
+      select: { id: true, status: true, payload: true },
+    }),
+    prisma.appEntity.findMany({
+      where: {
+        resource: QUOTATION_RESOURCE,
+        entityId: { in: items.map((item) => item.id) },
+      },
+      select: { entityId: true, payload: true },
+    }),
+  ]);
+  const finalLockedIds = new Set<string>();
+  for (const row of existingRows) {
+    const payload = asRecord(row.payload);
+    const status = normalizeWorkflowStatus(row.status || payload.status);
+    if (status === "Approved" || status === "Rejected") {
+      finalLockedIds.add(row.id);
+    }
+  }
+  for (const row of legacyRows) {
+    const payload = asRecord(row.payload);
+    const status = normalizeWorkflowStatus(payload.status);
+    if (status === "Approved" || status === "Rejected") {
+      finalLockedIds.add(row.entityId);
+    }
+  }
+  if (finalLockedIds.size > 0) {
     return res.status(400).json({
-      error: `Quotation final state tidak bisa diubah via bulk: ${finalLockedIds.join(", ")}`,
+      error: `Quotation final state tidak bisa diubah via bulk: ${Array.from(finalLockedIds).join(", ")}`,
     });
   }
 
@@ -755,7 +956,7 @@ quotationsRouter.put("/quotations/bulk", authenticate, async (req: AuthRequest, 
   try {
     try {
       await prisma.$transaction(
-        items.map((item) =>
+        items.flatMap((item) => [
           prisma.quotation.upsert({
             where: { id: item.id },
             update: {
@@ -767,8 +968,24 @@ quotationsRouter.put("/quotations/bulk", authenticate, async (req: AuthRequest, 
               ...toQuotationMeta(item),
               payload: item as Prisma.InputJsonValue,
             },
-          })
-        )
+          }),
+          prisma.appEntity.upsert({
+            where: {
+              resource_entityId: {
+                resource: QUOTATION_RESOURCE,
+                entityId: item.id,
+              },
+            },
+            update: {
+              payload: item as Prisma.InputJsonValue,
+            },
+            create: {
+              resource: QUOTATION_RESOURCE,
+              entityId: item.id,
+              payload: item as Prisma.InputJsonValue,
+            },
+          }),
+        ])
       );
     } catch (err) {
       if (!isMissingColumnError(err)) {
@@ -777,7 +994,7 @@ quotationsRouter.put("/quotations/bulk", authenticate, async (req: AuthRequest, 
 
       // Backward-compatible fallback if DB column metadata is not yet synced.
       await prisma.$transaction(
-        items.map((item) =>
+        items.flatMap((item) => [
           prisma.quotation.upsert({
             where: { id: item.id },
             update: {
@@ -787,8 +1004,24 @@ quotationsRouter.put("/quotations/bulk", authenticate, async (req: AuthRequest, 
               id: item.id,
               payload: item as Prisma.InputJsonValue,
             },
-          })
-        )
+          }),
+          prisma.appEntity.upsert({
+            where: {
+              resource_entityId: {
+                resource: QUOTATION_RESOURCE,
+                entityId: item.id,
+              },
+            },
+            update: {
+              payload: item as Prisma.InputJsonValue,
+            },
+            create: {
+              resource: QUOTATION_RESOURCE,
+              entityId: item.id,
+              payload: item as Prisma.InputJsonValue,
+            },
+          }),
+        ])
       );
     }
 
@@ -856,40 +1089,91 @@ quotationsRouter.post("/quotations", authenticate, async (req: AuthRequest, res:
   }
 
   try {
-    const exists = await prisma.quotation.findUnique({
-      where: { id: item.id },
-      select: { id: true },
-    });
-    if (exists) {
+    const [exists, legacyExists] = await Promise.all([
+      prisma.quotation.findUnique({
+        where: { id: item.id },
+        select: { id: true },
+      }),
+      prisma.appEntity.findUnique({
+        where: {
+          resource_entityId: {
+            resource: QUOTATION_RESOURCE,
+            entityId: item.id,
+          },
+        },
+        select: { entityId: true },
+      }),
+    ]);
+    if (exists || legacyExists) {
       return sendError(res, 409, { code: "QUOTATION_ID_EXISTS", message: "Quotation id already exists", legacyError: "Quotation id already exists" });
     }
 
-    let saved;
-    try {
-      saved = await prisma.quotation.create({
-        data: {
-          id: item.id,
-          ...toQuotationMeta(item),
-          payload: item as Prisma.InputJsonValue,
-        },
-        select: {
-          payload: true,
-        },
-      });
-    } catch (err) {
-      // Fallback to payload-only persistence if meta columns/constraints fail.
-      saved = await prisma.quotation.create({
-        data: {
-          id: item.id,
-          payload: item as Prisma.InputJsonValue,
-        },
-        select: {
-          payload: true,
-        },
-      });
-    }
+    const savedPayload = await prisma.$transaction(async (tx) => {
+      let saved;
+      try {
+        saved = await tx.quotation.create({
+          data: {
+            id: item.id,
+            ...toQuotationMeta(item),
+            payload: item as Prisma.InputJsonValue,
+          },
+          select: {
+            id: true,
+            noPenawaran: true,
+            tanggal: true,
+            status: true,
+            kepada: true,
+            perihal: true,
+            grandTotal: true,
+            dataCollectionId: true,
+            payload: true,
+          },
+        });
+      } catch (err) {
+        if (!isMissingColumnError(err)) {
+          throw err;
+        }
 
-    const savedPayload = normalizeQuotationPayload(item.id, saved.payload);
+        // Fallback only for schema drift where dedicated meta columns are not ready yet.
+        saved = await tx.quotation.create({
+          data: {
+            id: item.id,
+            payload: item as Prisma.InputJsonValue,
+          },
+          select: {
+            id: true,
+            noPenawaran: true,
+            tanggal: true,
+            status: true,
+            kepada: true,
+            perihal: true,
+            grandTotal: true,
+            dataCollectionId: true,
+            payload: true,
+          },
+        });
+      }
+
+      const hydrated = hydrateQuotationPayload(saved);
+      await tx.appEntity.upsert({
+        where: {
+          resource_entityId: {
+            resource: QUOTATION_RESOURCE,
+            entityId: hydrated.id,
+          },
+        },
+        update: {
+          payload: hydrated as Prisma.InputJsonValue,
+        },
+        create: {
+          resource: QUOTATION_RESOURCE,
+          entityId: hydrated.id,
+          payload: hydrated as Prisma.InputJsonValue,
+        },
+      });
+
+      return hydrated;
+    });
     await upsertProjectFromQuotation(savedPayload);
     await createQuotationApprovalLogSafe({
       quotationId: savedPayload.id,
@@ -946,14 +1230,38 @@ quotationsRouter.patch("/quotations/:id", authenticate, async (req: AuthRequest,
   try {
     const existing = await prisma.quotation.findUnique({
       where: { id },
-      select: { payload: true },
+      select: {
+        id: true,
+        noPenawaran: true,
+        tanggal: true,
+        status: true,
+        kepada: true,
+        perihal: true,
+        grandTotal: true,
+        dataCollectionId: true,
+        payload: true,
+      },
     });
 
+    const hasDedicatedRow = Boolean(existing);
+    let existingPayload: QuotationPayload;
     if (!existing) {
-      return sendError(res, 404, { code: "QUOTATION_NOT_FOUND", message: "Quotation not found", legacyError: "Quotation not found" });
+      const legacy = await prisma.appEntity.findUnique({
+        where: {
+          resource_entityId: {
+            resource: QUOTATION_RESOURCE,
+            entityId: id,
+          },
+        },
+        select: { payload: true },
+      });
+      if (!legacy) {
+        return sendError(res, 404, { code: "QUOTATION_NOT_FOUND", message: "Quotation not found", legacyError: "Quotation not found" });
+      }
+      existingPayload = normalizeQuotationPayload(id, legacy.payload);
+    } else {
+      existingPayload = hydrateQuotationPayload(existing);
     }
-
-    const existingPayload = normalizeQuotationPayload(id, existing.payload);
     const previousStatus = normalizeWorkflowStatus(existingPayload.status);
 
     const merged: QuotationPayload = {
@@ -998,31 +1306,117 @@ quotationsRouter.patch("/quotations/:id", authenticate, async (req: AuthRequest,
       return sendError(res, 400, { code: "VALIDATION_ERROR", message: "Validation failed", details: parsed.error.flatten(), legacyError: parsed.error.flatten() });
     }
 
-    let saved;
-    try {
-      saved = await prisma.quotation.update({
-        where: { id },
-        data: {
-          ...toQuotationMeta(normalizedMerged),
-          payload: normalizedMerged as Prisma.InputJsonValue,
-        },
-        select: { payload: true },
-      });
-    } catch (err) {
-      if (!isMissingColumnError(err)) {
-        throw err;
+    const savedPayload = await prisma.$transaction(async (tx) => {
+      let saved;
+      try {
+        saved = hasDedicatedRow
+          ? await tx.quotation.update({
+              where: { id },
+              data: {
+                ...toQuotationMeta(normalizedMerged),
+                payload: normalizedMerged as Prisma.InputJsonValue,
+              },
+              select: {
+                id: true,
+                noPenawaran: true,
+                tanggal: true,
+                status: true,
+                kepada: true,
+                perihal: true,
+                grandTotal: true,
+                dataCollectionId: true,
+                payload: true,
+              },
+            })
+          : await tx.quotation.upsert({
+              where: { id },
+              update: {
+                ...toQuotationMeta(normalizedMerged),
+                payload: normalizedMerged as Prisma.InputJsonValue,
+              },
+              create: {
+                id,
+                ...toQuotationMeta(normalizedMerged),
+                payload: normalizedMerged as Prisma.InputJsonValue,
+              },
+              select: {
+                id: true,
+                noPenawaran: true,
+                tanggal: true,
+                status: true,
+                kepada: true,
+                perihal: true,
+                grandTotal: true,
+                dataCollectionId: true,
+                payload: true,
+              },
+            });
+      } catch (err) {
+        if (!isMissingColumnError(err)) {
+          throw err;
+        }
+
+        saved = hasDedicatedRow
+          ? await tx.quotation.update({
+              where: { id },
+              data: {
+                payload: normalizedMerged as Prisma.InputJsonValue,
+              },
+              select: {
+                id: true,
+                noPenawaran: true,
+                tanggal: true,
+                status: true,
+                kepada: true,
+                perihal: true,
+                grandTotal: true,
+                dataCollectionId: true,
+                payload: true,
+              },
+            })
+          : await tx.quotation.upsert({
+              where: { id },
+              update: {
+                payload: normalizedMerged as Prisma.InputJsonValue,
+              },
+              create: {
+                id,
+                payload: normalizedMerged as Prisma.InputJsonValue,
+              },
+              select: {
+                id: true,
+                noPenawaran: true,
+                tanggal: true,
+                status: true,
+                kepada: true,
+                perihal: true,
+                grandTotal: true,
+                dataCollectionId: true,
+                payload: true,
+              },
+            });
       }
 
-      saved = await prisma.quotation.update({
-        where: { id },
-        data: {
-          payload: normalizedMerged as Prisma.InputJsonValue,
+      const hydrated = hydrateQuotationPayload(saved);
+      await tx.appEntity.upsert({
+        where: {
+          resource_entityId: {
+            resource: QUOTATION_RESOURCE,
+            entityId: hydrated.id,
+          },
         },
-        select: { payload: true },
+        update: {
+          payload: hydrated as Prisma.InputJsonValue,
+        },
+        create: {
+          resource: QUOTATION_RESOURCE,
+          entityId: hydrated.id,
+          payload: hydrated as Prisma.InputJsonValue,
+        },
       });
-    }
 
-    const savedPayload = normalizeQuotationPayload(id, saved.payload);
+      return hydrated;
+    });
     await upsertProjectFromQuotation(savedPayload);
     if (previousStatus !== nextStatus) {
       await createQuotationApprovalLogSafe({
@@ -1067,6 +1461,29 @@ quotationsRouter.get("/quotations/:id/approval-logs", authenticate, async (req: 
 
   const { id } = req.params;
   try {
+    const [quotationRow, legacyRow] = await Promise.all([
+      prisma.quotation.findUnique({
+        where: { id },
+        select: { id: true },
+      }),
+      prisma.appEntity.findUnique({
+        where: {
+          resource_entityId: {
+            resource: QUOTATION_RESOURCE,
+            entityId: id,
+          },
+        },
+        select: { entityId: true },
+      }),
+    ]);
+    if (!quotationRow && !legacyRow) {
+      return sendError(res, 404, {
+        code: "QUOTATION_NOT_FOUND",
+        message: "Quotation not found",
+        legacyError: "Quotation not found",
+      });
+    }
+
     const rows = await prisma.quotationApprovalLog.findMany({
       where: { quotationId: id },
       orderBy: { createdAt: "desc" },
@@ -1091,13 +1508,114 @@ quotationsRouter.delete("/quotations/:id", authenticate, async (req: AuthRequest
   }
 
   try {
-    await prisma.quotation.delete({
-      where: { id },
+    const result = await prisma.$transaction(async (tx) => {
+      const [projectRows, legacyProjectRows] = await Promise.all([
+        tx.projectRecord.findMany({
+          where: { quotationId: id },
+          select: {
+            id: true,
+            approvalStatus: true,
+            payload: true,
+          },
+        }),
+        tx.appEntity.findMany({
+          where: { resource: PROJECT_RESOURCE },
+          select: {
+            entityId: true,
+            payload: true,
+          },
+        }),
+      ]);
+
+      const linkedProjectIds = new Set<string>();
+      for (const row of projectRows) {
+        const payload = asRecord(row.payload);
+        const approvalStatus = String(row.approvalStatus || payload.approvalStatus || "").toUpperCase();
+        if (approvalStatus !== "APPROVED") {
+          linkedProjectIds.add(row.id);
+        }
+      }
+      for (const row of legacyProjectRows) {
+        const payload = asRecord(row.payload);
+        const approvalStatus = String(payload.approvalStatus || "").toUpperCase();
+        if (String(payload.quotationId || "") === id && approvalStatus !== "APPROVED") {
+          linkedProjectIds.add(row.entityId);
+        }
+      }
+
+      for (const projectId of linkedProjectIds) {
+        const projectRow = projectRows.find((row) => row.id === projectId);
+        const legacyProjectRow = legacyProjectRows.find((row) => row.entityId === projectId);
+        const basePayload =
+          projectRow?.payload && typeof projectRow.payload === "object" && !Array.isArray(projectRow.payload)
+            ? { ...(projectRow.payload as Record<string, unknown>) }
+            : legacyProjectRow?.payload && typeof legacyProjectRow.payload === "object" && !Array.isArray(legacyProjectRow.payload)
+              ? { ...(legacyProjectRow.payload as Record<string, unknown>) }
+              : {};
+        const nextPayload: Record<string, unknown> = {
+          ...basePayload,
+          quotationId: null,
+          quotationStatus: null,
+          quotationNo: null,
+        };
+        await tx.appEntity.upsert({
+          where: {
+            resource_entityId: {
+              resource: PROJECT_RESOURCE,
+              entityId: projectId,
+            },
+          },
+          update: {
+            payload: nextPayload as Prisma.InputJsonValue,
+          },
+          create: {
+            resource: PROJECT_RESOURCE,
+            entityId: projectId,
+            payload: nextPayload as Prisma.InputJsonValue,
+          },
+        });
+        await tx.projectRecord.updateMany({
+          where: { id: projectId },
+          data: {
+            quotationId: null,
+            payload: nextPayload as Prisma.InputJsonValue,
+          },
+        });
+      }
+
+      const [quotationDelete, legacyDelete] = await Promise.all([
+        tx.quotation.deleteMany({ where: { id } }),
+        tx.appEntity.deleteMany({
+          where: {
+            resource: QUOTATION_RESOURCE,
+            entityId: id,
+          },
+        }),
+      ]);
+      await tx.quotationApprovalLog.deleteMany({
+        where: { quotationId: id },
+      });
+      return {
+        deleted: quotationDelete.count + legacyDelete.count,
+      };
     });
+
+    if (result.deleted === 0) {
+      return sendError(res, 404, {
+        code: "QUOTATION_NOT_FOUND",
+        message: "Quotation not found",
+        legacyError: "Quotation not found",
+      });
+    }
+
     return res.status(204).send();
   } catch (err) {
-    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2025") {
-      return sendError(res, 404, { code: "QUOTATION_NOT_FOUND", message: "Quotation not found", legacyError: "Quotation not found" });
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2003") {
+      return sendError(res, 409, {
+        code: "QUOTATION_CONFLICT",
+        message: "Quotation is linked to another record. Resolve relation first.",
+        legacyError: "Quotation is linked to another record. Resolve relation first.",
+      });
     }
 
     return sendError(res, 500, { code: "INTERNAL_ERROR", message: "Internal server error", legacyError: "Internal server error" });

@@ -124,7 +124,7 @@ export default function PettyCashPage() {
     });
   }, [liveArchiveRegistry]);
 
-  const handleSaveTopUp = (e: React.FormEvent) => {
+  const handleSaveTopUp = async (e: React.FormEvent) => {
     e.preventDefault();
     if (topUpRequest.amount <= 0) {
       toast.error("Nominal top-up harus lebih dari 0");
@@ -145,26 +145,27 @@ export default function PettyCashPage() {
       type: "PETTY",
       source: `petty|accountCode=00000|direction=debit|kind=topup`,
     };
-    api.post('/finance/petty-cash-transactions', payload)
-      .then(() => {
-        setServerArchive((prev) => [{ id: txId, ...payload }, ...prev]);
-      })
-      .catch(() => {
-        toast.error("Gagal simpan transaksi top-up ke database");
+    try {
+      const res = await api.post('/finance/petty-cash-transactions', payload);
+      const saved = { id: txId, ...payload, ...(res?.data || {}) };
+      setServerArchive((prev) => [saved, ...prev]);
+      await fetchPettyCashData(true);
+      addAuditLog({
+        action: "PETTY_TOPUP_REQUESTED",
+        module: "Finance",
+        details: `Top-up petty cash diajukan sebesar ${formatCurrency(topUpRequest.amount)}`,
+        status: "Success",
       });
-    addAuditLog({
-      action: "PETTY_TOPUP_REQUESTED",
-      module: "Finance",
-      details: `Top-up petty cash diajukan sebesar ${formatCurrency(topUpRequest.amount)}`,
-      status: "Success",
-    });
-
-    toast.success("Permintaan Top-Up Kas Kecil telah diajukan ke Direksi", {
-      description: `Nominal: ${formatCurrency(topUpRequest.amount)}`,
-    });
-    setShowTopUpModal(false);
-    setIsSubmitting(false);
-    setTopUpRequest({ amount: 0, notes: '', priority: 'Normal' });
+      toast.success("Permintaan Top-Up Kas Kecil telah diajukan ke Direksi", {
+        description: `Nominal: ${formatCurrency(topUpRequest.amount)}`,
+      });
+      setShowTopUpModal(false);
+      setTopUpRequest({ amount: 0, notes: '', priority: 'Normal' });
+    } catch {
+      toast.error("Gagal simpan transaksi top-up ke database");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const effectiveTotals = useMemo(
@@ -179,7 +180,7 @@ export default function PettyCashPage() {
     [initialBalance, serverSummary]
   );
 
-  const handleSaveTransaction = (e: React.FormEvent) => {
+  const handleSaveTransaction = async (e: React.FormEvent) => {
     e.preventDefault();
     if (newTransaction.amount <= 0) {
       toast.error("Nominal transaksi harus lebih dari 0");
@@ -199,30 +200,31 @@ export default function PettyCashPage() {
       type: 'PETTY',
       source: `petty|accountCode=${newTransaction.accountCode}|direction=${newTransaction.type === "Debit" ? "debit" : "credit"}|kind=transaction`,
     };
-    api.post('/finance/petty-cash-transactions', payload)
-      .then(() => {
-        setServerArchive((prev) => [{ id: txId, ...payload }, ...prev]);
-      })
-      .catch(() => {
-        toast.error("Gagal simpan transaksi kas kecil ke database");
+    try {
+      const res = await api.post('/finance/petty-cash-transactions', payload);
+      const saved = { id: txId, ...payload, ...(res?.data || {}) };
+      setServerArchive((prev) => [saved, ...prev]);
+      await fetchPettyCashData(true);
+      addAuditLog({
+        action: "PETTY_TRANSACTION_CREATED",
+        module: "Finance",
+        details: `Transaksi petty cash ${newTransaction.type} ${formatCurrency(newTransaction.amount)} pada akun ${newTransaction.accountCode}`,
+        status: "Success",
       });
-    addAuditLog({
-      action: "PETTY_TRANSACTION_CREATED",
-      module: "Finance",
-      details: `Transaksi petty cash ${newTransaction.type} ${formatCurrency(newTransaction.amount)} pada akun ${newTransaction.accountCode}`,
-      status: "Success",
-    });
-
-    setShowInputModal(false);
-    setIsSubmitting(false);
-    setNewTransaction({
-      date: new Date().toISOString().split('T')[0],
-      accountCode: '',
-      description: '',
-      type: 'Credit',
-      amount: 0
-    });
-    toast.success("Transaksi kas kecil berhasil dicatat");
+      setShowInputModal(false);
+      setNewTransaction({
+        date: new Date().toISOString().split('T')[0],
+        accountCode: '',
+        description: '',
+        type: 'Credit',
+        amount: 0
+      });
+      toast.success("Transaksi kas kecil berhasil dicatat");
+    } catch {
+      toast.error("Gagal simpan transaksi kas kecil ke database");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const formatCurrency = (num: number) => {

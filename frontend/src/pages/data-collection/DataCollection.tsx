@@ -457,7 +457,7 @@ export default function DataCollection() {
 
     // Jika checkbox "Create Quotation" checked, navigate ke halaman Quotation utama
     if (createQuotationAfterSave) {
-      setShowModal(false);
+      resetForm();
       navigate("/sales/quotation", {
         state: {
           openQuotationModal: true,
@@ -2633,7 +2633,7 @@ export default function DataCollection() {
                   <button
                     onClick={() => {
                       setShowDetailModal(false);
-                      navigate("/sales/penawaran", {
+                      navigate("/sales/quotation", {
                         state: {
                           openQuotationModal: true,
                           selectedDataCollectionId:

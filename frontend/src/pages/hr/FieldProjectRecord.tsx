@@ -157,9 +157,8 @@ export default function FieldProjectRecord() {
   const [requestQty, setRequestQty] = useState('');
   const [requestDate, setRequestDate] = useState(new Date().toISOString().split('T')[0]);
 
-  const handleSaveAttendance = () => {
+  const handleSaveAttendance = async () => {
     const newRecords: any[] = [];
-    const todayStr = new Date().toISOString().split('T')[0];
 
     // Generate real attendance objects from the matrix
     workers.forEach(worker => {
@@ -193,8 +192,21 @@ export default function FieldProjectRecord() {
     });
 
     if (newRecords.length > 0) {
-      addAttendanceBulk(newRecords);
-      toast.success(`${newRecords.length} Data Absensi Lapangan berhasil disinkronkan ke Ledger Biaya Proyek!`);
+      try {
+        await addAttendanceBulk(newRecords);
+        setServerAttendanceList((prev) => [...newRecords, ...(prev || [])]);
+        addAuditLog({
+          action: 'FIELD_ATTENDANCE_BULK_CREATED',
+          module: 'HR',
+          entityType: 'Attendance',
+          entityId: selectedProjectId || 'unknown-project',
+          description: `${newRecords.length} data absensi lapangan disimpan untuk proyek ${selectedProject?.namaProject || selectedProjectId || '-'}`,
+        });
+        toast.success(`${newRecords.length} Data Absensi Lapangan berhasil disinkronkan ke Ledger Biaya Proyek!`);
+      } catch (err: any) {
+        const apiMessage = err?.response?.data?.error || err?.response?.data?.message || err?.message || 'Gagal simpan absensi lapangan';
+        toast.error(apiMessage);
+      }
     } else {
       toast.info("Tidak ada data baru untuk disimpan.");
     }
@@ -372,7 +384,7 @@ export default function FieldProjectRecord() {
     setShowKasbonModal(true);
   };
 
-  const handleAddEquipmentUsage = (e: React.FormEvent) => {
+  const handleAddEquipmentUsage = async (e: React.FormEvent) => {
     e.preventDefault();
     const asset = effectiveAssetList.find(a => a.id === selectedAssetId);
     if (!asset) return;
@@ -388,20 +400,29 @@ export default function FieldProjectRecord() {
       costPerHour: asset.category === 'Heavy Equipment' ? 250000 : 50000,
       status: 'Logged',
     };
-    api
-      .post('/fleet-health', payload)
-      .then(() => {
-        setServerFleetHealthList((prev) => [payload, ...(prev || [])]);
-        toast.success(`Log penggunaan ${asset.name} berhasil disimpan.`);
-        setShowEquipmentModal(false);
-      })
-      .catch((err: any) => {
-        const apiMessage = err?.response?.data?.error || err?.response?.data?.message || err?.message || 'Gagal simpan log equipment';
-        toast.error(apiMessage);
+    try {
+      const res = await api.post('/fleet-health', payload);
+      const savedRaw = res?.data || payload;
+      setServerFleetHealthList((prev) => [savedRaw, ...(prev || [])]);
+      addAuditLog({
+        action: 'FLEET_HEALTH_CREATED',
+        module: 'Operations',
+        entityType: 'FleetHealth',
+        entityId: String(savedRaw.id || payload.id),
+        description: `Log penggunaan ${asset.name} selama ${payload.hoursUsed} jam dicatat untuk proyek ${selectedProjectId}`,
       });
+      toast.success(`Log penggunaan ${asset.name} berhasil disimpan.`);
+      setShowEquipmentModal(false);
+      setSelectedAssetId('');
+      setUsageDate(new Date().toISOString().split('T')[0]);
+      setUsageHours('8');
+    } catch (err: any) {
+      const apiMessage = err?.response?.data?.error || err?.response?.data?.message || err?.message || 'Gagal simpan log equipment';
+      toast.error(apiMessage);
+    }
   };
 
-  const handleAddMaterialRequest = (e: React.FormEvent) => {
+  const handleAddMaterialRequest = async (e: React.FormEvent) => {
     e.preventDefault();
     const boqItem = selectedProject?.boq?.find((item: any) => item.id === selectedBoqItemId);
     if (!boqItem) return;
@@ -435,17 +456,26 @@ export default function FieldProjectRecord() {
       ],
     };
 
-    api
-      .post('/material-requests', materialRequestPayload)
-      .then(() => {
-        setServerMaterialRequestList((prev) => [materialRequestPayload, ...(prev || [])]);
-        toast.success(`Material Request untuk ${materialRequestPayload.itemName} berhasil diajukan.`);
-        setShowMaterialModal(false);
-      })
-      .catch((err: any) => {
-        const apiMessage = err?.response?.data?.error || err?.response?.data?.message || err?.message || 'Gagal simpan material request';
-        toast.error(apiMessage);
+    try {
+      const res = await api.post('/material-requests', materialRequestPayload);
+      const savedRaw = res?.data || materialRequestPayload;
+      setServerMaterialRequestList((prev) => [savedRaw, ...(prev || [])]);
+      addAuditLog({
+        action: 'MATERIAL_REQUEST_CREATED',
+        module: 'Operations',
+        entityType: 'MaterialRequest',
+        entityId: String(savedRaw.id || materialRequestPayload.id),
+        description: `Material request ${materialRequestPayload.noRequest} untuk ${materialRequestPayload.itemName} diajukan pada proyek ${selectedProjectId}`,
       });
+      toast.success(`Material Request untuk ${materialRequestPayload.itemName} berhasil diajukan.`);
+      setShowMaterialModal(false);
+      setSelectedBoqItemId('');
+      setRequestQty('');
+      setRequestDate(new Date().toISOString().split('T')[0]);
+    } catch (err: any) {
+      const apiMessage = err?.response?.data?.error || err?.response?.data?.message || err?.message || 'Gagal simpan material request';
+      toast.error(apiMessage);
+    }
   };
 
   const submitKasbon = async (e: React.FormEvent) => {
@@ -471,8 +501,18 @@ export default function FieldProjectRecord() {
       createdAt: new Date().toISOString(),
     };
     try {
-      await api.post('/hr/kasbons', newKasbon);
-      setServerKasbonList((prev) => [newKasbon, ...(prev || [])]);
+      const res = await api.post('/hr/kasbons', newKasbon);
+      const savedRaw = res?.data && typeof res.data === 'object' && 'payload' in res.data
+        ? { id: res.data.payload?.id || res.data.entityId || res.data.id, ...(res.data.payload || {}) }
+        : (res?.data || newKasbon);
+      setServerKasbonList((prev) => [savedRaw, ...(prev || [])]);
+      addAuditLog({
+        action: 'KASBON_CREATED',
+        module: 'HR',
+        entityType: 'Kasbon',
+        entityId: String(savedRaw.id || newKasbon.id),
+        description: `Kasbon ${formatCurrency(amount)} untuk ${selectedWorker.name} dicatat pada proyek ${selectedProjectId}`,
+      });
     } catch (err: any) {
       const apiMessage = err?.response?.data?.message || err?.message || 'Gagal simpan kasbon';
       toast.error(apiMessage);
@@ -482,6 +522,8 @@ export default function FieldProjectRecord() {
     toast.success(`Kasbon senilai ${formatCurrency(amount)} untuk ${selectedWorker.name} berhasil dicatat.`);
     setShowKasbonModal(false);
     setKasbonAmount('');
+    setKasbonDate(new Date().toISOString().split('T')[0]);
+    setSelectedWorker(null);
   };
 
   const formatCurrency = (val: number) => {
@@ -1008,8 +1050,8 @@ export default function FieldProjectRecord() {
                 </div>
 
                 <p className="text-[9px] text-slate-400 text-center font-bold uppercase italic leading-relaxed">
-                   By finalizing this report, all attendance and advances records will be locked and synced <br/> 
-                   to the PT Gema Teknik Perkasa General Ledger for current fiscal week.
+                   Export ini hanya menghasilkan dokumen weekly field report. Data attendance, kasbon, <br/>
+                   equipment, dan material tetap mengikuti status yang sudah tersimpan di sistem.
                 </p>
               </div>
             </motion.div>

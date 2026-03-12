@@ -27,6 +27,22 @@ export default function BankReconciliationPage() {
   const [serverInvoiceList, setServerInvoiceList] = useState<Invoice[] | null>(null);
   const [serverVendorInvoiceList, setServerVendorInvoiceList] = useState<VendorInvoice[] | null>(null);
   const [serverArchiveRegistry, setServerArchiveRegistry] = useState<ArchiveEntry[] | null>(null);
+  const [serverReconciliations, setServerReconciliations] = useState<Array<{
+    id: string;
+    matchedId?: string;
+    status?: string;
+    date?: string;
+    periodLabel?: string;
+    account?: string;
+    description?: string;
+    debit?: number;
+    credit?: number;
+    balance?: number;
+    invoiceId?: string;
+    customerInvoiceId?: string;
+    vendorInvoiceId?: string;
+    note?: string;
+  }> | null>(null);
   const [serverTransactions, setServerTransactions] = useState<BankTransaction[] | null>(null);
   const [serverReconSummary, setServerReconSummary] = useState<{
     totalDebit: number;
@@ -42,7 +58,7 @@ export default function BankReconciliationPage() {
   const fetchReconciliationSources = async () => {
     try {
       setIsRefreshing(true);
-      const [summaryRes, invoiceRes, vendorRes, archiveRes] = await Promise.all([
+      const [summaryRes, invoiceRes, vendorRes, archiveRes, reconRes] = await Promise.all([
         api.get<{
           summary?: {
             totalDebit?: number;
@@ -62,6 +78,7 @@ export default function BankReconciliationPage() {
         api.get('/invoices'),
         api.get('/finance/vendor-invoices'),
         api.get('/archive-registry'),
+        api.get('/finance/bank-reconciliations'),
       ]);
 
       const normalizeRows = <T,>(rows: any[]): T[] => rows as T[];
@@ -72,6 +89,7 @@ export default function BankReconciliationPage() {
       setServerInvoiceList(normalizeRows<Invoice>(invoiceRows));
       setServerVendorInvoiceList(normalizeRows<VendorInvoice>(vendorRows));
       setServerArchiveRegistry(normalizeRows<ArchiveEntry>(archiveRows));
+      setServerReconciliations(Array.isArray(reconRes.data) ? reconRes.data : []);
       if (summaryRes.data?.summary) {
         setServerReconSummary({
           totalDebit: Number(summaryRes.data.summary.totalDebit || 0),
@@ -109,6 +127,7 @@ export default function BankReconciliationPage() {
       setServerInvoiceList(null);
       setServerVendorInvoiceList(null);
       setServerArchiveRegistry(null);
+      setServerReconciliations(null);
       setServerTransactions(null);
       setServerReconSummary(null);
     } finally {
@@ -124,6 +143,17 @@ export default function BankReconciliationPage() {
     return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(num);
   };
 
+  const persistedMatchedIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const row of serverReconciliations || []) {
+      if (String(row.status || '').trim() === 'Matched' && row.matchedId) {
+        ids.add(String(row.matchedId));
+      }
+    }
+    for (const id of manualMatchedIds) ids.add(id);
+    return ids;
+  }, [manualMatchedIds, serverReconciliations]);
+
   const transactions = useMemo<BankTransaction[]>(() => {
     const rows: BankTransaction[] = [];
 
@@ -131,7 +161,7 @@ export default function BankReconciliationPage() {
       const gross = Number(inv.totalAmount || 0);
       const paid = Number(inv.paidAmount || 0);
       const status: BankTransaction["status"] =
-        manualMatchedIds.has(inv.id) || inv.status === "Paid"
+        persistedMatchedIds.has(inv.id) || inv.status === "Paid"
           ? "Matched"
           : paid > 0
           ? "Potential"
@@ -154,7 +184,7 @@ export default function BankReconciliationPage() {
       const total = Number(vinv.totalAmount || 0);
       const paid = Number(vinv.paidAmount || 0);
       const status: BankTransaction["status"] =
-        manualMatchedIds.has(vinv.id) || vinv.status === "Paid"
+        persistedMatchedIds.has(vinv.id) || vinv.status === "Paid"
           ? "Matched"
           : paid > 0
           ? "Potential"
@@ -184,7 +214,7 @@ export default function BankReconciliationPage() {
         credit: entry.type === "AP" || entry.type === "BK" ? Number(entry.amount || 0) : 0,
         balance: 0,
         matchedId: entry.id,
-        status: "Matched",
+        status: persistedMatchedIds.has(entry.id) ? "Matched" : "Unmatched",
       });
     }
 
@@ -197,43 +227,81 @@ export default function BankReconciliationPage() {
     });
 
     return withBalanceAsc.sort((a, b) => (a.date < b.date ? 1 : -1));
-  }, [effectiveInvoiceList, effectiveVendorInvoiceList, effectiveArchiveRegistry, manualMatchedIds]);
+  }, [effectiveInvoiceList, effectiveVendorInvoiceList, effectiveArchiveRegistry, persistedMatchedIds]);
 
-  const effectiveTransactions = serverTransactions ?? [];
+  const effectiveTransactions = transactions;
 
-  const handleAutoMatch = () => {
+  const persistReconciliationMatch = async (transaction: BankTransaction) => {
+    if (!transaction.matchedId) return false;
+    const matchedId = String(transaction.matchedId).trim();
+    const existing = (serverReconciliations || []).find((row) => String(row.matchedId || '').trim() === matchedId);
+    const payload = {
+      id: existing?.id || `RECON-${selectedPeriod}-${matchedId}`.replace(/[^A-Za-z0-9_-]/g, '-'),
+      date: transaction.date,
+      periodLabel: selectedPeriod,
+      account: transaction.account,
+      description: transaction.description,
+      debit: transaction.debit,
+      credit: transaction.credit,
+      balance: transaction.balance,
+      status: 'Matched',
+      matchedId,
+      note: 'Matched from Bank Reconciliation page',
+      customerInvoiceId: matchedId.startsWith('CINV-') ? matchedId : undefined,
+      invoiceId: matchedId.startsWith('CINV-') ? matchedId : undefined,
+      vendorInvoiceId: matchedId.startsWith('VINV-') ? matchedId : undefined,
+    };
+    try {
+      const res = existing
+        ? await api.patch(`/finance/bank-reconciliations/${payload.id}`, payload)
+        : await api.post('/finance/bank-reconciliations', payload);
+      const saved = (res?.data || payload) as typeof payload;
+      setServerReconciliations((prev) => {
+        const list = prev || [];
+        const idx = list.findIndex((row) => row.id === saved.id);
+        if (idx >= 0) {
+          const next = [...list];
+          next[idx] = saved;
+          return next;
+        }
+        return [saved, ...list];
+      });
+      setManualMatchedIds((prev) => {
+        const next = new Set(prev);
+        next.add(matchedId);
+        return next;
+      });
+      return true;
+    } catch (err: any) {
+      toast.error(err?.response?.data?.error || 'Gagal menyimpan hasil rekonsiliasi');
+      return false;
+    }
+  };
+
+  const handleAutoMatch = async () => {
     setIsMatching(true);
     toast.loading("AI is analyzing statement patterns...", { id: "auto-match" });
-    const idsToMark = effectiveTransactions
-      .filter((t) => t.status !== "Matched" && !!t.matchedId)
-      .map((t) => t.matchedId!) as string[];
-    setManualMatchedIds((prev) => {
-      const next = new Set(prev);
-      idsToMark.forEach((id) => next.add(id));
-      return next;
-    });
-    
+    const candidates = effectiveTransactions.filter((t) => t.status !== "Matched" && !!t.matchedId);
+    const results = await Promise.all(candidates.map((transaction) => persistReconciliationMatch(transaction)));
+    const successCount = results.filter(Boolean).length;
     setIsMatching(false);
     addAuditLog({
       action: 'BANK_RECONCILE_AUTO_MATCH',
       module: 'Finance',
       entityType: 'BankReconciliation',
       entityId: selectedPeriod,
-      description: `Auto match reconciled ${idsToMark.length} transactions for period ${selectedPeriod}`,
+      description: `Auto match reconciled ${successCount} transactions for period ${selectedPeriod}`,
     });
-    toast.success(`AI Auto-Match complete. ${idsToMark.length} transactions reconciled.`, { id: "auto-match" });
+    toast.success(`AI Auto-Match complete. ${successCount} transactions reconciled.`, { id: "auto-match" });
   };
 
-  const handleManualLink = (transaction: BankTransaction) => {
+  const handleManualLink = async (transaction: BankTransaction) => {
     if (!transaction.matchedId) {
       toast.error('Tidak ada dokumen yang bisa di-link');
       return;
     }
-    setManualMatchedIds((prev) => {
-      const next = new Set(prev);
-      next.add(transaction.matchedId!);
-      return next;
-    });
+    const ok = await persistReconciliationMatch(transaction);
+    if (!ok) return;
     addAuditLog({
       action: 'BANK_RECONCILE_MANUAL_LINK',
       module: 'Finance',

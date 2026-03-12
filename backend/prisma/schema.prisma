@@ -92,6 +92,13 @@ model ProjectRecord {
   id                   String                      @id
   quotationId          String?
   customerId           String?
+  kodeProject          String?
+  namaProject          String?
+  customerName         String?
+  status               String?
+  approvalStatus       String?
+  nilaiKontrak         Float?
+  progress             Float?
   payload              Json
   quotation            Quotation?                  @relation(fields: [quotationId], references: [id], onDelete: SetNull, onUpdate: Cascade)
   customer             CustomerRecord?             @relation(fields: [customerId], references: [id], onDelete: SetNull, onUpdate: Cascade)
@@ -150,6 +157,9 @@ model ProjectRecord {
 
   @@index([quotationId])
   @@index([customerId])
+  @@index([kodeProject])
+  @@index([approvalStatus])
+  @@index([status])
   @@index([updatedAt])
 }
 

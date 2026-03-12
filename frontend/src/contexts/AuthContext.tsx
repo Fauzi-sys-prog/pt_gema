@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, { createContext, useContext, useEffect, useRef, useState } from "react";
 import api from "../services/api"; // axios instance kamu (yang auto attach token)
 
 import type { User } from "./AppContext"; // atau pindahin type User ke types biar clean
@@ -24,6 +24,61 @@ const normalizeUser = (raw: any): User => {
   } as User;
 };
 
+const safeGetStorageItem = (key: string): string | null => {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+};
+
+const safeSetStorageItem = (key: string, value: string) => {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    // ignore storage access failures
+  }
+};
+
+const safeRemoveStorageItem = (key: string) => {
+  try {
+    localStorage.removeItem(key);
+  } catch {
+    // ignore storage access failures
+  }
+};
+
+const safeRemoveSessionStorageItem = (key: string) => {
+  try {
+    sessionStorage.removeItem(key);
+  } catch {
+    // ignore storage access failures
+  }
+};
+
+const persistUser = (user: User | null) => {
+  if (!user) {
+    safeRemoveStorageItem("user");
+    return;
+  }
+  safeSetStorageItem("user", JSON.stringify(user));
+};
+
+const readPersistedUser = (): User | null => {
+  try {
+    if (!safeGetStorageItem("token")) {
+      safeRemoveStorageItem("user");
+      return null;
+    }
+    const raw = safeGetStorageItem("user");
+    if (!raw) return null;
+    return normalizeUser(JSON.parse(raw));
+  } catch {
+    safeRemoveStorageItem("user");
+    return null;
+  }
+};
+
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (!context) throw new Error("useAuth must be used within AuthProvider");
@@ -31,45 +86,139 @@ export const useAuth = () => {
 };
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [currentUser, setCurrentUser] = useState<User | null>(() => readPersistedUser());
   const [loading, setLoading] = useState<boolean>(true);
+  const authRequestVersionRef = useRef(0);
+  const isMountedRef = useRef(true);
+
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
+  const clearAuthState = () => {
+    authRequestVersionRef.current += 1;
+    safeRemoveStorageItem("token");
+    persistUser(null);
+    safeRemoveSessionStorageItem("auth401_notified");
+    if (isMountedRef.current) {
+      setCurrentUser(null);
+    }
+  };
 
   // Auto-check token -> fetch /auth/me
   useEffect(() => {
-    const token = localStorage.getItem("token");
+    const token = safeGetStorageItem("token");
 
     if (!token) {
-      setLoading(false);
+      clearAuthState();
+      if (isMountedRef.current) {
+        setLoading(false);
+      }
       return;
     }
+
+    const requestVersion = ++authRequestVersionRef.current;
 
     api
       .get("/auth/me")
       .then((res) => {
-        setCurrentUser(normalizeUser(res.data));
+        if (authRequestVersionRef.current !== requestVersion || !isMountedRef.current) return;
+        const normalizedUser = normalizeUser(res.data);
+        setCurrentUser(normalizedUser);
+        persistUser(normalizedUser);
       })
       .catch(() => {
-        localStorage.removeItem("token");
-        setCurrentUser(null);
+        if (authRequestVersionRef.current !== requestVersion || !isMountedRef.current) return;
+        clearAuthState();
       })
-      .finally(() => setLoading(false));
+      .finally(() => {
+        if (authRequestVersionRef.current === requestVersion && isMountedRef.current) {
+          setLoading(false);
+        }
+      });
+  }, []);
+
+  useEffect(() => {
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key !== "token" && event.key !== "user") return;
+
+      const nextToken = safeGetStorageItem("token");
+      if (!nextToken) {
+        clearAuthState();
+        if (isMountedRef.current) {
+          setLoading(false);
+        }
+        return;
+      }
+
+      const persistedUser = readPersistedUser();
+      if (persistedUser) {
+        if (isMountedRef.current) {
+          setCurrentUser(persistedUser);
+          setLoading(false);
+        }
+        return;
+      }
+
+      const requestVersion = ++authRequestVersionRef.current;
+      if (isMountedRef.current) {
+        setLoading(true);
+      }
+      api
+        .get("/auth/me")
+        .then((res) => {
+          if (authRequestVersionRef.current !== requestVersion || !isMountedRef.current) return;
+          const normalizedUser = normalizeUser(res.data);
+          setCurrentUser(normalizedUser);
+          persistUser(normalizedUser);
+        })
+        .catch(() => {
+          if (authRequestVersionRef.current !== requestVersion || !isMountedRef.current) return;
+          clearAuthState();
+        })
+        .finally(() => {
+          if (authRequestVersionRef.current === requestVersion && isMountedRef.current) {
+            setLoading(false);
+          }
+        });
+    };
+
+    window.addEventListener("storage", handleStorage);
+    return () => window.removeEventListener("storage", handleStorage);
   }, []);
 
   const login = async (username: string, password: string): Promise<boolean> => {
     try {
+      if (isMountedRef.current) {
+        setLoading(true);
+      }
+      safeRemoveSessionStorageItem("auth401_notified");
+      authRequestVersionRef.current += 1;
       const res = await api.post("/auth/login", { username, password });
 
       // simpan JWT
-      localStorage.setItem("token", res.data.token);
+      safeSetStorageItem("token", res.data.token);
 
-      // set user dari response backend
-      setCurrentUser(normalizeUser(res.data.user));
+      // hydrate user penuh dari /auth/me agar shape user konsisten
+      const meRes = await api.get("/auth/me");
+      const normalizedUser = normalizeUser(meRes.data);
+      if (isMountedRef.current) {
+        setCurrentUser(normalizedUser);
+      }
+      persistUser(normalizedUser);
+      if (isMountedRef.current) {
+        setLoading(false);
+      }
 
       return true;
     } catch (err: any) {
       // optional: biar rapi kalau login gagal
-      localStorage.removeItem("token");
-      setCurrentUser(null);
+      clearAuthState();
+      if (isMountedRef.current) {
+        setLoading(false);
+      }
       return false;
     }
   };
@@ -77,8 +226,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const logout = () => {
     // Best-effort server logout: revoke current JWT jti in backend
     void api.post("/auth/logout").catch(() => undefined);
-    localStorage.removeItem("token");
-    setCurrentUser(null);
+    clearAuthState();
+    if (isMountedRef.current) {
+      setLoading(false);
+    }
   };
 
   return (

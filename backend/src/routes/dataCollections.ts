@@ -52,6 +52,16 @@ function toDataCollectionMeta(item: Record<string, unknown>) {
   };
 }
 
+type DataCollectionReadRow = {
+  id: string;
+  namaResponden: string | null;
+  lokasi: string | null;
+  tipePekerjaan: string | null;
+  status: string | null;
+  tanggalSurvey: string | null;
+  payload: Prisma.JsonValue;
+};
+
 function ensurePayloadWithId(id: string, payload: unknown): Record<string, unknown> {
   if (payload && typeof payload === "object" && !Array.isArray(payload)) {
     return {
@@ -66,29 +76,75 @@ function ensurePayloadWithId(id: string, payload: unknown): Record<string, unkno
   return { id };
 }
 
+function normalizeDataCollectionPayload(id: string, payload: unknown): Record<string, unknown> {
+  const shaped = ensurePayloadWithId(id, payload);
+  return {
+    ...shaped,
+    id,
+    namaResponden: readString(shaped, "namaResponden") ?? undefined,
+    lokasi: readString(shaped, "lokasi") ?? undefined,
+    tipePekerjaan: readString(shaped, "tipePekerjaan") ?? undefined,
+    status: readString(shaped, "status") ?? undefined,
+    tanggalSurvey: readString(shaped, "tanggalSurvey") ?? undefined,
+  };
+}
+
+function hydrateDataCollectionPayload(row: DataCollectionReadRow): Record<string, unknown> {
+  const payload = normalizeDataCollectionPayload(row.id, row.payload);
+  return {
+    ...payload,
+    id: row.id,
+    namaResponden:
+      row.namaResponden ?? readString(payload, "namaResponden") ?? undefined,
+    lokasi: row.lokasi ?? readString(payload, "lokasi") ?? undefined,
+    tipePekerjaan:
+      row.tipePekerjaan ?? readString(payload, "tipePekerjaan") ?? undefined,
+    status: row.status ?? readString(payload, "status") ?? undefined,
+    tanggalSurvey:
+      row.tanggalSurvey ?? readString(payload, "tanggalSurvey") ?? undefined,
+  };
+}
+
 dataCollectionsRouter.get("/data-collections", authenticate, async (_req: AuthRequest, res: Response) => {
   try {
-    const rows = await prisma.dataCollection.findMany({
-      orderBy: { updatedAt: "desc" },
-      select: {
-        id: true,
-        payload: true,
-      },
-    });
+    const [rows, legacyRows] = await Promise.all([
+      prisma.dataCollection.findMany({
+        orderBy: { updatedAt: "desc" },
+        select: {
+          id: true,
+          namaResponden: true,
+          lokasi: true,
+          tipePekerjaan: true,
+          status: true,
+          tanggalSurvey: true,
+          payload: true,
+          updatedAt: true,
+        },
+      }),
+      prisma.appEntity.findMany({
+        where: { resource: DATA_COLLECTION_RESOURCE },
+        orderBy: { updatedAt: "desc" },
+        select: { entityId: true, payload: true, updatedAt: true },
+      }),
+    ]);
 
-    // Backward compatibility during migration from AppEntity.
-    const sourceRows =
-      rows.length > 0
-        ? rows.map((row) => ({ id: row.id, payload: row.payload }))
-        : (
-            await prisma.appEntity.findMany({
-              where: { resource: DATA_COLLECTION_RESOURCE },
-              orderBy: { updatedAt: "desc" },
-              select: { entityId: true, payload: true },
-            })
-          ).map((row) => ({ id: row.entityId, payload: row.payload }));
+    const merged = new Map<string, { payload: Record<string, unknown>; updatedAt: Date }>();
+    for (const row of legacyRows) {
+      merged.set(row.entityId, {
+        payload: normalizeDataCollectionPayload(row.entityId, row.payload),
+        updatedAt: row.updatedAt,
+      });
+    }
+    for (const row of rows) {
+      merged.set(row.id, {
+        payload: hydrateDataCollectionPayload(row),
+        updatedAt: row.updatedAt,
+      });
+    }
 
-    const items: unknown[] = sourceRows.map((row) => ensurePayloadWithId(row.id, row.payload));
+    const items: unknown[] = Array.from(merged.values())
+      .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
+      .map((row) => row.payload);
 
     const parsed = dataCollectionBulkSchema.safeParse(items);
     if (!parsed.success) {
@@ -112,6 +168,62 @@ dataCollectionsRouter.get("/data-collections", authenticate, async (_req: AuthRe
   }
 });
 
+dataCollectionsRouter.get("/data-collections/:id", authenticate, async (req: AuthRequest, res: Response) => {
+  const { id } = req.params;
+
+  try {
+    const row = await prisma.dataCollection.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        namaResponden: true,
+        lokasi: true,
+        tipePekerjaan: true,
+        status: true,
+        tanggalSurvey: true,
+        payload: true,
+      },
+    });
+
+    if (!row) {
+      const legacy = await prisma.appEntity.findUnique({
+        where: {
+          resource_entityId: {
+            resource: DATA_COLLECTION_RESOURCE,
+            entityId: id,
+          },
+        },
+        select: { payload: true },
+      });
+      if (!legacy) {
+        return sendError(res, 404, {
+          code: "DATA_COLLECTION_NOT_FOUND",
+          message: "Data collection not found",
+          legacyError: "Data collection not found",
+        });
+      }
+
+      return res.json(normalizeDataCollectionPayload(id, legacy.payload));
+    }
+
+    return res.json(hydrateDataCollectionPayload(row));
+  } catch (err) {
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2025") {
+      return sendError(res, 404, {
+        code: "DATA_COLLECTION_NOT_FOUND",
+        message: "Data collection not found",
+        legacyError: "Data collection not found",
+      });
+    }
+
+    return sendError(res, 500, {
+      code: "INTERNAL_ERROR",
+      message: "Internal server error",
+      legacyError: "Internal server error",
+    });
+  }
+});
+
 dataCollectionsRouter.put("/data-collections/bulk", authenticate, async (req: AuthRequest, res: Response) => {
   if (!canWriteDataCollection(req.user?.role)) {
     return sendError(res, 403, { code: "FORBIDDEN", message: "Forbidden", legacyError: "Forbidden" });
@@ -123,26 +235,56 @@ dataCollectionsRouter.put("/data-collections/bulk", authenticate, async (req: Au
   }
 
   const items = parsed.data;
+  const duplicateIds = items
+    .map((item) => item.id)
+    .filter((id, index, arr) => arr.indexOf(id) !== index);
+  if (duplicateIds.length > 0) {
+    return sendError(res, 400, {
+      code: "DUPLICATE_ID_IN_BULK",
+      message: `Duplicate data collection id in bulk payload: ${duplicateIds.join(", ")}`,
+      legacyError: `Duplicate data collection id in bulk payload: ${duplicateIds.join(", ")}`,
+    });
+  }
   if (toPayloadBytes(items) > MAX_PAYLOAD_BYTES) {
     return sendError(res, 413, { code: "PAYLOAD_TOO_LARGE", message: "Payload too large", legacyError: "Payload too large" });
   }
 
   try {
     await prisma.$transaction(
-      items.map((item) =>
-        prisma.dataCollection.upsert({
-          where: { id: item.id },
-          update: {
-            ...toDataCollectionMeta(item as Record<string, unknown>),
-            payload: item as Prisma.InputJsonValue,
-          },
-          create: {
-            id: item.id,
-            ...toDataCollectionMeta(item as Record<string, unknown>),
-            payload: item as Prisma.InputJsonValue,
-          },
-        })
-      )
+      items.flatMap((item) => {
+        const normalizedItem = normalizeDataCollectionPayload(item.id, item);
+        const normalizedId = String(normalizedItem.id || item.id);
+        return [
+          prisma.dataCollection.upsert({
+            where: { id: normalizedId },
+            update: {
+              ...toDataCollectionMeta(normalizedItem),
+              payload: normalizedItem as Prisma.InputJsonValue,
+            },
+            create: {
+              id: normalizedId,
+              ...toDataCollectionMeta(normalizedItem),
+              payload: normalizedItem as Prisma.InputJsonValue,
+            },
+          }),
+          prisma.appEntity.upsert({
+            where: {
+              resource_entityId: {
+                resource: DATA_COLLECTION_RESOURCE,
+                entityId: normalizedId,
+              },
+            },
+            update: {
+              payload: normalizedItem as Prisma.InputJsonValue,
+            },
+            create: {
+              resource: DATA_COLLECTION_RESOURCE,
+              entityId: normalizedId,
+              payload: normalizedItem as Prisma.InputJsonValue,
+            },
+          }),
+        ];
+      })
     );
 
     return res.json({ message: "Data collections synced", count: items.length });
@@ -165,28 +307,80 @@ dataCollectionsRouter.post("/data-collections", authenticate, async (req: AuthRe
   if (toPayloadBytes(item) > MAX_PAYLOAD_BYTES) {
     return sendError(res, 413, { code: "PAYLOAD_TOO_LARGE", message: "Payload too large", legacyError: "Payload too large" });
   }
-  const itemAsRecord = item as Record<string, unknown>;
+  const itemAsRecord = normalizeDataCollectionPayload(item.id, item as Record<string, unknown>);
 
   try {
-    const saved = await prisma.dataCollection.upsert({
-      where: {
-        id: item.id,
-      },
-      update: {
-        ...toDataCollectionMeta(itemAsRecord),
-        payload: item as Prisma.InputJsonValue,
-      },
-      create: {
-        id: item.id,
-        ...toDataCollectionMeta(itemAsRecord),
-        payload: item as Prisma.InputJsonValue,
-      },
-      select: {
-        payload: true,
-      },
+    const [exists, legacyExists] = await Promise.all([
+      prisma.dataCollection.findUnique({
+        where: { id: item.id },
+        select: { id: true },
+      }),
+      prisma.appEntity.findUnique({
+        where: {
+          resource_entityId: {
+            resource: DATA_COLLECTION_RESOURCE,
+            entityId: item.id,
+          },
+        },
+        select: { entityId: true },
+      }),
+    ]);
+
+    if (exists || legacyExists) {
+      return sendError(res, 409, {
+        code: "DATA_COLLECTION_ID_EXISTS",
+        message: "Data collection id already exists",
+        legacyError: "Data collection id already exists",
+      });
+    }
+
+    const payload = await prisma.$transaction(async (tx) => {
+      const saved = await tx.dataCollection.upsert({
+        where: {
+          id: item.id,
+        },
+        update: {
+          ...toDataCollectionMeta(itemAsRecord),
+          payload: itemAsRecord as Prisma.InputJsonValue,
+        },
+        create: {
+          id: item.id,
+          ...toDataCollectionMeta(itemAsRecord),
+          payload: itemAsRecord as Prisma.InputJsonValue,
+        },
+        select: {
+          id: true,
+          namaResponden: true,
+          lokasi: true,
+          tipePekerjaan: true,
+          status: true,
+          tanggalSurvey: true,
+          payload: true,
+        },
+      });
+
+      const hydrated = hydrateDataCollectionPayload(saved);
+      await tx.appEntity.upsert({
+        where: {
+          resource_entityId: {
+            resource: DATA_COLLECTION_RESOURCE,
+            entityId: item.id,
+          },
+        },
+        update: {
+          payload: hydrated as Prisma.InputJsonValue,
+        },
+        create: {
+          resource: DATA_COLLECTION_RESOURCE,
+          entityId: item.id,
+          payload: hydrated as Prisma.InputJsonValue,
+        },
+      });
+
+      return hydrated;
     });
 
-    return res.status(201).json(saved.payload);
+    return res.status(201).json(payload);
   } catch {
     return sendError(res, 500, { code: "INTERNAL_ERROR", message: "Internal server error", legacyError: "Internal server error" });
   }
@@ -208,22 +402,46 @@ dataCollectionsRouter.patch("/data-collections/:id", authenticate, async (req: A
   }
   const existing = await prisma.dataCollection.findUnique({
     where: { id },
-    select: { payload: true },
+    select: {
+      id: true,
+      namaResponden: true,
+      lokasi: true,
+      tipePekerjaan: true,
+      status: true,
+      tanggalSurvey: true,
+      payload: true,
+    },
   });
 
+  const hasDedicatedRow = Boolean(existing);
+  let existingPayload: Record<string, unknown>;
   if (!existing) {
-    return sendError(res, 404, {
-      code: "DATA_COLLECTION_NOT_FOUND",
-      message: "Data collection not found",
-      legacyError: "Data collection not found",
+    const legacy = await prisma.appEntity.findUnique({
+      where: {
+        resource_entityId: {
+          resource: DATA_COLLECTION_RESOURCE,
+          entityId: id,
+        },
+      },
+      select: { payload: true },
     });
+    if (!legacy) {
+      return sendError(res, 404, {
+        code: "DATA_COLLECTION_NOT_FOUND",
+        message: "Data collection not found",
+        legacyError: "Data collection not found",
+      });
+    }
+    existingPayload = normalizeDataCollectionPayload(id, legacy.payload);
+  } else {
+    existingPayload = hydrateDataCollectionPayload(existing);
   }
 
-  const merged = {
-    ...ensurePayloadWithId(id, existing.payload),
+  const merged = normalizeDataCollectionPayload(id, {
+    ...existingPayload,
     ...updates,
     id,
-  };
+  });
 
   const parsed = dataCollectionSchema.safeParse(merged);
   if (!parsed.success) {
@@ -231,16 +449,68 @@ dataCollectionsRouter.patch("/data-collections/:id", authenticate, async (req: A
   }
 
   try {
-    const saved = await prisma.dataCollection.update({
-      where: { id },
-      data: {
-        ...toDataCollectionMeta(merged),
-        payload: merged as Prisma.InputJsonValue,
-      },
-      select: { payload: true },
+    const payload = await prisma.$transaction(async (tx) => {
+      const saved = hasDedicatedRow
+        ? await tx.dataCollection.update({
+            where: { id },
+            data: {
+              ...toDataCollectionMeta(merged),
+              payload: merged as Prisma.InputJsonValue,
+            },
+            select: {
+              id: true,
+              namaResponden: true,
+              lokasi: true,
+              tipePekerjaan: true,
+              status: true,
+              tanggalSurvey: true,
+              payload: true,
+            },
+          })
+        : await tx.dataCollection.upsert({
+            where: { id },
+            update: {
+              ...toDataCollectionMeta(merged),
+              payload: merged as Prisma.InputJsonValue,
+            },
+            create: {
+              id,
+              ...toDataCollectionMeta(merged),
+              payload: merged as Prisma.InputJsonValue,
+            },
+            select: {
+              id: true,
+              namaResponden: true,
+              lokasi: true,
+              tipePekerjaan: true,
+              status: true,
+              tanggalSurvey: true,
+              payload: true,
+            },
+          });
+
+      const hydrated = hydrateDataCollectionPayload(saved);
+      await tx.appEntity.upsert({
+        where: {
+          resource_entityId: {
+            resource: DATA_COLLECTION_RESOURCE,
+            entityId: id,
+          },
+        },
+        update: {
+          payload: hydrated as Prisma.InputJsonValue,
+        },
+        create: {
+          resource: DATA_COLLECTION_RESOURCE,
+          entityId: id,
+          payload: hydrated as Prisma.InputJsonValue,
+        },
+      });
+
+      return hydrated;
     });
 
-    return res.json(saved.payload);
+    return res.json(payload);
   } catch (err) {
     if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2025") {
       return sendError(res, 404, {
@@ -261,12 +531,23 @@ dataCollectionsRouter.delete("/data-collections/:id", authenticate, async (req: 
   const { id } = req.params;
 
   try {
-    await prisma.dataCollection.delete({
-      where: { id },
-    });
-    return res.status(204).send();
-  } catch (err) {
-    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2003") {
+    const [quotationCount, legacyQuotationRows] = await Promise.all([
+      prisma.quotation.count({
+        where: { dataCollectionId: id },
+      }),
+      prisma.appEntity.findMany({
+        where: { resource: "quotations" },
+        select: { entityId: true, payload: true },
+      }),
+    ]);
+    const legacyQuotationReferenceCount = legacyQuotationRows.filter((row) => {
+      const payload =
+        row.payload && typeof row.payload === "object" && !Array.isArray(row.payload)
+          ? (row.payload as Record<string, unknown>)
+          : {};
+      return String(payload.dataCollectionId || "") === id;
+    }).length;
+    if (quotationCount > 0 || legacyQuotationReferenceCount > 0) {
       return sendError(res, 409, {
         code: "DATA_COLLECTION_CONFLICT",
         message: "Data collection is used by quotation. Delete quotation first.",
@@ -274,11 +555,36 @@ dataCollectionsRouter.delete("/data-collections/:id", authenticate, async (req: 
       });
     }
 
-    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2025") {
+    const result = await prisma.$transaction(async (tx) => {
+      const [collectionDelete, legacyDelete] = await Promise.all([
+        tx.dataCollection.deleteMany({ where: { id } }),
+        tx.appEntity.deleteMany({
+          where: {
+            resource: DATA_COLLECTION_RESOURCE,
+            entityId: id,
+          },
+        }),
+      ]);
+      return {
+        deleted: collectionDelete.count + legacyDelete.count,
+      };
+    });
+
+    if (result.deleted === 0) {
       return sendError(res, 404, {
         code: "DATA_COLLECTION_NOT_FOUND",
         message: "Data collection not found",
         legacyError: "Data collection not found",
+      });
+    }
+
+    return res.status(204).send();
+  } catch (err) {
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2003") {
+      return sendError(res, 409, {
+        code: "DATA_COLLECTION_CONFLICT",
+        message: "Data collection is used by quotation. Delete quotation first.",
+        legacyError: "Data collection is used by quotation. Delete quotation first.",
       });
     }
 

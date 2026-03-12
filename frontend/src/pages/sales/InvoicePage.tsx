@@ -228,9 +228,12 @@ export default function InvoicePage() {
     if (selectedInvoice) {
       const kwitansiNo = `KWT/GTP/${new Date().getFullYear()}${new Date().getMonth() + 1}/0001`;
       const paidDate = new Date().toISOString().split("T")[0];
+      const totalBayar = toNum(selectedInvoice.totalBayar);
       const updatedInvoice = {
         ...selectedInvoice,
         status: "Paid" as const,
+        paidAmount: totalBayar,
+        outstandingAmount: 0,
         noKwitansi: kwitansiNo,
         tanggalBayar: paidDate,
       };
@@ -238,6 +241,8 @@ export default function InvoicePage() {
       try {
         await updateInvoice(selectedInvoice.id, { 
           status: 'Paid',
+          paidAmount: totalBayar,
+          outstandingAmount: 0,
           noKwitansi: kwitansiNo,
           tanggalBayar: paidDate
         });
@@ -245,7 +250,14 @@ export default function InvoicePage() {
           prev
             ? prev.map((inv) =>
                 inv.id === selectedInvoice.id
-                  ? { ...inv, status: 'Paid', noKwitansi: kwitansiNo, tanggalBayar: paidDate }
+                  ? {
+                      ...inv,
+                      status: 'Paid',
+                      paidAmount: totalBayar,
+                      outstandingAmount: 0,
+                      noKwitansi: kwitansiNo,
+                      tanggalBayar: paidDate,
+                    }
                   : inv
               )
             : prev

@@ -7608,7 +7608,6 @@ dataRouter.put("/assets/bulk", authenticate, async (req: AuthRequest, res: Respo
       }
     }
     await prisma.$transaction(async (tx) => {
-      const incomingIds = new Set(items.map((item) => item.id));
       for (const item of items) {
         const payload = sanitizeAssetPayload(item.id, item);
         await tx.assetRecord.upsert({
@@ -7617,7 +7616,6 @@ dataRouter.put("/assets/bulk", authenticate, async (req: AuthRequest, res: Respo
           create: payload,
         });
       }
-      await tx.assetRecord.deleteMany({ where: { id: { notIn: Array.from(incomingIds) } } });
     });
     await writeDataAuditLog(req, "bulk-upsert", "assets", null, { count: items.length });
     return res.json({ message: "Synced", count: items.length });
@@ -7725,7 +7723,6 @@ dataRouter.put("/maintenances/bulk", authenticate, async (req: AuthRequest, res:
     const invalidProjectId = projectIds.find((id) => !projectSet.has(id));
     if (invalidProjectId) return sendError(res, 400, { code: "PROJECT_NOT_FOUND", message: `Project '${invalidProjectId}' not found`, legacyError: `Project '${invalidProjectId}' not found` });
     await prisma.$transaction(async (tx) => {
-      const incomingIds = new Set(items.map((item) => item.id));
       for (const item of items) {
         const payload = sanitizeMaintenancePayload(item.id, item);
         const asset = payload.assetId ? assetMap.get(payload.assetId) : undefined;
@@ -7750,7 +7747,6 @@ dataRouter.put("/maintenances/bulk", authenticate, async (req: AuthRequest, res:
           },
         });
       }
-      await tx.maintenanceRecord.deleteMany({ where: { id: { notIn: Array.from(incomingIds) } } });
     });
     await writeDataAuditLog(req, "bulk-upsert", "maintenances", null, { count: items.length });
     return res.json({ message: "Synced", count: items.length });

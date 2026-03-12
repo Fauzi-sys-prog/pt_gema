@@ -95,7 +95,7 @@ export default function StockInPage() {
     return matchSearch && matchType && matchStatus;
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const validItems = formData.items
       .map((item) => ({
@@ -133,12 +133,15 @@ export default function StockInPage() {
     };
     
     // Centralized execution (Updates both list and inventory)
-    createStockIn(stockIn);
-    setServerStockInList((prev) => (prev ? [stockIn, ...prev] : prev));
-    
-    toast.success("Jurnal stok masuk berhasil diposting.");
-    setShowModal(false);
-    resetForm();
+    try {
+      await createStockIn(stockIn);
+      setServerStockInList((prev) => (prev ? [stockIn, ...prev] : prev));
+      toast.success("Jurnal stok masuk berhasil diposting.");
+      setShowModal(false);
+      resetForm();
+    } catch {
+      // toast handled in AppContext
+    }
   };
 
   const resetForm = () => {

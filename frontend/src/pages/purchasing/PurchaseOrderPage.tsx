@@ -581,55 +581,63 @@ export default function PurchaseOrderPage() {
       payload: poData,
     });
 
-    if (editMode && selectedPO) {
-      try {
+    try {
+      if (editMode && selectedPO) {
         await updatePO(selectedPO.id, poData as Partial<PurchaseOrder>);
-      } catch {
-        return;
-      }
-    } else {
-      const resolvedNoPO = poData.noPO || `PO-${new Date().getFullYear()}-${String(poList.length + 1).padStart(3, '0')}`;
-      const newPO: PurchaseOrder = {
-        id: `PO-${Date.now()}`,
-        noPO: resolvedNoPO,
-        ...poData as PurchaseOrder,
-      };
-      try {
+      } else {
+        const resolvedNoPO = poData.noPO || `PO-${new Date().getFullYear()}-${String(poList.length + 1).padStart(3, '0')}`;
+        const newPO: PurchaseOrder = {
+          id: `PO-${Date.now()}`,
+          noPO: resolvedNoPO,
+          ...poData as PurchaseOrder,
+        };
         await addPO(newPO);
-      } catch {
-        return;
-      }
-      
-      // Update BOQ Status in Project if linked
-      if (formData.projectId) {
-        const project = resolveProjectByRef(String(formData.projectId));
-        if (project && Array.isArray(project.boq)) {
-          const updatedBOQ = project.boq.map((boqItem: any) => {
-            // Check if this BOQ item is in the PO items (safe string compare).
-            const boqCode = String(boqItem?.itemKode || '').trim();
-            const boqName = String(boqItem?.materialName || '').trim().toLowerCase();
-            const matchedPOItem = normalizedItems.find((pi) => {
-              const poCode = String(pi?.kode || '').trim();
-              const poName = String(pi?.nama || '').trim().toLowerCase();
-              return (poCode && boqCode && poCode === boqCode) || (poName && boqName && poName === boqName);
+        
+        // Update BOQ Status in Project if linked
+        if (formData.projectId) {
+          const project = resolveProjectByRef(String(formData.projectId));
+          if (project && Array.isArray(project.boq)) {
+            const updatedBOQ = project.boq.map((boqItem: any) => {
+              const boqCode = String(boqItem?.itemKode || '').trim();
+              const boqName = String(boqItem?.materialName || '').trim().toLowerCase();
+              const matchedPOItem = normalizedItems.find((pi) => {
+                const poCode = String(pi?.kode || '').trim();
+                const poName = String(pi?.nama || '').trim().toLowerCase();
+                return (poCode && boqCode && poCode === boqCode) || (poName && boqName && poName === boqName);
+              });
+              
+              if (matchedPOItem) {
+                return {
+                  ...boqItem,
+                  status: 'Ordered' as const,
+                  qtyActual: (boqItem.qtyActual || 0) + matchedPOItem.qty
+                };
+              }
+              return boqItem;
             });
-            
-            if (matchedPOItem) {
-              return {
-                ...boqItem,
-                status: 'Ordered' as const,
-                qtyActual: (boqItem.qtyActual || 0) + matchedPOItem.qty
-              };
+            try {
+              updateProject(project.id, { boq: updatedBOQ });
+            } catch (err) {
+              console.error('Failed to update project BOQ status after PO create:', err);
             }
-            return boqItem;
-          });
-          try {
-            updateProject(project.id, { boq: updatedBOQ });
-          } catch (err) {
-            console.error('Failed to update project BOQ status after PO create:', err);
           }
         }
       }
+    } catch {
+      if (createdNewStockItems.length > 0) {
+        await Promise.allSettled(
+          createdNewStockItems
+            .map((item) => String(item?.id || '').trim())
+            .filter(Boolean)
+            .map((id) => api.delete(`/inventory/items/${id}`))
+        );
+        setStockItemList((prev) =>
+          (Array.isArray(prev) ? prev : []).filter(
+            (item) => !createdNewStockItems.some((created) => created.id === item.id)
+          )
+        );
+      }
+      return;
     }
     setShowModal(false);
     resetForm();

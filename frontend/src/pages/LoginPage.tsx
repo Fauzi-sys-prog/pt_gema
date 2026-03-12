@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { LogIn, Mail, Lock, Eye, EyeOff, AlertCircle } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import logoImage from 'figma:asset/661f558dc14c79fa090b7039a885f26b843f5c04.png';
 
 export default function LoginPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { login, isAuthenticated } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -16,13 +17,19 @@ export default function LoginPage() {
     password: '',
   });
 
+  const nextPath = searchParams.get('next') || '/';
+
   // Redirect if already authenticated
   useEffect(() => {
-    sessionStorage.removeItem("auth401_notified");
-    if (isAuthenticated) {
-      navigate('/dashboard');
+    try {
+      sessionStorage.removeItem("auth401_notified");
+    } catch {
+      // Ignore session storage access failures during login navigation.
     }
-  }, [isAuthenticated, navigate]);
+    if (isAuthenticated) {
+      navigate(nextPath, { replace: true });
+    }
+  }, [isAuthenticated, navigate, nextPath]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -33,7 +40,7 @@ export default function LoginPage() {
       const success = await login(formData.username, formData.password);
       
       if (success) {
-        navigate('/');
+        navigate(nextPath, { replace: true });
       } else {
         setError('Username atau password salah');
       }

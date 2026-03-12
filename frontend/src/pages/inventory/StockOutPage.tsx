@@ -152,7 +152,7 @@ export default function StockOutPage() {
 
   const actorRoleLabel = String(currentUser?.role || 'USER').trim().toUpperCase() || 'USER';
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     // 1. Validations
@@ -199,28 +199,32 @@ export default function StockOutPage() {
     };
     
     // 3. Execution (Centralized in AppContext)
-    createStockOut(stockOut);
-    setServerStockOutList((prev) => (prev ? [stockOut, ...prev] : prev));
+    try {
+      await createStockOut(stockOut);
+      setServerStockOutList((prev) => (prev ? [stockOut, ...prev] : prev));
     
-    // 4. Update BOQ Status if applicable
-    if (project && project.boq) {
-      const updatedBOQ = project.boq.map(boqItem => {
-        const matchedItem = formData.items.find(pi => 
-          (pi.kode && pi.kode === boqItem.itemKode) || 
-          (pi.nama.toLowerCase() === boqItem.materialName.toLowerCase())
-        );
-        
-        if (matchedItem) {
-          return { ...boqItem, status: 'Used' as const };
-        }
-        return boqItem;
-      });
-      updateProject(project.id, { boq: updatedBOQ });
-    }
+      // 4. Update BOQ Status if applicable
+      if (project && project.boq) {
+        const updatedBOQ = project.boq.map(boqItem => {
+          const matchedItem = formData.items.find(pi => 
+            (pi.kode && pi.kode === boqItem.itemKode) || 
+            (pi.nama.toLowerCase() === boqItem.materialName.toLowerCase())
+          );
+          
+          if (matchedItem) {
+            return { ...boqItem, status: 'Used' as const };
+          }
+          return boqItem;
+        });
+        updateProject(project.id, { boq: updatedBOQ });
+      }
 
-    toast.success("Jurnal stok keluar berhasil diposting.");
-    setShowModal(false);
-    resetForm();
+      toast.success("Jurnal stok keluar berhasil diposting.");
+      setShowModal(false);
+      resetForm();
+    } catch {
+      // toast handled in AppContext
+    }
   };
 
   const resetForm = () => {

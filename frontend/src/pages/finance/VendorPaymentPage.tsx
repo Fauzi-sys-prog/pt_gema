@@ -161,7 +161,7 @@ export default function VendorPaymentPage() {
   };
 
   // Submit expense
-  const handleSubmitExpense = () => {
+  const handleSubmitExpense = async () => {
     if (!expenseForm.vendorId || !expenseForm.keterangan || expenseForm.nominal <= 0) {
       toast.error('Lengkapi semua field yang diperlukan!');
       return;
@@ -198,7 +198,7 @@ export default function VendorPaymentPage() {
     };
 
     if (isEditMode && selectedExpense) {
-      updateExpense(selectedExpense.id, {
+      const ok = await updateExpense(selectedExpense.id, {
         ...expenseForm,
         vendorName: vendor?.namaVendor || '',
         projectName: project?.namaProject || undefined,
@@ -206,6 +206,7 @@ export default function VendorPaymentPage() {
         hasKwitansi: !!kwitansiPreview,
         kwitansiUrl: kwitansiPreview || undefined
       });
+      if (!ok) return;
       toast.success('Expense berhasil diupdate!');
     } else {
       addExpense(newExpense);
@@ -682,21 +683,22 @@ export default function VendorPaymentPage() {
                               {expense.status === 'Pending Approval' && (
                                 <>
                                   <button
-                                    onClick={() => approveExpense(expense.id, currentUser?.fullName || 'Admin')}
+                                    onClick={async () => {
+                                      await approveExpense(expense.id, currentUser?.fullName || 'Admin');
+                                    }}
                                     className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-all"
                                     title="Approve"
                                   >
                                     <CheckCircle className="w-4 h-4" />
                                   </button>
                                   <button
-                                    onClick={() => {
+                                    onClick={async () => {
                                       const reason = window.prompt('Alasan reject:')?.trim();
                                       if (!reason) {
                                         toast.error('Alasan reject wajib diisi');
                                         return;
                                       }
-                                      rejectExpense(expense.id, reason);
-                                      toast.success('Expense berhasil direject');
+                                      await rejectExpense(expense.id, reason);
                                     }}
                                     className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-all"
                                     title="Reject"
@@ -707,11 +709,12 @@ export default function VendorPaymentPage() {
                               )}
                               {expense.status === 'Approved' && (
                                 <button
-                                  onClick={() => {
-                                    updateExpense(expense.id, { 
+                                  onClick={async () => {
+                                    const ok = await updateExpense(expense.id, { 
                                       status: 'Paid',
                                       paidAt: new Date().toISOString()
                                     });
+                                    if (!ok) return;
                                     toast.success('Expense ditandai sebagai Paid!');
                                   }}
                                   className="px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-bold hover:bg-emerald-700 transition-all"

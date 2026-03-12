@@ -1,5 +1,25 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Plus, Search, FileText, Download, Trash2, Camera, ChevronRight, Filter, CheckCircle2, AlertCircle, ArrowLeft, Calendar, DollarSign, User, MapPin, Image as ImageIcon, Save, Clock, X, Briefcase, ArrowUpRight } from 'lucide-react'; import { motion, AnimatePresence } from 'motion/react'; import { ImageWithFallback } from '../../components/figma/ImageWithFallback'; import { toast } from 'sonner@2.0.3'; import { useApp } from '../../contexts/AppContext';
+import {
+  Plus,
+  Search,
+  FileText,
+  Download,
+  ChevronRight,
+  CheckCircle2,
+  AlertCircle,
+  ArrowLeft,
+  DollarSign,
+  MapPin,
+  Image as ImageIcon,
+  Save,
+  Clock,
+  X,
+  ArrowUpRight,
+} from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
+import { ImageWithFallback } from '../../components/figma/ImageWithFallback';
+import { toast } from 'sonner@2.0.3';
+import { useApp } from '../../contexts/AppContext';
 import api from '../../services/api';
 
 // New image asset from user
@@ -25,7 +45,54 @@ interface WorkingExpenseSheet {
   items: ExpenseItem[];
   totalKas: number;
   status: 'Draft' | 'Submitted' | 'Approved' | 'Paid';
+  createdBy?: string;
 }
+
+const getLedgerStatusUi = (status: WorkingExpenseSheet["status"]) => {
+  switch (status) {
+    case "Approved":
+      return {
+        title: "Approved",
+        accentText: "text-emerald-400",
+        iconBg: "bg-emerald-600",
+        icon: CheckCircle2,
+      };
+    case "Paid":
+      return {
+        title: "Paid",
+        accentText: "text-blue-400",
+        iconBg: "bg-blue-600",
+        icon: DollarSign,
+      };
+    case "Submitted":
+      return {
+        title: "Submitted",
+        accentText: "text-amber-400",
+        iconBg: "bg-amber-500",
+        icon: Clock,
+      };
+    default:
+      return {
+        title: "Draft",
+        accentText: "text-slate-400",
+        iconBg: "bg-slate-600",
+        icon: Save,
+      };
+  }
+};
+
+const getLedgerStatusBadgeClass = (status: WorkingExpenseSheet["status"]) => {
+  switch (status) {
+    case "Approved":
+      return "bg-emerald-50 text-emerald-600 border-emerald-100";
+    case "Paid":
+      return "bg-blue-50 text-blue-600 border-blue-100";
+    case "Submitted":
+      return "bg-amber-50 text-amber-600 border-amber-100";
+    default:
+      return "bg-slate-100 text-slate-600 border-slate-200";
+  }
+};
 
 const normalizeWorkingExpenseSheet = (row: any): WorkingExpenseSheet => {
   const payload = row?.payload ?? row ?? {};
@@ -56,6 +123,7 @@ const normalizeWorkingExpenseSheet = (row: any): WorkingExpenseSheet => {
     items,
     totalKas: Number(payload?.totalKas || 0),
     status: normalizeStatus(payload?.status),
+    createdBy: String(payload?.createdBy || row?.createdBy || "").trim() || undefined,
   };
 };
 
@@ -77,15 +145,42 @@ const toWorkingExpensePayload = (sheet: WorkingExpenseSheet) => ({
   })),
   totalKas: Number(sheet.totalKas || 0),
   status: sheet.status,
+  ...(sheet.createdBy ? { createdBy: sheet.createdBy } : {}),
 });
+
+const getWorkingExpenseGrandTotal = (sheet: WorkingExpenseSheet) =>
+  sheet.items.reduce((sum, item) => sum + Number(item.nominal || 0), 0);
+
+const getWorkingExpenseBalanceUi = (balance: number) => {
+  if (balance < 0) {
+    return {
+      label: "Defisit",
+      className: "text-rose-400",
+    };
+  }
+
+  if (balance === 0) {
+    return {
+      label: "Imbang",
+      className: "text-amber-300",
+    };
+  }
+
+  return {
+    label: "Sisa Kas",
+    className: "text-emerald-400",
+  };
+};
 
 export default function WorkingExpensePage() {
   const { projectList = [], addArchiveEntry, addAuditLog, currentUser } = useApp();
+  const actorName = currentUser?.fullName || currentUser?.name || currentUser?.username || 'unknown';
   const [sheets, setSheets] = useState<WorkingExpenseSheet[]>([]);
   const [view, setView] = useState<'list' | 'detail'>('list');
   const [selectedSheet, setSelectedSheet] = useState<WorkingExpenseSheet | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
     let mounted = true;
@@ -110,50 +205,54 @@ export default function WorkingExpensePage() {
     };
   }, []);
 
-  const handleApprove = () => {
+  const handleApprove = async () => {
     if (!selectedSheet) return;
     setIsSubmitting(true);
 
-    const nextSheet: WorkingExpenseSheet = {
+    const pendingSheet: WorkingExpenseSheet = {
       ...selectedSheet,
       status: 'Approved',
     };
 
-    api
-      .patch(`/finance/working-expense-sheets/${selectedSheet.id}`, toWorkingExpensePayload(nextSheet))
-      .then(() => {
-        addArchiveEntry({
+    try {
+      const res = await api.patch(
+        `/finance/working-expense-sheets/${selectedSheet.id}`,
+        toWorkingExpensePayload(pendingSheet),
+      );
+      const approvedSheet = normalizeWorkingExpenseSheet(res?.data || pendingSheet);
+      await addArchiveEntry({
           date: new Date().toISOString().split('T')[0],
           ref: selectedSheet.noHal,
           description: `Final Settlement: ${selectedSheet.project}`,
-          amount: selectedSheet.items.reduce((sum, i) => sum + i.nominal, 0),
+          amount: getWorkingExpenseGrandTotal(selectedSheet),
           project: selectedSheet.project,
-          admin: 'Finance Approval',
+          admin: actorName,
           type: 'BK',
           source: 'Working Expense'
-        });
-        setSheets((prev) => prev.map((s) => (s.id === nextSheet.id ? nextSheet : s)));
-        setSelectedSheet(nextSheet);
-        addAuditLog({
-          action: "WORKING_EXPENSE_APPROVED",
-          module: "Finance",
-          entityType: "WorkingExpenseSheet",
-          entityId: nextSheet.id,
-          description: `Working expense ${nextSheet.noHal} approved`,
-        });
-        toast.success("Ledger Approved and Archived", {
-          description: `Data has been moved to Digital Archive Data Registry.`,
-        });
-        setView('list');
-      })
-      .catch((err) => {
-        console.error('Failed approving working expense sheet', err);
-        toast.error('Gagal update status Working Expense di backend');
-      })
-      .finally(() => setIsSubmitting(false));
+      });
+      setSheets((prev) => prev.map((s) => (s.id === approvedSheet.id ? approvedSheet : s)));
+      setSelectedSheet(approvedSheet);
+      addAuditLog({
+        action: "WORKING_EXPENSE_APPROVED",
+        module: "Finance",
+        details: `Working expense ${approvedSheet.noHal} approved`,
+        status: "Success",
+      });
+      toast.success("Ledger Approved and Archived", {
+        description: `Data has been moved to Digital Archive Data Registry.`,
+      });
+    } catch (err: any) {
+      console.error('Failed approving working expense sheet', err);
+      if (!err?.__toastShown) {
+        toast.error('Gagal approve dan arsipkan Working Expense');
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const [newExpense, setNewExpense] = useState({
+    projectId: '',
     client: '',
     project: '',
     location: '',
@@ -162,7 +261,7 @@ export default function WorkingExpensePage() {
     totalKas: 0,
   });
 
-  const handleCreateExpense = (e: React.FormEvent) => {
+  const handleCreateExpense = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
 
@@ -176,50 +275,50 @@ export default function WorkingExpensePage() {
       revisi: '0',
       totalKas: newExpense.totalKas,
       status: 'Draft',
+      createdBy: actorName,
       items: [],
     };
 
-    api
-      .post('/finance/working-expense-sheets', entry)
-      .then(() => {
-        setSheets((prev) => [entry, ...prev]);
-        addAuditLog({
-          action: "WORKING_EXPENSE_CREATED",
-          module: "Finance",
-          entityType: "WorkingExpenseSheet",
-          entityId: entry.id,
-          description: `Working expense ${entry.noHal} created`,
-        });
-        toast.success("Biaya Kerja baru telah dibuat", {
-          description: `Ref: ${newExpense.noHal} - ${newExpense.project}`,
-        });
-        setShowCreateModal(false);
-        setNewExpense({
-          client: '',
-          project: '',
-          location: '',
-          date: new Date().toISOString().split('T')[0],
-          noHal: '',
-          totalKas: 0,
-        });
-      })
-      .catch((err) => {
-        console.error('Failed creating working expense sheet', err);
-        toast.error('Gagal membuat Working Expense di backend');
-      })
-      .finally(() => setIsSubmitting(false));
+    try {
+      const res = await api.post('/finance/working-expense-sheets', entry);
+      const saved = normalizeWorkingExpenseSheet(res?.data || entry);
+      setSheets((prev) => [saved, ...prev]);
+      setSelectedSheet(saved);
+      addAuditLog({
+        action: "WORKING_EXPENSE_CREATED",
+        module: "Finance",
+        details: `Working expense ${saved.noHal} created`,
+        status: "Success",
+      });
+      toast.success("Biaya Kerja baru telah dibuat", {
+        description: `Ref: ${saved.noHal} - ${saved.project}`,
+      });
+      setSearchQuery('');
+      setShowCreateModal(false);
+      setView('detail');
+      setNewExpense({
+        projectId: '',
+        client: '',
+        project: '',
+        location: '',
+        date: new Date().toISOString().split('T')[0],
+        noHal: '',
+        totalKas: 0,
+      });
+    } catch (err) {
+      console.error('Failed creating working expense sheet', err);
+      toast.error('Gagal membuat Working Expense di backend');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const activeSheet = useMemo(() => {
     if (!sheets.length) return null;
     const submitted = sheets.find((s) => s.status === 'Submitted');
-    return submitted || sheets[0];
+    const draft = sheets.find((s) => s.status === 'Draft');
+    return submitted || draft || sheets[0];
   }, [sheets]);
-
-  const handleOpenActiveDetail = () => {
-    if (!activeSheet) return;
-    handleOpenDetail(activeSheet);
-  };
 
   const hasSheets = sheets.length > 0;
 
@@ -230,14 +329,34 @@ export default function WorkingExpensePage() {
     </div>
   );
 
-  const displayedSheets = hasSheets ? sheets : [];
+  const displayedSheets = useMemo(() => {
+    if (!hasSheets) return [];
+    const keyword = searchQuery.trim().toLowerCase();
+    if (!keyword) return sheets;
+    return sheets.filter((sheet) =>
+      [sheet.noHal, sheet.client, sheet.project, sheet.location, sheet.status, sheet.date]
+        .some((value) => String(value || '').toLowerCase().includes(keyword))
+    );
+  }, [hasSheets, searchQuery, sheets]);
+
+  const isSearchEmpty = searchQuery.trim().length > 0 && displayedSheets.length === 0;
 
   // keep selected data valid after backend refresh
   useEffect(() => {
     if (!selectedSheet) return;
     const found = displayedSheets.find((s) => s.id === selectedSheet.id);
-    if (found) setSelectedSheet(found);
-  }, [displayedSheets, selectedSheet]);
+    if (found) {
+      setSelectedSheet(found);
+      return;
+    }
+    const fallback = sheets.find((s) => s.id === selectedSheet.id);
+    if (fallback) {
+      setSelectedSheet(fallback);
+      return;
+    }
+    setSelectedSheet(null);
+    setView('list');
+  }, [displayedSheets, selectedSheet, sheets]);
 
   // original helper and render start below
   
@@ -245,7 +364,16 @@ export default function WorkingExpensePage() {
     // show empty block and keep page usable
   }
 
-  const activeForCard = activeSheet || displayedSheets[0] || null;
+  const activeForCard = displayedSheets.length
+    ? displayedSheets[0]
+    : searchQuery.trim()
+      ? null
+      : activeSheet || null;
+
+  const handleOpenActiveDetail = () => {
+    if (!activeForCard) return;
+    handleOpenDetail(activeForCard);
+  };
 
   // existing page logic continues
   
@@ -277,7 +405,7 @@ export default function WorkingExpensePage() {
   const handleExportSingleSheet = async (sheet: WorkingExpenseSheet) => {
     const payload = {
       ...sheet,
-      generatedBy: currentUser?.name || currentUser?.username || "unknown",
+      generatedBy: actorName,
       generatedAt: new Date().toISOString(),
     };
     try {
@@ -294,9 +422,8 @@ export default function WorkingExpensePage() {
     addAuditLog({
       action: "WORKING_EXPENSE_EXPORTED",
       module: "Finance",
-      entityType: "WorkingExpenseSheet",
-      entityId: sheet.id,
-      description: `Working expense ${sheet.noHal} exported as Word+Excel`,
+      details: `Working expense ${sheet.noHal} exported as Word+Excel`,
+      status: "Success",
     });
     toast.success("Export selesai", { description: `${sheet.noHal} (.doc + .xls)` });
   };
@@ -309,9 +436,9 @@ export default function WorkingExpensePage() {
     const payload = {
       items: displayedSheets.map((sheet) => ({
         ...sheet,
-        grandTotal: sheet.items.reduce((sum, i) => sum + i.nominal, 0),
+        grandTotal: getWorkingExpenseGrandTotal(sheet),
       })),
-      generatedBy: currentUser?.name || currentUser?.username || "unknown",
+      generatedBy: actorName,
       generatedAt: new Date().toISOString(),
     };
     try {
@@ -329,9 +456,8 @@ export default function WorkingExpensePage() {
     addAuditLog({
       action: "WORKING_EXPENSE_BULK_EXPORTED",
       module: "Finance",
-      entityType: "WorkingExpenseSheet",
-      entityId: "all",
-      description: `Bulk export working expense (${displayedSheets.length} rows) as Word+Excel`,
+      details: `Bulk export working expense (${displayedSheets.length} rows) as Word+Excel`,
+      status: "Success",
     });
     toast.success("Bulk export selesai", { description: `${displayedSheets.length} rows (.doc + .xls)` });
   };
@@ -341,23 +467,35 @@ export default function WorkingExpensePage() {
     addAuditLog({
       action: "WORKING_EXPENSE_PRINTED",
       module: "Finance",
-      entityType: "WorkingExpenseSheet",
-      entityId: selectedSheet.id,
-      description: `Print ledger ${selectedSheet.noHal}`,
+      details: `Print ledger ${selectedSheet.noHal}`,
+      status: "Success",
     });
     window.print();
   };
 
   if (view === 'detail' && selectedSheet) {
-    const grandTotal = selectedSheet.items.reduce((sum, item) => sum + item.nominal, 0);
+    const grandTotal = getWorkingExpenseGrandTotal(selectedSheet);
     const sisaUang = selectedSheet.totalKas - grandTotal;
+    const balanceUi = getWorkingExpenseBalanceUi(sisaUang);
+    const statusUi = getLedgerStatusUi(selectedSheet.status);
+    const StatusIcon = statusUi.icon;
+    const canApprove = selectedSheet.status === "Draft" || selectedSheet.status === "Submitted";
+    const detailFacts = [
+      { label: "Ref No", value: selectedSheet.noHal },
+      { label: "Tanggal", value: selectedSheet.date },
+      { label: "Project", value: selectedSheet.project },
+      { label: "Location", value: selectedSheet.location || "-" },
+      { label: "Items", value: `${selectedSheet.items.length} lines` },
+      { label: "Status", value: selectedSheet.status },
+    ];
 
     return (
       <div className="space-y-8 pb-20 animate-in slide-in-from-bottom-4 duration-500">
         <div className="flex items-center gap-4">
           <button 
+            disabled={isSubmitting}
             onClick={() => setView('list')}
-            className="w-10 h-10 bg-white border border-slate-200 rounded-full flex items-center justify-center text-slate-600 hover:bg-slate-50 transition-all shadow-sm"
+            className="w-10 h-10 bg-white border border-slate-200 rounded-full flex items-center justify-center text-slate-600 hover:bg-slate-50 transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <ArrowLeft size={18} />
           </button>
@@ -367,16 +505,18 @@ export default function WorkingExpensePage() {
           </div>
           <div className="ml-auto flex gap-3">
              <button
+                disabled={isSubmitting}
                 onClick={() => toast.info("Scan preview tersedia di panel kanan")}
-                className="px-6 py-2.5 bg-white border border-slate-200 text-slate-600 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-50 transition-all flex items-center gap-2"
+                className="px-6 py-2.5 bg-white border border-slate-200 text-slate-600 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-50 transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
              >
-                <ImageIcon size={16} /> View Original Scan
+                <ImageIcon size={16} /> Preview Scan
              </button>
              <button
+                disabled={isSubmitting}
                 onClick={handlePrintCurrent}
-                className="px-6 py-2.5 bg-slate-900 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg hover:bg-black transition-all flex items-center gap-2"
+                className="px-6 py-2.5 bg-slate-900 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg hover:bg-black transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
              >
-                <Download size={16} /> Export PDF
+                <Download size={16} /> Print / Save PDF
              </button>
           </div>
         </div>
@@ -416,7 +556,7 @@ export default function WorkingExpensePage() {
                      </div>
                   </div>
                   <div className="w-24 h-24 bg-slate-50 rounded-2xl flex items-center justify-center p-4 border border-slate-100">
-                     <ImageWithFallback src="/logo.png" fallbackIcon={<FileText className="text-slate-300" size={32} />} className="w-full h-full object-contain" />
+                     <ImageWithFallback src="/logo.png" className="w-full h-full object-contain" />
                   </div>
                </div>
 
@@ -473,8 +613,16 @@ export default function WorkingExpensePage() {
                            <td className="px-6 py-4 text-sm font-black text-right italic text-blue-600 bg-blue-50/30">{formatCurrency(selectedSheet.totalKas)}</td>
                            <td colSpan={2}></td>
                         </tr>
-                        <tr className="bg-emerald-600 text-white divide-x divide-emerald-500">
-                           <td colSpan={3} className="px-6 py-4 text-[10px] font-black uppercase italic tracking-[0.2em]">Sisa Uang Lapangan</td>
+                        <tr
+                          className={`text-white divide-x ${
+                            sisaUang < 0
+                              ? "bg-rose-600 divide-rose-500"
+                              : sisaUang === 0
+                                ? "bg-amber-500 divide-amber-400"
+                                : "bg-emerald-600 divide-emerald-500"
+                          }`}
+                        >
+                           <td colSpan={3} className="px-6 py-4 text-[10px] font-black uppercase italic tracking-[0.2em]">{balanceUi.label}</td>
                            <td className="px-6 py-4 text-lg font-black text-right italic">{formatCurrency(sisaUang)}</td>
                            <td colSpan={2}></td>
                         </tr>
@@ -488,12 +636,12 @@ export default function WorkingExpensePage() {
           <div className="space-y-6">
             <div className="bg-slate-900 p-8 rounded-[2.5rem] shadow-xl text-white relative overflow-hidden">
                <div className="flex items-center gap-3 mb-8">
-                  <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center">
-                     <Clock size={20} />
+                  <div className={`w-10 h-10 ${statusUi.iconBg} rounded-xl flex items-center justify-center`}>
+                     <StatusIcon size={20} />
                   </div>
                   <div>
                      <h4 className="text-[10px] font-black uppercase italic tracking-widest text-blue-400">Ledger Status</h4>
-                     <p className="text-sm font-black uppercase italic tracking-tighter">Under Review</p>
+                     <p className={`text-sm font-black uppercase italic tracking-tighter ${statusUi.accentText}`}>{statusUi.title}</p>
                   </div>
                </div>
 
@@ -504,48 +652,60 @@ export default function WorkingExpensePage() {
                         <ImageWithFallback src={imgBiayaKerjaRef} alt="Nota Proof" className="w-full h-full object-cover grayscale opacity-50 group-hover:grayscale-0 group-hover:opacity-100 transition-all" />
                         <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all bg-black/40">
                            <button
+                             disabled={isSubmitting}
                              onClick={() => toast.info("Scan sudah ditampilkan")}
-                             className="px-4 py-2 bg-white text-slate-900 rounded-lg text-[10px] font-black uppercase tracking-widest"
+                             className="px-4 py-2 bg-white text-slate-900 rounded-lg text-[10px] font-black uppercase tracking-widest disabled:opacity-50 disabled:cursor-not-allowed"
                            >
-                             Enlarge Scan
+                             Preview Scan
                            </button>
                         </div>
                      </div>
                   </div>
 
-                  <div className="flex gap-4 p-4">
-                     <div className="w-1 bg-blue-500 rounded-full h-auto" />
-                     <div>
-                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Submitted By</p>
-                        <p className="text-xs font-black uppercase italic">Site Admin - Aris S.</p>
-                        <p className="text-[9px] text-slate-500 font-bold uppercase mt-1">Feb 09, 2026 • 15:45</p>
-                     </div>
+                  <div className="p-4 bg-white/5 border border-white/10 rounded-2xl space-y-3">
+                     <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Document Snapshot</p>
+                     {detailFacts.map((fact) => (
+                        <div key={fact.label} className="flex items-center justify-between gap-4 text-[9px] font-bold uppercase">
+                           <span className="text-slate-400 tracking-widest">{fact.label}</span>
+                           <span className="text-white italic text-right">{fact.value}</span>
+                        </div>
+                     ))}
                   </div>
 
                   <button 
                     onClick={handleApprove}
-                    disabled={isSubmitting}
-                    className="w-full py-4 bg-blue-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] shadow-xl shadow-blue-900/40 hover:bg-blue-700 transition-all flex items-center justify-center gap-2"
+                    disabled={isSubmitting || !canApprove}
+                    className={`w-full py-4 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] shadow-xl transition-all flex items-center justify-center gap-2 ${
+                      canApprove
+                        ? "bg-blue-600 text-white shadow-blue-900/40 hover:bg-blue-700"
+                        : "bg-slate-700 text-slate-300 shadow-none cursor-not-allowed"
+                    }`}
                   >
                      {isSubmitting ? <span className="animate-spin rounded-full h-4 w-4 border-2 border-white/30 border-t-white" /> : <CheckCircle2 size={16} />} 
-                     Approve Ledger
+                     {canApprove ? "Approve Ledger" : `Ledger ${selectedSheet.status}`}
                   </button>
                </div>
             </div>
 
             <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
-               <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-6 italic">Audit Logs</h4>
+               <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-6 italic">Ledger Summary</h4>
                <div className="space-y-4">
-                  {[
-                    { action: 'Sheet Created', user: 'System', time: '14:20' },
-                    { action: 'Items Added (21 lines)', user: 'Aris S.', time: '15:10' },
-                    { action: 'Proof Uploaded', user: 'Aris S.', time: '15:45' }
-                  ].map((log, i) => (
-                    <div key={i} className="flex justify-between items-center text-[9px] font-bold uppercase">
-                       <span className="text-slate-400 tracking-widest">{log.action}</span>
-                       <span className="text-slate-900 italic">{log.time}</span>
-                    </div>
-                  ))}
+                  <div className="flex justify-between items-center text-[9px] font-bold uppercase">
+                     <span className="text-slate-400 tracking-widest">Grand Total</span>
+                     <span className="text-slate-900 italic">{formatCurrency(grandTotal)}</span>
+                  </div>
+                  <div className="flex justify-between items-center text-[9px] font-bold uppercase">
+                     <span className="text-slate-400 tracking-widest">Total Kas</span>
+                     <span className="text-slate-900 italic">{formatCurrency(selectedSheet.totalKas)}</span>
+                  </div>
+                  <div className="flex justify-between items-center text-[9px] font-bold uppercase">
+                     <span className="text-slate-400 tracking-widest">{balanceUi.label}</span>
+                     <span className={`${balanceUi.className} italic`}>{formatCurrency(sisaUang)}</span>
+                  </div>
+                  <div className="flex justify-between items-center text-[9px] font-bold uppercase">
+                     <span className="text-slate-400 tracking-widest">Generated By</span>
+                     <span className="text-slate-900 italic">{selectedSheet.createdBy || "-"}</span>
+                  </div>
                </div>
             </div>
           </div>
@@ -570,9 +730,10 @@ export default function WorkingExpensePage() {
         <div className="flex gap-3">
            <button
               onClick={handleExportAll}
-              className="px-6 py-3 bg-white border-2 border-slate-100 text-slate-600 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-50 transition-all flex items-center gap-2"
+              disabled={!displayedSheets.length}
+              className="px-6 py-3 bg-white border-2 border-slate-100 text-slate-600 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-50 transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
            >
-              <Download size={16} /> Bulk Export
+              <Download size={16} /> {displayedSheets.length ? "Bulk Export" : "No Data To Export"}
            </button>
            <button 
              onClick={() => setShowCreateModal(true)}
@@ -585,41 +746,52 @@ export default function WorkingExpensePage() {
 
       {!hasSheets && renderEmptyState}
 
+      {hasSheets && (
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-1 bg-slate-900 p-10 rounded-[3rem] shadow-2xl text-white relative overflow-hidden group">
            <div className="absolute -right-10 -bottom-10 opacity-5 group-hover:scale-110 transition-transform">
               <ImageIcon size={200} />
            </div>
-           <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-2 italic">Active Site Report</p>
+           <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-2 italic">
+             {isSearchEmpty ? "Search Result" : "Active Site Report"}
+           </p>
            <h3 className="text-xl font-black italic text-white tracking-tighter uppercase mb-6 leading-tight">
-             {activeForCard ? `BK - ${activeForCard.client} (${activeForCard.project})` : "Belum Ada Ledger Aktif"}
+             {activeForCard
+               ? `BK - ${activeForCard.client} (${activeForCard.project})`
+               : isSearchEmpty
+                 ? "Tidak Ada Ledger Yang Cocok"
+                 : "Belum Ada Ledger Aktif"}
            </h3>
            
+      {(() => {
+        const activeBalance = activeForCard
+          ? activeForCard.totalKas - getWorkingExpenseGrandTotal(activeForCard)
+          : 0;
+        const activeBalanceUi = getWorkingExpenseBalanceUi(activeBalance);
+        return (
            <div className="space-y-4 mb-8">
               <div className="flex items-center justify-between p-3 bg-white/5 rounded-xl border border-white/10">
                  <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Grand Total</span>
                  <span className="text-sm font-black italic text-blue-400">
-                   {formatCurrency(activeForCard ? activeForCard.items.reduce((sum, i) => sum + i.nominal, 0) : 0)}
+                   {formatCurrency(activeForCard ? getWorkingExpenseGrandTotal(activeForCard) : 0)}
                  </span>
               </div>
               <div className="flex items-center justify-between p-3 bg-white/5 rounded-xl border border-white/10">
-                 <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Sisa Kas</span>
-                 <span className="text-sm font-black italic text-emerald-400">
-                   {formatCurrency(
-                     activeForCard
-                       ? activeForCard.totalKas - activeForCard.items.reduce((sum, i) => sum + i.nominal, 0)
-                       : 0
-                   )}
+                 <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{activeBalanceUi.label}</span>
+                     <span className={`text-sm font-black italic ${activeBalanceUi.className}`}>
+                       {formatCurrency(activeBalance)}
                  </span>
               </div>
            </div>
+        );
+      })()}
 
            <button 
              onClick={handleOpenActiveDetail}
              disabled={!activeForCard}
-             className="w-full py-4 bg-white text-slate-900 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-blue-50 transition-all flex items-center justify-center gap-2"
+             className="w-full py-4 bg-white text-slate-900 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-blue-50 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
            >
-              Review Verification <ChevronRight size={14} />
+              {isSearchEmpty ? "No Matching Ledger" : "Open Ledger"} <ChevronRight size={14} />
            </button>
         </div>
 
@@ -628,7 +800,13 @@ export default function WorkingExpensePage() {
               <h3 className="text-[10px] font-black text-slate-900 uppercase italic tracking-widest">History Biaya Kerja</h3>
               <div className="relative">
                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300" size={14} />
-                 <input type="text" placeholder="Search BK No / Client..." className="pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-[10px] font-bold uppercase italic outline-none focus:border-blue-500 transition-all" />
+                 <input
+                   type="text"
+                   placeholder="Search BK / Client / Project / Status..."
+                   value={searchQuery}
+                   onChange={(e) => setSearchQuery(e.target.value)}
+                   className="pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-[10px] font-bold uppercase italic outline-none focus:border-blue-500 transition-all"
+                 />
               </div>
            </div>
            <div className="overflow-x-auto">
@@ -644,6 +822,9 @@ export default function WorkingExpensePage() {
                  </thead>
                  <tbody className="divide-y divide-slate-50">
                     {displayedSheets.map(sheet => (
+                      (() => {
+                        const statusBadgeClass = getLedgerStatusBadgeClass(sheet.status);
+                        return (
                       <tr key={sheet.id} className="hover:bg-slate-50/50 transition-all group">
                          <td className="px-8 py-6">
                             <div className="flex flex-col">
@@ -661,10 +842,10 @@ export default function WorkingExpensePage() {
                             </div>
                          </td>
                          <td className="px-8 py-6 font-black italic text-xs text-blue-600 text-right">
-                            {formatCurrency(sheet.items.reduce((sum, i) => sum + i.nominal, 0))}
+                            {formatCurrency(getWorkingExpenseGrandTotal(sheet))}
                          </td>
                          <td className="px-8 py-6 text-center">
-                            <span className="px-3 py-1 bg-blue-50 text-blue-600 border border-blue-100 rounded-lg text-[8px] font-black uppercase italic tracking-widest">
+                            <span className={`px-3 py-1 border rounded-lg text-[8px] font-black uppercase italic tracking-widest ${statusBadgeClass}`}>
                                {sheet.status}
                             </span>
                          </td>
@@ -683,12 +864,22 @@ export default function WorkingExpensePage() {
                             </button>
                          </td>
                       </tr>
+                        );
+                      })()
                     ))}
+                    {displayedSheets.length === 0 && (
+                      <tr>
+                        <td colSpan={5} className="px-8 py-10 text-center text-[10px] font-black uppercase tracking-widest text-slate-400">
+                          Tidak ada ledger yang cocok dengan pencarian.
+                        </td>
+                      </tr>
+                    )}
                  </tbody>
               </table>
            </div>
         </div>
       </div>
+      )}
 
       {/* Visual Reference Section */}
       <div className="p-10 bg-slate-50 rounded-[3rem] border border-slate-200 border-dashed">
@@ -754,7 +945,12 @@ export default function WorkingExpensePage() {
                       <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-2">Create new operational site ledger</p>
                     </div>
                   </div>
-                  <button type="button" onClick={() => setShowCreateModal(false)} className="p-3 bg-slate-800 hover:bg-slate-700 text-white rounded-xl transition-all border border-slate-700">
+                  <button
+                    type="button"
+                    disabled={isSubmitting}
+                    onClick={() => setShowCreateModal(false)}
+                    className="p-3 bg-slate-800 hover:bg-slate-700 text-white rounded-xl transition-all border border-slate-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
                     <X size={20} />
                   </button>
                 </div>
@@ -766,25 +962,35 @@ export default function WorkingExpensePage() {
                       <select 
                         required
                         className="w-full px-6 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl text-xs font-black uppercase italic outline-none focus:border-blue-500 transition-all appearance-none"
-                        value={newExpense.project}
+                        value={newExpense.projectId}
                         onChange={(e) => {
-                          const p = projectList.find(proj => proj.id === e.target.value);
+                          const selectedProjectId = e.target.value;
+                          const p = projectList.find((proj) => proj.id === selectedProjectId);
                           const anyProject = p as any;
                           setNewExpense({
-                            ...newExpense, 
-                            project: p?.namaProject || '',
-                            client: p?.customer || '',
+                            ...newExpense,
+                            projectId: p?.id || '',
+                            project:
+                              anyProject?.namaProject ||
+                              anyProject?.projectName ||
+                              '',
+                            client:
+                              anyProject?.customer ||
+                              anyProject?.customerName ||
+                              '',
                             location:
                               anyProject?.location ||
                               anyProject?.lokasi ||
                               anyProject?.quotationSnapshot?.lokasi ||
-                              ''
+                              '',
                           });
                         }}
                       >
                         <option value="">Select Project</option>
-                        {projectList.map((p, i) => (
-                          <option key={i} value={p.id}>{p.namaProject}</option>
+                        {projectList.map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {(p as any)?.namaProject || (p as any)?.projectName || p.id}
+                          </option>
                         ))}
                       </select>
                     </div>
@@ -805,7 +1011,6 @@ export default function WorkingExpensePage() {
                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Client Name</label>
                       <input 
                         type="text" 
-                        required
                         readOnly
                         placeholder="Auto-filled from project"
                         value={newExpense.client}
@@ -817,7 +1022,6 @@ export default function WorkingExpensePage() {
                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Project Location</label>
                       <input 
                         type="text" 
-                        required
                         readOnly
                         placeholder="Auto-filled from project"
                         value={newExpense.location}
@@ -866,8 +1070,9 @@ export default function WorkingExpensePage() {
                 <div className="p-10 bg-slate-50 flex gap-4">
                   <button 
                     type="button"
+                    disabled={isSubmitting}
                     onClick={() => setShowCreateModal(false)}
-                    className="flex-1 py-5 bg-white border-2 border-slate-200 text-slate-500 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-100 transition-all"
+                    className="flex-1 py-5 bg-white border-2 border-slate-200 text-slate-500 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-100 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     Batal
                   </button>

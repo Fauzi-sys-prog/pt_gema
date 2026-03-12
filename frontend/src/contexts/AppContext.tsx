@@ -13,6 +13,64 @@ import api from "../services/api";
 import { subscribeDataSync } from "../services/dataSyncBus";
 import { isOwnerLike } from "../utils/roles";
 
+const safeGetLocalStorageItem = (key: string): string | null => {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+};
+
+const safeSetLocalStorageItem = (key: string, value: string) => {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    // Ignore storage access failures in app context.
+  }
+};
+
+const safeRemoveLocalStorageItem = (key: string) => {
+  try {
+    localStorage.removeItem(key);
+  } catch {
+    // Ignore storage access failures in app context.
+  }
+};
+
+const normalizeAuthUser = (raw: any): User => {
+  const displayName = raw?.fullName || raw?.name || raw?.username || "User";
+
+  return {
+    ...raw,
+    fullName: displayName,
+    role: raw?.role ?? "ADMIN",
+    isActive: raw?.isActive ?? true,
+  } as User;
+};
+
+const persistAuthUser = (user: User | null) => {
+  if (!user) {
+    safeRemoveLocalStorageItem("user");
+    return;
+  }
+  safeSetLocalStorageItem("user", JSON.stringify(user));
+};
+
+const readPersistedAuthUser = (): User | null => {
+  try {
+    if (!safeGetLocalStorageItem("token")) {
+      safeRemoveLocalStorageItem("user");
+      return null;
+    }
+    const raw = safeGetLocalStorageItem("user");
+    if (!raw) return null;
+    return normalizeAuthUser(JSON.parse(raw));
+  } catch {
+    safeRemoveLocalStorageItem("user");
+    return null;
+  }
+};
+
 /**
  * =========================
  *  TYPES (DEDUPED + CLEAN)
@@ -1041,14 +1099,14 @@ export interface AppContextType {
   updateWorkOrder: (id: string, updates: Partial<WorkOrder>) => Promise<void>;
   deleteWorkOrder: (id: string) => Promise<void>;
 
-  createStockOut: (so: StockOut) => void;
-  createStockIn: (si: StockIn) => void;
-  addStockIn: (si: StockIn) => void;
-  addStockOut: (so: StockOut) => void;
+  createStockOut: (so: StockOut) => Promise<void>;
+  createStockIn: (si: StockIn) => Promise<void>;
+  addStockIn: (si: StockIn) => Promise<void>;
+  addStockOut: (so: StockOut) => Promise<void>;
   addStockOpname: (opname: StockOpname) => Promise<void>;
   confirmStockOpname: (id: string) => Promise<void>;
 
-  addReceiving: (rcv: Receiving) => void;
+  addReceiving: (rcv: Receiving) => Promise<void>;
 
   addInvoice: (inv: Invoice) => Promise<void>;
   updateInvoice: (id: string, updates: Partial<Invoice>) => Promise<void>;
@@ -1104,7 +1162,7 @@ export interface AppContextType {
   deleteSuratJalan: (id: string) => void;
 
   addAsset: (a: Asset) => Promise<void>;
-  addMaintenance: (m: MaintenanceRecord) => void;
+  addMaintenance: (m: MaintenanceRecord) => Promise<void>;
   updateAsset: (id: string, updates: Partial<Asset>) => Promise<void>;
   deleteAsset: (id: string) => Promise<void>;
 
@@ -1134,10 +1192,10 @@ export interface AppContextType {
   deleteVendor: (id: string) => void;
 
   addExpense: (expense: VendorExpense) => void;
-  updateExpense: (id: string, updates: Partial<VendorExpense>) => void;
+  updateExpense: (id: string, updates: Partial<VendorExpense>) => Promise<boolean>;
   deleteExpense: (id: string) => void;
-  approveExpense: (id: string, approver: string) => void;
-  rejectExpense: (id: string, reason: string) => void;
+  approveExpense: (id: string, approver: string) => Promise<boolean>;
+  rejectExpense: (id: string, reason: string) => Promise<boolean>;
 
   addCustomer: (customer: Customer) => void;
   updateCustomer: (id: string, updates: Partial<Customer>) => void;
@@ -1146,7 +1204,7 @@ export interface AppContextType {
   addCustomerInvoice: (invoice: CustomerInvoice) => void;
   updateCustomerInvoice: (id: string, updates: Partial<CustomerInvoice>) => Promise<boolean>;
   deleteCustomerInvoice: (id: string) => void;
-  addInvoicePayment: (invoiceId: string, payment: InvoicePayment) => void;
+  addInvoicePayment: (invoiceId: string, payment: InvoicePayment) => Promise<boolean>;
 }
 
 /**
@@ -1286,7 +1344,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
    *  STATE
    * =========================
    */
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [currentUser, setCurrentUser] = useState<User | null>(() => readPersistedAuthUser());
   const [userList, setUserList] = useState<User[]>([]);
 
   const [projectList, setProjectList] = useState<Project[]>([]);
@@ -1451,17 +1509,19 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
    * =========================
    */
   useEffect(() => {
-    const token = localStorage.getItem("token");
+    const token = safeGetLocalStorageItem("token");
     if (!token) return;
 
     api
       .get("/auth/me")
       .then((res) => {
-        const u = res.data as User;
+        const u = normalizeAuthUser(res.data);
         setCurrentUser(u);
+        persistAuthUser(u);
       })
       .catch(() => {
-        localStorage.removeItem("token");
+        safeRemoveLocalStorageItem("token");
+        persistAuthUser(null);
         setCurrentUser(null);
       });
   }, []);
@@ -1599,7 +1659,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   const refreshCoreLinkedData = async () => {
-    const token = localStorage.getItem("token");
+    const token = safeGetLocalStorageItem("token");
     if (!token) return;
     if (coreLinkedRefreshInFlightRef.current) return;
 
@@ -1623,7 +1683,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   const refreshRealtimeCoreData = async () => {
-    const token = localStorage.getItem("token");
+    const token = safeGetLocalStorageItem("token");
     if (!token) return;
     if (realtimeRefreshInFlightRef.current) return;
     realtimeRefreshInFlightRef.current = true;
@@ -1837,7 +1897,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   useEffect(() => {
-    const token = localStorage.getItem("token");
+    const token = safeGetLocalStorageItem("token");
     if (!token || !currentUser) return;
 
     let cancelled = false;
@@ -1916,7 +1976,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   }, [currentUser?.id]);
 
   useEffect(() => {
-    const token = localStorage.getItem("token");
+    const token = safeGetLocalStorageItem("token");
     if (!token || !currentUser || !hasHydratedFromBackend.current || !canPersistToBackend.current || isSyncingToBackend.current) return;
 
     const syncTasks = [
@@ -2119,10 +2179,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const login: AppContextType["login"] = async (username, password) => {
     try {
       const res = await api.post("/auth/login", { username, password });
-      localStorage.setItem("token", res.data.token);
-      setCurrentUser(res.data.user);
-      toast.success(`Welcome back, ${res.data.user.username}`);
+      safeSetLocalStorageItem("token", res.data.token);
+      const meRes = await api.get("/auth/me");
+      const user = normalizeAuthUser(meRes.data);
+      setCurrentUser(user);
+      persistAuthUser(user);
+      toast.success(`Welcome back, ${user.username}`);
     } catch (err: any) {
+      persistAuthUser(null);
       toast.error(err.response?.data?.error || "Login failed");
       throw err;
     }
@@ -2731,7 +2795,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
    *  - match by kode ONLY
    * =========================
    */
-  const createStockOut: AppContextType["createStockOut"] = (so) => {
+  const createStockOut: AppContextType["createStockOut"] = async (so) => {
     const linkedWO = so.noWorkOrder
       ? workOrderList.find((wo) => String(wo.noWorkOrder || "").trim() === String(so.noWorkOrder || "").trim())
       : undefined;
@@ -2759,11 +2823,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       return;
     }
 
+    const previousStockItems = stockItemList;
+    const previousStockMovements = stockMovementList;
     setStockOutList((prev) => [...prev, so]);
-    api.post("/inventory/stock-outs", so).catch((err) => {
-      console.error("Failed to sync create stock out:", err);
-      toast.error(err?.response?.data?.error || "Gagal simpan stock out ke server");
-    });
 
     setStockItemList((prevInventory) => {
       const updated = [...prevInventory];
@@ -2777,11 +2839,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         const stockAfter = stockBefore - item.qty;
 
         updated[idx] = { ...updated[idx], stok: stockAfter, lastUpdate: new Date().toISOString() };
-        api
-          .patch(`/inventory/items/${updated[idx].id}`, updated[idx])
-          .catch((err) => {
-            console.error("Failed to sync stock item after stock out:", err);
-          });
+        api.patch(`/inventory/items/${updated[idx].id}`, updated[idx]).catch((err) => {
+          console.error("Failed to sync stock item after stock out:", err);
+        });
 
         movements.push({
           id: uid("MOV"),
@@ -2822,14 +2882,22 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
       return updated;
     });
+    try {
+      await api.post("/inventory/stock-outs", so);
+    } catch (err: any) {
+      console.error("Failed to sync create stock out:", err);
+      setStockOutList((prev) => prev.filter((item) => item.id !== so.id));
+      setStockItemList(previousStockItems);
+      setStockMovementList(previousStockMovements);
+      toast.error(err?.response?.data?.error || "Gagal simpan stock out ke server");
+      throw err;
+    }
   };
 
-  const createStockIn: AppContextType["createStockIn"] = (si) => {
+  const createStockIn: AppContextType["createStockIn"] = async (si) => {
+    const previousStockItems = stockItemList;
+    const previousStockMovements = stockMovementList;
     setStockInList((prev) => [...prev, si]);
-    api.post("/inventory/stock-ins", si).catch((err) => {
-      console.error("Failed to sync create stock in:", err);
-      toast.error(err?.response?.data?.error || "Gagal simpan stock in ke server");
-    });
 
     setStockItemList((prevInventory) => {
       const updated = [...prevInventory];
@@ -2864,11 +2932,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           supplier: updated[idx].supplier || si.supplier || undefined,
           lastUpdate: new Date().toISOString(),
         };
-        api
-          .patch(`/inventory/items/${updated[idx].id}`, updated[idx])
-          .catch((err) => {
-            console.error("Failed to sync stock item after stock in:", err);
-          });
+        api.patch(`/inventory/items/${updated[idx].id}`, updated[idx]).catch((err) => {
+          console.error("Failed to sync stock item after stock in:", err);
+        });
 
         movements.push({
           id: uid("MOV"),
@@ -2911,10 +2977,20 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
       return updated;
     });
+    try {
+      await api.post("/inventory/stock-ins", si);
+    } catch (err: any) {
+      console.error("Failed to sync create stock in:", err);
+      setStockInList((prev) => prev.filter((item) => item.id !== si.id));
+      setStockItemList(previousStockItems);
+      setStockMovementList(previousStockMovements);
+      toast.error(err?.response?.data?.error || "Gagal simpan stock in ke server");
+      throw err;
+    }
   };
 
-  const addStockIn: AppContextType["addStockIn"] = (si) => createStockIn(si);
-  const addStockOut: AppContextType["addStockOut"] = (so) => createStockOut(so);
+  const addStockIn: AppContextType["addStockIn"] = async (si) => createStockIn(si);
+  const addStockOut: AppContextType["addStockOut"] = async (so) => createStockOut(so);
   const addStockOpname: AppContextType["addStockOpname"] = async (opname) => {
     try {
       const res = await api.post("/inventory/stock-opnames", opname);
@@ -3020,26 +3096,19 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
    *  RECEIVING: auto StockIn + PO progress
    * =========================
    */
-  const addReceiving: AppContextType["addReceiving"] = (rcv) => {
+  const addReceiving: AppContextType["addReceiving"] = async (rcv) => {
     setReceivingList((prev) => [...prev, rcv]);
-    void (async () => {
-      try {
-        const res = await api.post("/receivings", rcv);
-        const savedReceiving = (res?.data || rcv) as Receiving;
-        setReceivingList((prev) => {
-          const exists = prev.some((item) => item.id === savedReceiving.id);
-          if (exists) return prev.map((item) => (item.id === savedReceiving.id ? savedReceiving : item));
-          return [savedReceiving, ...prev];
-        });
-      } catch (err: any) {
-        console.error("Failed to sync create receiving:", err);
-        setReceivingList((prev) => prev.filter((item) => item.id !== rcv.id));
-        toast.error(err?.response?.data?.error || "Gagal simpan receiving ke server");
-        return;
-      }
+    try {
+      const res = await api.post("/receivings", rcv);
+      const savedReceiving = (res?.data || rcv) as Receiving;
+      setReceivingList((prev) => {
+        const exists = prev.some((item) => item.id === savedReceiving.id);
+        if (exists) return prev.map((item) => (item.id === savedReceiving.id ? savedReceiving : item));
+        return [savedReceiving, ...prev];
+      });
 
       const actorRoleLabel = String(currentUser?.role || "SUPPLY_CHAIN").trim().toUpperCase() || "SUPPLY_CHAIN";
-      createStockIn({
+      await createStockIn({
         id: uid("SI"),
         noStockIn: `SI-AUTO-${rcv.noReceiving}`,
         noSuratJalan: rcv.noSuratJalan,
@@ -3081,7 +3150,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         details: `Received materials for PO ${rcv.noPO} via GRN ${rcv.noReceiving}`,
         status: "Success",
       });
-    })();
+    } catch (err: any) {
+      console.error("Failed to sync create receiving:", err);
+      setReceivingList((prev) => prev.filter((item) => item.id !== rcv.id));
+      toast.error(err?.response?.data?.error || "Gagal simpan receiving ke server");
+      throw err;
+    }
   };
 
   /**
@@ -3254,6 +3328,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
    */
   const addDataCollection: AppContextType["addDataCollection"] = (dc) =>
     {
+      setDataCollectionList((prev) => {
+        const exists = prev.some((item) => item.id === dc.id);
+        if (exists) return prev.map((item) => (item.id === dc.id ? dc : item));
+        return [...prev, dc];
+      });
       api.post("/data-collections", dc).then((res) => {
         const saved = (res?.data || dc) as DataCollection;
         setDataCollectionList((prev) => {
@@ -3263,6 +3342,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         });
       }).catch((err) => {
         console.error("Failed to sync create data collection:", err);
+        setDataCollectionList((prev) => prev.filter((item) => item.id !== dc.id));
         toast.error(err?.response?.data?.error || "Gagal simpan data collection ke server");
       });
     };
@@ -3804,7 +3884,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
   };
 
-  const addMaintenance: AppContextType["addMaintenance"] = (m) => {
+  const addMaintenance: AppContextType["addMaintenance"] = async (m) => {
     setMaintenanceList((prev) => [m, ...prev]);
     const linkedAsset =
       findAssetByPlateRef(m.assetCode) ||
@@ -3816,21 +3896,20 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           : getIdleAssetStatus(linkedAsset, workOrderList, suratJalanList, [m, ...maintenanceList]);
       syncAssetLinkedUpdate(linkedAsset.id, { status: nextStatus });
     }
-    api
-      .post("/maintenances", m)
-      .then((res) => {
-        const saved = (res?.data || m) as MaintenanceRecord;
-        setMaintenanceList((prev) => {
-          const exists = prev.some((item) => item.id === saved.id);
-          if (exists) return prev.map((item) => (item.id === saved.id ? saved : item));
-          return [saved, ...prev];
-        });
-      })
-      .catch((err) => {
-        console.error("Failed to sync create maintenance:", err);
-        setMaintenanceList((prev) => prev.filter((item) => item.id !== m.id));
-        toast.error(err?.response?.data?.error || "Gagal simpan maintenance ke server");
+    try {
+      const res = await api.post("/maintenances", m);
+      const saved = (res?.data || m) as MaintenanceRecord;
+      setMaintenanceList((prev) => {
+        const exists = prev.some((item) => item.id === saved.id);
+        if (exists) return prev.map((item) => (item.id === saved.id ? saved : item));
+        return [saved, ...prev];
       });
+    } catch (err: any) {
+      console.error("Failed to sync create maintenance:", err);
+      setMaintenanceList((prev) => prev.filter((item) => item.id !== m.id));
+      toast.error(err?.response?.data?.error || "Gagal simpan maintenance ke server");
+      throw err;
+    }
     addAuditLog({
       action: "MAINTENANCE_LOGGED",
       module: "Assets",
@@ -4200,7 +4279,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     });
   };
 
-  const updateExpense: AppContextType["updateExpense"] = (id, updates) => {
+  const updateExpense: AppContextType["updateExpense"] = async (id, updates) => {
     let prevSnapshot: VendorExpense | undefined;
     let mergedPayload: VendorExpense | undefined;
     setExpenseList((prev) =>
@@ -4213,20 +4292,20 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         return e;
       })
     );
-    if (!mergedPayload) return;
-    api
-      .patch(`/finance/vendor-expenses/${id}`, mergedPayload)
-      .then((res) => {
-        const saved = (res?.data || mergedPayload) as VendorExpense;
-        setExpenseList((prev) => prev.map((item) => (item.id === id ? saved : item)));
-      })
-      .catch((err) => {
-        console.error("Failed to sync update expense:", err);
-        if (prevSnapshot) {
-          setExpenseList((prev) => prev.map((item) => (item.id === id ? prevSnapshot! : item)));
-        }
-        toast.error(err?.response?.data?.error || "Gagal update expense di server");
-      });
+    if (!mergedPayload) return false;
+    try {
+      const res = await api.patch(`/finance/vendor-expenses/${id}`, mergedPayload);
+      const saved = (res?.data || mergedPayload) as VendorExpense;
+      setExpenseList((prev) => prev.map((item) => (item.id === id ? saved : item)));
+      return true;
+    } catch (err: any) {
+      console.error("Failed to sync update expense:", err);
+      if (prevSnapshot) {
+        setExpenseList((prev) => prev.map((item) => (item.id === id ? prevSnapshot! : item)));
+      }
+      toast.error(err?.response?.data?.error || "Gagal update expense di server");
+      return false;
+    }
   };
 
   const deleteExpense: AppContextType["deleteExpense"] = (id) => {
@@ -4255,14 +4334,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     });
   };
 
-  const approveExpense: AppContextType["approveExpense"] = (id, approver) => {
-    setExpenseList((prev) =>
-      prev.map((e) =>
-        e.id === id ? { ...e, status: "Approved", approvedBy: approver, approvedAt: new Date().toISOString() } : e
-      )
-    );
-
+  const approveExpense: AppContextType["approveExpense"] = async (id, approver) => {
     const expense = expenseList.find((e) => e.id === id);
+    const ok = await updateExpense(id, {
+      status: "Approved",
+      approvedBy: approver,
+      approvedAt: new Date().toISOString(),
+    });
+    if (!ok) return false;
+
     toast.success(`Expense ${expense?.noExpense || id} telah disetujui!`);
     addAuditLog({
       action: "EXPENSE_APPROVED",
@@ -4270,20 +4350,21 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       details: `Menyetujui expense: ${expense?.noExpense || id}`,
       status: "Success",
     });
+    return true;
   };
 
-  const rejectExpense: AppContextType["rejectExpense"] = (id, reason) => {
+  const rejectExpense: AppContextType["rejectExpense"] = async (id, reason) => {
     const rejector = currentUser?.fullName || currentUser?.username || "System";
 
-    setExpenseList((prev) =>
-      prev.map((e) =>
-        e.id === id
-          ? { ...e, status: "Rejected", rejectedBy: rejector, rejectedAt: new Date().toISOString(), rejectReason: reason }
-          : e
-      )
-    );
-
     const expense = expenseList.find((e) => e.id === id);
+    const ok = await updateExpense(id, {
+      status: "Rejected",
+      rejectedBy: rejector,
+      rejectedAt: new Date().toISOString(),
+      rejectReason: reason,
+    });
+    if (!ok) return false;
+
     toast.error(`Expense ${expense?.noExpense || id} ditolak!`);
     addAuditLog({
       action: "EXPENSE_REJECTED",
@@ -4291,6 +4372,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       details: `Menolak expense: ${expense?.noExpense || id} - Alasan: ${reason}`,
       status: "Warning",
     });
+    return true;
   };
 
   /**
@@ -4480,7 +4562,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     });
   };
 
-  const addInvoicePayment: AppContextType["addInvoicePayment"] = (invoiceId, payment) => {
+  const addInvoicePayment: AppContextType["addInvoicePayment"] = async (invoiceId, payment) => {
     let prevSnapshot: CustomerInvoice | undefined;
     let mergedPayload: CustomerInvoice | undefined;
     setCustomerInvoiceList((prev) =>
@@ -4500,30 +4582,29 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         return mergedPayload;
       })
     );
-    if (mergedPayload) {
-      api
-        .patch(`/finance/customer-invoices/${invoiceId}`, mergedPayload)
-        .then((res) => {
-          const saved = (res?.data || mergedPayload) as CustomerInvoice;
-          setCustomerInvoiceList((prev) => prev.map((item) => (item.id === invoiceId ? saved : item)));
-        })
-        .catch((err) => {
-          console.error("Failed to sync invoice payment:", err);
-          if (prevSnapshot) {
-            setCustomerInvoiceList((prev) => prev.map((item) => (item.id === invoiceId ? prevSnapshot! : item)));
-          }
-          toast.error(err?.response?.data?.error || "Gagal sinkron pembayaran invoice ke server");
-        });
-    }
+    if (!mergedPayload) return false;
+    try {
+      const res = await api.patch(`/finance/customer-invoices/${invoiceId}`, mergedPayload);
+      const saved = (res?.data || mergedPayload) as CustomerInvoice;
+      setCustomerInvoiceList((prev) => prev.map((item) => (item.id === invoiceId ? saved : item)));
 
-    const inv = customerInvoiceList.find((x) => x.id === invoiceId);
-    toast.success(`Pembayaran Rp ${payment.nominal.toLocaleString("id-ID")} berhasil dicatat!`);
-    addAuditLog({
-      action: "PAYMENT_RECEIVED",
-      module: "Finance",
-      details: `Pembayaran invoice ${inv?.noInvoice || invoiceId} Rp ${payment.nominal.toLocaleString("id-ID")}`,
-      status: "Success",
-    });
+      const inv = customerInvoiceList.find((x) => x.id === invoiceId);
+      toast.success(`Pembayaran Rp ${payment.nominal.toLocaleString("id-ID")} berhasil dicatat!`);
+      addAuditLog({
+        action: "PAYMENT_RECEIVED",
+        module: "Finance",
+        details: `Pembayaran invoice ${inv?.noInvoice || invoiceId} Rp ${payment.nominal.toLocaleString("id-ID")}`,
+        status: "Success",
+      });
+      return true;
+    } catch (err: any) {
+      console.error("Failed to sync invoice payment:", err);
+      if (prevSnapshot) {
+        setCustomerInvoiceList((prev) => prev.map((item) => (item.id === invoiceId ? prevSnapshot! : item)));
+      }
+      toast.error(err?.response?.data?.error || "Gagal sinkron pembayaran invoice ke server");
+      return false;
+    }
   };
 
   /**
@@ -4612,7 +4693,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   const refreshAll: AppContextType["refreshAll"] = async () => {
-    const token = localStorage.getItem("token");
+    const token = safeGetLocalStorageItem("token");
     if (!token || !currentUser) {
       toast.error("Silakan login ulang.");
       return;
@@ -4675,7 +4756,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   useEffect(() => {
     const unsubscribe = subscribeDataSync(() => {
-      const token = localStorage.getItem("token");
+      const token = safeGetLocalStorageItem("token");
       if (!token) return;
 
       void refreshCoreLinkedData().catch(() => {
@@ -4686,7 +4767,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   }, []);
 
   useEffect(() => {
-    const token = localStorage.getItem("token");
+    const token = safeGetLocalStorageItem("token");
     if (!token || !currentUser) return;
 
     const REALTIME_SYNC_INTERVAL_MS = 30000;

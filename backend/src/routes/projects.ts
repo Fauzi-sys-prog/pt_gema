@@ -72,6 +72,17 @@ function normalizeApprovalToken(value: unknown): string {
     .replace(/[\s-]+/g, "_");
 }
 
+function ensurePayloadWithId(id: string, payload: unknown): Record<string, unknown> {
+  const base =
+    payload && typeof payload === "object" && !Array.isArray(payload)
+      ? ({ ...(payload as Record<string, unknown>) } as Record<string, unknown>)
+      : {};
+  if (!readString(base, "id")) {
+    base.id = id;
+  }
+  return base;
+}
+
 function resolveProjectApprovalTransition(
   role: Role | undefined,
   currentStatus: string,
@@ -243,12 +254,241 @@ function normalizeOptionalId(value: unknown): string | null {
   return trimmed.length > 0 ? trimmed : null;
 }
 
+function normalizeProjectPayloadForPersistence(payload: Record<string, unknown>): Record<string, unknown> {
+  const normalized: Record<string, unknown> = { ...payload };
+  const projectId = readString(payload, "id");
+  const kodeProject = readString(payload, "kodeProject") || projectId;
+  const namaProject = readString(payload, "namaProject") || readString(payload, "projectName");
+  const customerName = readString(payload, "customer") || readString(payload, "customerName");
+
+  if (projectId) normalized.id = projectId;
+  if (kodeProject) normalized.kodeProject = kodeProject;
+  if (namaProject) {
+    normalized.namaProject = namaProject;
+    normalized.projectName = namaProject;
+  }
+  if (customerName) {
+    normalized.customer = customerName;
+    normalized.customerName = customerName;
+  }
+
+  return normalized;
+}
+
 function buildProjectRecordData(payload: Record<string, unknown>) {
+  const normalized = normalizeProjectPayloadForPersistence(payload);
   return {
-    quotationId: normalizeOptionalId(payload.quotationId),
-    customerId: normalizeOptionalId(payload.customerId),
-    payload: payload as Prisma.InputJsonValue,
+    quotationId: normalizeOptionalId(normalized.quotationId),
+    customerId: normalizeOptionalId(normalized.customerId),
+    kodeProject: readString(normalized, "kodeProject"),
+    namaProject: readString(normalized, "namaProject") || readString(normalized, "projectName"),
+    customerName: readString(normalized, "customer") || readString(normalized, "customerName"),
+    status: readString(normalized, "status"),
+    approvalStatus: readString(normalized, "approvalStatus") || "Pending",
+    nilaiKontrak: readNumber(normalized, "nilaiKontrak") ?? 0,
+    progress: readNumber(normalized, "progress") ?? 0,
+    payload: normalized as Prisma.InputJsonValue,
   };
+}
+
+type ProjectReadRow = {
+  id: string;
+  quotationId: string | null;
+  customerId: string | null;
+  kodeProject: string | null;
+  namaProject: string | null;
+  customerName: string | null;
+  status: string | null;
+  approvalStatus: string | null;
+  nilaiKontrak: number | null;
+  progress: number | null;
+  payload: Prisma.JsonValue;
+  updatedAt: Date;
+};
+
+function hydrateProjectPayload(row: ProjectReadRow): Record<string, unknown> {
+  const payload = asRecord(row.payload);
+  return {
+    ...payload,
+    id: readString(payload, "id") || row.id,
+    quotationId: row.quotationId ?? normalizeOptionalId(payload.quotationId) ?? undefined,
+    customerId: row.customerId ?? normalizeOptionalId(payload.customerId) ?? undefined,
+    kodeProject: row.kodeProject ?? readString(payload, "kodeProject") ?? undefined,
+    namaProject:
+      row.namaProject ??
+      readString(payload, "namaProject") ??
+      readString(payload, "projectName") ??
+      undefined,
+    customer:
+      row.customerName ??
+      readString(payload, "customer") ??
+      readString(payload, "customerName") ??
+      undefined,
+    customerName:
+      row.customerName ??
+      readString(payload, "customerName") ??
+      readString(payload, "customer") ??
+      undefined,
+    status: row.status ?? readString(payload, "status") ?? undefined,
+    approvalStatus: row.approvalStatus ?? readString(payload, "approvalStatus") ?? "Pending",
+    nilaiKontrak:
+      row.nilaiKontrak ??
+      readNumber(payload, "nilaiKontrak") ??
+      readNumber(payload, "contractValue") ??
+      readNumber(payload, "totalContractValue") ??
+      0,
+    progress: row.progress ?? readNumber(payload, "progress") ?? 0,
+  };
+}
+
+async function loadFinancialPurchaseOrders(): Promise<Record<string, unknown>[]> {
+  const [appRows, procurementRows] = await Promise.all([
+    prisma.appEntity.findMany({
+      where: { resource: "purchase-orders" },
+      select: { entityId: true, payload: true, updatedAt: true },
+    }),
+    prisma.procurementPurchaseOrder.findMany({
+      select: {
+        id: true,
+        number: true,
+        tanggal: true,
+        supplierName: true,
+        vendorId: true,
+        projectId: true,
+        totalAmount: true,
+        status: true,
+        updatedAt: true,
+      },
+    }),
+  ]);
+  const byId = new Map<string, { payload: Record<string, unknown>; updatedAt: Date }>();
+  for (const row of appRows) byId.set(row.entityId, { payload: asRecord(row.payload), updatedAt: row.updatedAt });
+  for (const row of procurementRows) {
+    const payload = {
+      id: row.id,
+      noPO: row.number,
+      tanggal: row.tanggal.toISOString().slice(0, 10),
+      supplier: row.supplierName,
+      vendorId: row.vendorId ?? undefined,
+      projectId: row.projectId ?? undefined,
+      total: row.totalAmount,
+      totalAmount: row.totalAmount,
+      grandTotal: row.totalAmount,
+      status: row.status,
+    };
+    const existing = byId.get(row.id);
+    if (!existing || row.updatedAt > existing.updatedAt) byId.set(row.id, { payload, updatedAt: row.updatedAt });
+  }
+  return Array.from(byId.values()).map((row) => row.payload);
+}
+
+async function loadFinancialStockOuts(): Promise<Record<string, unknown>[]> {
+  const [appRows, stockOutRows] = await Promise.all([
+    prisma.appEntity.findMany({
+      where: { resource: "stock-outs" },
+      select: { entityId: true, payload: true, updatedAt: true },
+    }),
+    prisma.inventoryStockOut.findMany({
+      select: {
+        id: true,
+        number: true,
+        tanggal: true,
+        type: true,
+        status: true,
+        recipientName: true,
+        projectId: true,
+        workOrderId: true,
+        updatedAt: true,
+        items: {
+          select: {
+            itemCode: true,
+            itemName: true,
+            qty: true,
+            unit: true,
+            batchNo: true,
+          },
+          orderBy: { id: "asc" },
+        },
+      },
+    }),
+  ]);
+  const byId = new Map<string, { payload: Record<string, unknown>; updatedAt: Date }>();
+  for (const row of appRows) byId.set(row.entityId, { payload: asRecord(row.payload), updatedAt: row.updatedAt });
+  for (const row of stockOutRows) {
+    const payload = {
+      id: row.id,
+      noStockOut: row.number,
+      tanggal: row.tanggal.toISOString().slice(0, 10),
+      type: row.type,
+      status: row.status,
+      penerima: row.recipientName ?? "",
+      projectId: row.projectId ?? undefined,
+      workOrderId: row.workOrderId ?? undefined,
+      items: row.items.map((item) => ({
+        kode: item.itemCode,
+        itemCode: item.itemCode,
+        nama: item.itemName,
+        itemName: item.itemName,
+        qty: item.qty,
+        satuan: item.unit,
+        unit: item.unit,
+        batchNo: item.batchNo ?? undefined,
+      })),
+    };
+    const existing = byId.get(row.id);
+    if (!existing || row.updatedAt > existing.updatedAt) byId.set(row.id, { payload, updatedAt: row.updatedAt });
+  }
+  return Array.from(byId.values()).map((row) => row.payload);
+}
+
+async function loadFinancialStockItems(): Promise<Record<string, unknown>[]> {
+  const [appRows, stockItemRows] = await Promise.all([
+    prisma.appEntity.findMany({
+      where: { resource: "stock-items" },
+      select: { entityId: true, payload: true, updatedAt: true },
+    }),
+    prisma.inventoryItem.findMany({
+      select: {
+        id: true,
+        code: true,
+        name: true,
+        category: true,
+        unit: true,
+        location: true,
+        onHandQty: true,
+        unitPrice: true,
+        supplierName: true,
+        updatedAt: true,
+      },
+    }),
+  ]);
+  const byId = new Map<string, { payload: Record<string, unknown>; updatedAt: Date }>();
+  for (const row of appRows) byId.set(row.entityId, { payload: asRecord(row.payload), updatedAt: row.updatedAt });
+  for (const row of stockItemRows) {
+    const payload = {
+      id: row.id,
+      kode: row.code,
+      code: row.code,
+      nama: row.name,
+      name: row.name,
+      kategori: row.category,
+      category: row.category,
+      satuan: row.unit,
+      unit: row.unit,
+      lokasi: row.location,
+      location: row.location,
+      stok: row.onHandQty,
+      stock: row.onHandQty,
+      onHandQty: row.onHandQty,
+      hargaSatuan: row.unitPrice ?? 0,
+      unitPrice: row.unitPrice ?? undefined,
+      supplier: row.supplierName ?? undefined,
+      supplierName: row.supplierName ?? undefined,
+    };
+    const existing = byId.get(row.id);
+    if (!existing || row.updatedAt > existing.updatedAt) byId.set(row.id, { payload, updatedAt: row.updatedAt });
+  }
+  return Array.from(byId.values()).map((row) => row.payload);
 }
 
 async function upsertProjectRecord(
@@ -267,18 +507,32 @@ async function upsertProjectRecord(
 }
 
 async function findProjectIdsByQuotationId(quotationId: string): Promise<string[]> {
-  const rows = await prisma.appEntity.findMany({
-    where: { resource: PROJECT_RESOURCE },
-    select: { entityId: true, payload: true },
-  });
+  const [rows, legacyRows] = await Promise.all([
+    prisma.projectRecord.findMany({
+      select: {
+        id: true,
+        quotationId: true,
+        payload: true,
+      },
+    }),
+    prisma.appEntity.findMany({
+      where: { resource: PROJECT_RESOURCE },
+      select: { entityId: true, payload: true },
+    }),
+  ]);
 
-  const ids: string[] = [];
+  const ids = new Set<string>();
   for (const row of rows) {
     const payload = asRecord(row.payload);
-    const linked = readString(payload, "quotationId");
-    if (linked === quotationId) ids.push(row.entityId);
+    const linked = row.quotationId || readString(payload, "quotationId");
+    if (linked === quotationId) ids.add(row.id);
   }
-  return ids;
+  for (const row of legacyRows) {
+    const payload = asRecord(row.payload);
+    const linked = readString(payload, "quotationId");
+    if (linked === quotationId) ids.add(row.entityId);
+  }
+  return Array.from(ids);
 }
 
 async function ensureValidQuotationLink(
@@ -316,10 +570,42 @@ async function ensureValidQuotationLink(
 async function getQuotationPayloadById(id: string): Promise<Record<string, unknown> | null> {
   const direct = await prisma.quotation.findUnique({
     where: { id },
-    select: { payload: true },
+    select: {
+      id: true,
+      noPenawaran: true,
+      tanggal: true,
+      status: true,
+      kepada: true,
+      perihal: true,
+      grandTotal: true,
+      dataCollectionId: true,
+      payload: true,
+    },
   });
-  if (direct?.payload && typeof direct.payload === "object" && !Array.isArray(direct.payload)) {
-    return direct.payload as Record<string, unknown>;
+  if (direct) {
+    const payload =
+      direct.payload && typeof direct.payload === "object" && !Array.isArray(direct.payload)
+        ? (direct.payload as Record<string, unknown>)
+        : {};
+    return {
+      ...payload,
+      id: typeof payload.id === "string" && payload.id.trim() ? payload.id : direct.id,
+      noPenawaran:
+        direct.noPenawaran || (typeof payload.noPenawaran === "string" ? payload.noPenawaran : undefined),
+      tanggal: direct.tanggal || (typeof payload.tanggal === "string" ? payload.tanggal : undefined),
+      status: direct.status || (typeof payload.status === "string" ? payload.status : undefined),
+      kepada: direct.kepada || (typeof payload.kepada === "string" ? payload.kepada : undefined),
+      perihal: direct.perihal || (typeof payload.perihal === "string" ? payload.perihal : undefined),
+      grandTotal:
+        typeof direct.grandTotal === "number"
+          ? direct.grandTotal
+          : typeof payload.grandTotal === "number"
+            ? payload.grandTotal
+            : undefined,
+      dataCollectionId:
+        direct.dataCollectionId ||
+        (typeof payload.dataCollectionId === "string" ? payload.dataCollectionId : undefined),
+    };
   }
 
   const legacy = await prisma.appEntity.findUnique({
@@ -423,28 +709,48 @@ projectsRouter.get("/projects", authenticate, async (_req: AuthRequest, res: Res
     return sendError(res, 403, { code: "FORBIDDEN", message: "Forbidden", legacyError: "Forbidden" });
   }
   try {
-    const rows = await prisma.appEntity.findMany({
-      where: { resource: PROJECT_RESOURCE },
-      orderBy: { updatedAt: "desc" },
-      select: {
-        entityId: true,
-        payload: true,
-      },
-    });
+    const [rows, legacyRows] = await Promise.all([
+      prisma.projectRecord.findMany({
+        orderBy: { updatedAt: "desc" },
+        select: {
+          id: true,
+          quotationId: true,
+          customerId: true,
+          kodeProject: true,
+          namaProject: true,
+          customerName: true,
+          status: true,
+          approvalStatus: true,
+          nilaiKontrak: true,
+          progress: true,
+          payload: true,
+          updatedAt: true,
+        },
+      }),
+      prisma.appEntity.findMany({
+        where: { resource: PROJECT_RESOURCE },
+        orderBy: { updatedAt: "desc" },
+        select: { entityId: true, payload: true, updatedAt: true },
+      }),
+    ]);
 
-    const projects: unknown[] = rows.map((row) => {
-      const payload = row.payload;
-      if (payload && typeof payload === "object" && !Array.isArray(payload)) {
-        return {
-          ...(payload as Record<string, unknown>),
-          id: typeof (payload as Record<string, unknown>).id === "string"
-            ? (payload as Record<string, unknown>).id
-            : row.entityId,
-        };
-      }
+    const merged = new Map<string, { payload: Record<string, unknown>; updatedAt: Date }>();
+    for (const row of legacyRows) {
+      merged.set(row.entityId, {
+        payload: ensurePayloadWithId(row.entityId, row.payload),
+        updatedAt: row.updatedAt,
+      });
+    }
+    for (const row of rows) {
+      merged.set(row.id, {
+        payload: hydrateProjectPayload(row),
+        updatedAt: row.updatedAt,
+      });
+    }
 
-      return { id: row.entityId };
-    });
+    const projects: unknown[] = Array.from(merged.values())
+      .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
+      .map((row) => row.payload);
 
     const parsed = projectBulkSchema.safeParse(projects);
     if (!parsed.success) {
@@ -476,14 +782,37 @@ projectsRouter.put("/projects/bulk", authenticate, async (req: AuthRequest, res:
   }
 
   const ids = items.map((item) => item.id);
-  const existingRows = await prisma.appEntity.findMany({
-    where: {
-      resource: PROJECT_RESOURCE,
-      entityId: { in: ids },
-    },
-    select: { entityId: true, payload: true },
-  });
-  const existingById = new Map(existingRows.map((row) => [row.entityId, asRecord(row.payload)]));
+  const [existingRows, legacyRows] = await Promise.all([
+    prisma.projectRecord.findMany({
+      where: { id: { in: ids } },
+      select: {
+        id: true,
+        approvalStatus: true,
+        payload: true,
+      },
+    }),
+    prisma.appEntity.findMany({
+      where: {
+        resource: PROJECT_RESOURCE,
+        entityId: { in: ids },
+      },
+      select: { entityId: true, payload: true },
+    }),
+  ]);
+  const existingById = new Map<string, Record<string, unknown>>(
+    existingRows.map((row) => [
+      row.id,
+      {
+        ...asRecord(row.payload),
+        approvalStatus: row.approvalStatus ?? readString(asRecord(row.payload), "approvalStatus"),
+      },
+    ])
+  );
+  for (const row of legacyRows) {
+    if (!existingById.has(row.entityId)) {
+      existingById.set(row.entityId, asRecord(row.payload));
+    }
+  }
 
   for (const item of items) {
     const existing = existingById.get(item.id);
@@ -516,6 +845,7 @@ projectsRouter.put("/projects/bulk", authenticate, async (req: AuthRequest, res:
   try {
     await prisma.$transaction(async (tx) => {
       for (const project of items) {
+        const normalizedProject = normalizeProjectPayloadForPersistence(project as Record<string, unknown>);
         await tx.appEntity.upsert({
           where: {
             resource_entityId: {
@@ -524,16 +854,16 @@ projectsRouter.put("/projects/bulk", authenticate, async (req: AuthRequest, res:
             },
           },
           update: {
-            payload: project as Prisma.InputJsonValue,
+            payload: normalizedProject as Prisma.InputJsonValue,
           },
           create: {
             resource: PROJECT_RESOURCE,
             entityId: project.id,
-            payload: project as Prisma.InputJsonValue,
+            payload: normalizedProject as Prisma.InputJsonValue,
           },
         });
 
-        await upsertProjectRecord(tx, project.id, project as Record<string, unknown>);
+        await upsertProjectRecord(tx, project.id, normalizedProject);
       }
     });
 
@@ -568,21 +898,57 @@ projectsRouter.post("/projects", authenticate, async (req: AuthRequest, res: Res
   }
 
   try {
+    const normalizedProject = normalizeProjectPayloadForPersistence(project as Record<string, unknown>);
+    const [existingRecord, existingLegacy] = await Promise.all([
+      prisma.projectRecord.findUnique({
+        where: { id: project.id },
+        select: { id: true },
+      }),
+      prisma.appEntity.findUnique({
+        where: {
+          resource_entityId: {
+            resource: PROJECT_RESOURCE,
+            entityId: project.id,
+          },
+        },
+        select: { entityId: true },
+      }),
+    ]);
+    if (existingRecord || existingLegacy) {
+      return sendError(res, 409, { code: "PROJECT_ID_EXISTS", message: "Project id already exists", legacyError: "Project id already exists" });
+    }
+
     const saved = await prisma.$transaction(async (tx) => {
-      const row = await tx.appEntity.create({
+      await tx.appEntity.create({
         data: {
           resource: PROJECT_RESOURCE,
           entityId: project.id,
-          payload: project as Prisma.InputJsonValue,
+          payload: normalizedProject as Prisma.InputJsonValue,
         },
-        select: { payload: true },
       });
 
-      await upsertProjectRecord(tx, project.id, project as Record<string, unknown>);
-      return row;
+      await upsertProjectRecord(tx, project.id, normalizedProject);
+      const row = await tx.projectRecord.findUniqueOrThrow({
+        where: { id: project.id },
+        select: {
+          id: true,
+          quotationId: true,
+          customerId: true,
+          kodeProject: true,
+          namaProject: true,
+          customerName: true,
+          status: true,
+          approvalStatus: true,
+          nilaiKontrak: true,
+          progress: true,
+          payload: true,
+          updatedAt: true,
+        },
+      });
+      return hydrateProjectPayload(row);
     });
 
-    return res.status(201).json(saved.payload);
+    return res.status(201).json(saved);
   } catch (err) {
     if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
       return sendError(res, 409, { code: "PROJECT_ID_EXISTS", message: "Project id already exists", legacyError: "Project id already exists" });
@@ -598,32 +964,39 @@ projectsRouter.get("/projects/:id", authenticate, async (req: AuthRequest, res: 
   const { id } = req.params;
 
   try {
-    const row = await prisma.appEntity.findUnique({
-      where: {
-        resource_entityId: {
-          resource: PROJECT_RESOURCE,
-          entityId: id,
-        },
-      },
+    const row = await prisma.projectRecord.findUnique({
+      where: { id },
       select: {
-        entityId: true,
+        id: true,
+        quotationId: true,
+        customerId: true,
+        kodeProject: true,
+        namaProject: true,
+        customerName: true,
+        status: true,
+        approvalStatus: true,
+        nilaiKontrak: true,
+        progress: true,
         payload: true,
+        updatedAt: true,
       },
     });
 
     if (!row) {
-      return sendError(res, 404, { code: "PROJECT_NOT_FOUND", message: "Project not found", legacyError: "Project not found" });
-    }
+      const legacy = await prisma.appEntity.findUnique({
+        where: {
+          resource_entityId: {
+            resource: PROJECT_RESOURCE,
+            entityId: id,
+          },
+        },
+        select: { payload: true },
+      });
+      if (!legacy) {
+        return sendError(res, 404, { code: "PROJECT_NOT_FOUND", message: "Project not found", legacyError: "Project not found" });
+      }
 
-    const payload = row.payload;
-    if (payload && typeof payload === "object" && !Array.isArray(payload)) {
-      const withId = {
-        ...(payload as Record<string, unknown>),
-        id:
-          typeof (payload as Record<string, unknown>).id === "string"
-            ? (payload as Record<string, unknown>).id
-            : row.entityId,
-      };
+      const withId = ensurePayloadWithId(id, legacy.payload);
       const parsed = projectSchema.safeParse(withId);
       if (!parsed.success) {
         return sendError(res, 500, { code: "DATA_INTEGRITY_ERROR", message: "Stored project data is invalid", legacyError: "Stored project data is invalid" });
@@ -635,7 +1008,16 @@ projectsRouter.get("/projects/:id", authenticate, async (req: AuthRequest, res: 
       });
     }
 
-    return sendError(res, 500, { code: "DATA_INTEGRITY_ERROR", message: "Stored project payload is invalid", legacyError: "Stored project payload is invalid" });
+    const withId = hydrateProjectPayload(row);
+    const parsed = projectSchema.safeParse(withId);
+    if (!parsed.success) {
+      return sendError(res, 500, { code: "DATA_INTEGRITY_ERROR", message: "Stored project data is invalid", legacyError: "Stored project data is invalid" });
+    }
+    const quotationPreview = await buildQuotationPreviewForProject(withId);
+    return res.json({
+      ...parsed.data,
+      quotationPreview,
+    });
   } catch {
     return sendError(res, 500, { code: "INTERNAL_ERROR", message: "Internal server error", legacyError: "Internal server error" });
   }
@@ -653,21 +1035,42 @@ projectsRouter.patch("/projects/:id", authenticate, async (req: AuthRequest, res
   }
 
   try {
-    const existing = await prisma.appEntity.findUnique({
-      where: {
-        resource_entityId: {
-          resource: PROJECT_RESOURCE,
-          entityId: id,
-        },
+    const existing = await prisma.projectRecord.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        quotationId: true,
+        customerId: true,
+        kodeProject: true,
+        namaProject: true,
+        customerName: true,
+        status: true,
+        approvalStatus: true,
+        nilaiKontrak: true,
+        progress: true,
+        payload: true,
+        updatedAt: true,
       },
-      select: { payload: true },
     });
 
-    if (!existing || !existing.payload || typeof existing.payload !== "object" || Array.isArray(existing.payload)) {
-      return sendError(res, 404, { code: "PROJECT_NOT_FOUND", message: "Project not found", legacyError: "Project not found" });
+    let existingPayload: Record<string, unknown>;
+    if (!existing) {
+      const legacy = await prisma.appEntity.findUnique({
+        where: {
+          resource_entityId: {
+            resource: PROJECT_RESOURCE,
+            entityId: id,
+          },
+        },
+        select: { payload: true },
+      });
+      if (!legacy) {
+        return sendError(res, 404, { code: "PROJECT_NOT_FOUND", message: "Project not found", legacyError: "Project not found" });
+      }
+      existingPayload = ensurePayloadWithId(id, legacy.payload);
+    } else {
+      existingPayload = hydrateProjectPayload(existing);
     }
-
-    const existingPayload = existing.payload as Record<string, unknown>;
     const incomingPayload = req.body as Record<string, unknown>;
     const blockedKeys = getChangedKeys(incomingPayload, existingPayload, PATCH_BLOCKED_FIELDS);
     if (blockedKeys.length > 0) {
@@ -718,26 +1121,46 @@ projectsRouter.patch("/projects/:id", authenticate, async (req: AuthRequest, res
     }
 
     const updated = await prisma.$transaction(async (tx) => {
-      const row = await tx.appEntity.update({
+      const normalizedProject = normalizeProjectPayloadForPersistence(parsed.data as Record<string, unknown>);
+      await tx.appEntity.upsert({
         where: {
           resource_entityId: {
             resource: PROJECT_RESOURCE,
             entityId: id,
           },
         },
-        data: {
-          payload: parsed.data as Prisma.InputJsonValue,
+        update: {
+          payload: normalizedProject as Prisma.InputJsonValue,
         },
-        select: {
-          payload: true,
+        create: {
+          resource: PROJECT_RESOURCE,
+          entityId: id,
+          payload: normalizedProject as Prisma.InputJsonValue,
         },
       });
 
-      await upsertProjectRecord(tx, id, parsed.data as Record<string, unknown>);
-      return row;
+      await upsertProjectRecord(tx, id, normalizedProject);
+      const row = await tx.projectRecord.findUniqueOrThrow({
+        where: { id },
+        select: {
+          id: true,
+          quotationId: true,
+          customerId: true,
+          kodeProject: true,
+          namaProject: true,
+          customerName: true,
+          status: true,
+          approvalStatus: true,
+          nilaiKontrak: true,
+          progress: true,
+          payload: true,
+          updatedAt: true,
+        },
+      });
+      return hydrateProjectPayload(row);
     });
 
-    return res.json(updated.payload);
+    return res.json(updated);
   } catch {
     return sendError(res, 500, { code: "INTERNAL_ERROR", message: "Internal server error", legacyError: "Internal server error" });
   }
@@ -751,22 +1174,37 @@ projectsRouter.delete("/projects/:id", authenticate, async (req: AuthRequest, re
   const { id } = req.params;
 
   try {
-    await prisma.$transaction(async (tx) => {
-      await tx.appEntity.delete({
+    const result = await prisma.$transaction(async (tx) => {
+      const legacyDelete = await tx.appEntity.deleteMany({
         where: {
-          resource_entityId: {
-            resource: PROJECT_RESOURCE,
-            entityId: id,
-          },
+          resource: PROJECT_RESOURCE,
+          entityId: id,
         },
       });
-      await tx.projectRecord.deleteMany({
+      const recordDelete = await tx.projectRecord.deleteMany({
         where: { id },
       });
+      await tx.projectApprovalLog.deleteMany({
+        where: { projectId: id },
+      });
+      return {
+        deleted: legacyDelete.count + recordDelete.count,
+      };
     });
+
+    if (result.deleted === 0) {
+      return sendError(res, 404, {
+        code: "PROJECT_NOT_FOUND",
+        message: "Project not found",
+        legacyError: "Project not found",
+      });
+    }
 
     return res.status(204).send();
   } catch (err) {
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2003") {
+      return sendError(res, 409, { code: "PROJECT_CONFLICT", message: "Project is linked to another record. Resolve relation first.", legacyError: "Project is linked to another record. Resolve relation first." });
+    }
     if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2025") {
       return sendError(res, 404, { code: "PROJECT_NOT_FOUND", message: "Project not found", legacyError: "Project not found" });
     }
@@ -781,7 +1219,7 @@ projectsRouter.patch(
   approvalActionLimiter,
   async (req: AuthRequest, res: Response) => {
   if (!isOwner(req.user?.role) && !isSpv(req.user?.role)) {
-    return sendError(res, 403, { code: "FORBIDDEN", message: "Only SPV/OWNER can approve or reject project", legacyError: "Only SPV/OWNER can approve or reject project" });
+    return sendError(res, 403, { code: "FORBIDDEN", message: "Only OWNER/SPV can approve or reject project", legacyError: "Only OWNER/SPV can approve or reject project" });
   }
 
   const { id } = req.params;
@@ -796,22 +1234,43 @@ projectsRouter.patch(
   }
 
   try {
-    const existing = await prisma.appEntity.findUnique({
-      where: {
-        resource_entityId: {
-          resource: PROJECT_RESOURCE,
-          entityId: id,
-        },
+    const existing = await prisma.projectRecord.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        quotationId: true,
+        customerId: true,
+        kodeProject: true,
+        namaProject: true,
+        customerName: true,
+        status: true,
+        approvalStatus: true,
+        nilaiKontrak: true,
+        progress: true,
+        payload: true,
+        updatedAt: true,
       },
-      select: { payload: true },
     });
 
-    if (!existing || !existing.payload || typeof existing.payload !== "object" || Array.isArray(existing.payload)) {
-      return sendError(res, 404, { code: "PROJECT_NOT_FOUND", message: "Project not found", legacyError: "Project not found" });
-    }
-
     const now = new Date().toISOString();
-    const payload = existing.payload as Record<string, unknown>;
+    let payload: Record<string, unknown>;
+    if (!existing) {
+      const legacy = await prisma.appEntity.findUnique({
+        where: {
+          resource_entityId: {
+            resource: PROJECT_RESOURCE,
+            entityId: id,
+          },
+        },
+        select: { payload: true },
+      });
+      if (!legacy) {
+        return sendError(res, 404, { code: "PROJECT_NOT_FOUND", message: "Project not found", legacyError: "Project not found" });
+      }
+      payload = ensurePayloadWithId(id, legacy.payload);
+    } else {
+      payload = hydrateProjectPayload(existing);
+    }
     const fromStatus = String(payload.approvalStatus || "Pending");
     const fromUpper = normalizeApprovalToken(fromStatus);
     const actionApprove = action === "APPROVE";
@@ -881,20 +1340,25 @@ projectsRouter.patch(
     }
 
     const updated = await prisma.$transaction(async (tx) => {
-      const row = await tx.appEntity.update({
+      const normalizedProject = normalizeProjectPayloadForPersistence(parsed.data as Record<string, unknown>);
+      await tx.appEntity.upsert({
         where: {
           resource_entityId: {
             resource: PROJECT_RESOURCE,
             entityId: id,
           },
         },
-        data: {
-          payload: parsed.data as Prisma.InputJsonValue,
+        update: {
+          payload: normalizedProject as Prisma.InputJsonValue,
         },
-        select: { payload: true },
+        create: {
+          resource: PROJECT_RESOURCE,
+          entityId: id,
+          payload: normalizedProject as Prisma.InputJsonValue,
+        },
       });
 
-      await upsertProjectRecord(tx, id, parsed.data as Record<string, unknown>);
+      await upsertProjectRecord(tx, id, normalizedProject);
 
       await tx.projectApprovalLog.create({
         data: {
@@ -918,10 +1382,10 @@ projectsRouter.patch(
         },
       });
 
-      return row;
+      return normalizedProject;
     });
 
-    return res.json(updated.payload);
+    return res.json(updated);
   } catch {
     return sendError(res, 500, { code: "INTERNAL_ERROR", message: "Internal server error", legacyError: "Internal server error" });
   }
@@ -933,30 +1397,51 @@ projectsRouter.post(
   authenticate,
   approvalActionLimiter,
   async (req: AuthRequest, res: Response) => {
-  if (!isOwner(req.user?.role)) {
-    return sendError(res, 403, { code: "OWNER_ONLY", message: "Only OWNER/SPV can unlock project", legacyError: "Only OWNER/SPV can unlock project" });
+  if (!isOwner(req.user?.role) && !isSpv(req.user?.role)) {
+    return sendError(res, 403, { code: "FORBIDDEN", message: "Only OWNER/SPV can unlock project", legacyError: "Only OWNER/SPV can unlock project" });
   }
 
   const { id } = req.params;
   const reason = String((req.body as Record<string, unknown>)?.reason || "").trim();
 
   try {
-    const existing = await prisma.appEntity.findUnique({
-      where: {
-        resource_entityId: {
-          resource: PROJECT_RESOURCE,
-          entityId: id,
-        },
+    const existing = await prisma.projectRecord.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        quotationId: true,
+        customerId: true,
+        kodeProject: true,
+        namaProject: true,
+        customerName: true,
+        status: true,
+        approvalStatus: true,
+        nilaiKontrak: true,
+        progress: true,
+        payload: true,
+        updatedAt: true,
       },
-      select: { payload: true },
     });
 
-    if (!existing || !existing.payload || typeof existing.payload !== "object" || Array.isArray(existing.payload)) {
-      return sendError(res, 404, { code: "PROJECT_NOT_FOUND", message: "Project not found", legacyError: "Project not found" });
-    }
-
     const now = new Date().toISOString();
-    const payload = existing.payload as Record<string, unknown>;
+    let payload: Record<string, unknown>;
+    if (!existing) {
+      const legacy = await prisma.appEntity.findUnique({
+        where: {
+          resource_entityId: {
+            resource: PROJECT_RESOURCE,
+            entityId: id,
+          },
+        },
+        select: { payload: true },
+      });
+      if (!legacy) {
+        return sendError(res, 404, { code: "PROJECT_NOT_FOUND", message: "Project not found", legacyError: "Project not found" });
+      }
+      payload = ensurePayloadWithId(id, legacy.payload);
+    } else {
+      payload = hydrateProjectPayload(existing);
+    }
     const currentApproval = String(payload.approvalStatus || "Pending").toUpperCase();
     if (!["APPROVED", "REJECTED"].includes(currentApproval)) {
       return sendError(res, 400, {
@@ -989,20 +1474,25 @@ projectsRouter.post(
     }
 
     const updated = await prisma.$transaction(async (tx) => {
-      const row = await tx.appEntity.update({
+      const normalizedProject = normalizeProjectPayloadForPersistence(parsed.data as Record<string, unknown>);
+      await tx.appEntity.upsert({
         where: {
           resource_entityId: {
             resource: PROJECT_RESOURCE,
             entityId: id,
           },
         },
-        data: {
-          payload: parsed.data as Prisma.InputJsonValue,
+        update: {
+          payload: normalizedProject as Prisma.InputJsonValue,
         },
-        select: { payload: true },
+        create: {
+          resource: PROJECT_RESOURCE,
+          entityId: id,
+          payload: normalizedProject as Prisma.InputJsonValue,
+        },
       });
 
-      await upsertProjectRecord(tx, id, parsed.data as Record<string, unknown>);
+      await upsertProjectRecord(tx, id, normalizedProject);
 
       await tx.projectApprovalLog.create({
         data: {
@@ -1020,10 +1510,10 @@ projectsRouter.post(
         },
       });
 
-      return row;
+      return normalizedProject;
     });
 
-    return res.json(updated.payload);
+    return res.json(updated);
   } catch {
     return sendError(res, 500, { code: "INTERNAL_ERROR", message: "Internal server error", legacyError: "Internal server error" });
   }
@@ -1035,28 +1525,49 @@ projectsRouter.post(
   authenticate,
   approvalActionLimiter,
   async (req: AuthRequest, res: Response) => {
-  if (!isOwner(req.user?.role)) {
-    return sendError(res, 403, { code: "OWNER_ONLY", message: "Only OWNER/SPV can relock project", legacyError: "Only OWNER/SPV can relock project" });
+  if (!isOwner(req.user?.role) && !isSpv(req.user?.role)) {
+    return sendError(res, 403, { code: "FORBIDDEN", message: "Only OWNER/SPV can relock project", legacyError: "Only OWNER/SPV can relock project" });
   }
 
   const { id } = req.params;
   try {
-    const existing = await prisma.appEntity.findUnique({
-      where: {
-        resource_entityId: {
-          resource: PROJECT_RESOURCE,
-          entityId: id,
-        },
+    const existing = await prisma.projectRecord.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        quotationId: true,
+        customerId: true,
+        kodeProject: true,
+        namaProject: true,
+        customerName: true,
+        status: true,
+        approvalStatus: true,
+        nilaiKontrak: true,
+        progress: true,
+        payload: true,
+        updatedAt: true,
       },
-      select: { payload: true },
     });
 
-    if (!existing || !existing.payload || typeof existing.payload !== "object" || Array.isArray(existing.payload)) {
-      return sendError(res, 404, { code: "PROJECT_NOT_FOUND", message: "Project not found", legacyError: "Project not found" });
-    }
-
     const now = new Date().toISOString();
-    const payload = existing.payload as Record<string, unknown>;
+    let payload: Record<string, unknown>;
+    if (!existing) {
+      const legacy = await prisma.appEntity.findUnique({
+        where: {
+          resource_entityId: {
+            resource: PROJECT_RESOURCE,
+            entityId: id,
+          },
+        },
+        select: { payload: true },
+      });
+      if (!legacy) {
+        return sendError(res, 404, { code: "PROJECT_NOT_FOUND", message: "Project not found", legacyError: "Project not found" });
+      }
+      payload = ensurePayloadWithId(id, legacy.payload);
+    } else {
+      payload = hydrateProjectPayload(existing);
+    }
     const currentApproval = String(payload.approvalStatus || "Pending").toUpperCase();
     if (currentApproval === "APPROVED") {
       return sendError(res, 409, {
@@ -1115,20 +1626,25 @@ projectsRouter.post(
     }
 
     const updated = await prisma.$transaction(async (tx) => {
-      const row = await tx.appEntity.update({
+      const normalizedProject = normalizeProjectPayloadForPersistence(parsed.data as Record<string, unknown>);
+      await tx.appEntity.upsert({
         where: {
           resource_entityId: {
             resource: PROJECT_RESOURCE,
             entityId: id,
           },
         },
-        data: {
-          payload: parsed.data as Prisma.InputJsonValue,
+        update: {
+          payload: normalizedProject as Prisma.InputJsonValue,
         },
-        select: { payload: true },
+        create: {
+          resource: PROJECT_RESOURCE,
+          entityId: id,
+          payload: normalizedProject as Prisma.InputJsonValue,
+        },
       });
 
-      await upsertProjectRecord(tx, id, parsed.data as Record<string, unknown>);
+      await upsertProjectRecord(tx, id, normalizedProject);
 
       await tx.projectApprovalLog.create({
         data: {
@@ -1146,10 +1662,10 @@ projectsRouter.post(
         },
       });
 
-      return row;
+      return normalizedProject;
     });
 
-    return res.json(updated.payload);
+    return res.json(updated);
   } catch {
     return sendError(res, 500, { code: "INTERNAL_ERROR", message: "Internal server error", legacyError: "Internal server error" });
   }
@@ -1157,12 +1673,35 @@ projectsRouter.post(
 );
 
 projectsRouter.get("/projects/:id/approval-logs", authenticate, async (req: AuthRequest, res: Response) => {
-  if (!hasRoleAccess(req.user?.role, ["OWNER", "ADMIN"])) {
-    return sendError(res, 403, { code: "FORBIDDEN", message: "Only OWNER/ADMIN can view project approval logs", legacyError: "Only OWNER/ADMIN can view project approval logs" });
+  if (!hasRoleAccess(req.user?.role, ["OWNER", "SPV", "ADMIN"])) {
+    return sendError(res, 403, { code: "FORBIDDEN", message: "Only OWNER/SPV/ADMIN can view project approval logs", legacyError: "Only OWNER/SPV/ADMIN can view project approval logs" });
   }
 
   const { id } = req.params;
   try {
+    const [projectRow, legacyRow] = await Promise.all([
+      prisma.projectRecord.findUnique({
+        where: { id },
+        select: { id: true },
+      }),
+      prisma.appEntity.findUnique({
+        where: {
+          resource_entityId: {
+            resource: PROJECT_RESOURCE,
+            entityId: id,
+          },
+        },
+        select: { entityId: true },
+      }),
+    ]);
+    if (!projectRow && !legacyRow) {
+      return sendError(res, 404, {
+        code: "PROJECT_NOT_FOUND",
+        message: "Project not found",
+        legacyError: "Project not found",
+      });
+    }
+
     const rows = await prisma.projectApprovalLog.findMany({
       where: { projectId: id },
       orderBy: { createdAt: "desc" },
@@ -1179,23 +1718,52 @@ projectsRouter.get("/projects/metrics/summary", authenticate, async (req: AuthRe
   }
 
   try {
-    const rows = await prisma.appEntity.findMany({
-      where: { resource: PROJECT_RESOURCE },
-      select: { entityId: true, payload: true, updatedAt: true },
-      orderBy: { updatedAt: "desc" },
-    });
+    const [rows, legacyRows] = await Promise.all([
+      prisma.projectRecord.findMany({
+        select: {
+          id: true,
+          quotationId: true,
+          customerId: true,
+          kodeProject: true,
+          namaProject: true,
+          customerName: true,
+          status: true,
+          approvalStatus: true,
+          nilaiKontrak: true,
+          progress: true,
+          payload: true,
+          updatedAt: true,
+        },
+        orderBy: { updatedAt: "desc" },
+      }),
+      prisma.appEntity.findMany({
+        where: { resource: PROJECT_RESOURCE },
+        select: { entityId: true, payload: true, updatedAt: true },
+        orderBy: { updatedAt: "desc" },
+      }),
+    ]);
 
-    const projects = rows.map((row) => {
-      const payload = asRecord(row.payload);
-      const id = readString(payload, "id") || row.entityId;
-      return {
-        id,
-        status: String(readString(payload, "status") || ""),
-        approvalStatus: String(readString(payload, "approvalStatus") || "Pending"),
-        nilaiKontrak: toNumber(payload.nilaiKontrak, 0),
-        progress: toNumber(payload.progress, 0),
-      };
-    });
+    const merged = new Map<string, { payload: Record<string, unknown>; updatedAt: Date }>();
+    for (const row of legacyRows) {
+      merged.set(row.entityId, {
+        payload: ensurePayloadWithId(row.entityId, row.payload),
+        updatedAt: row.updatedAt,
+      });
+    }
+    for (const row of rows) {
+      merged.set(row.id, {
+        payload: hydrateProjectPayload(row),
+        updatedAt: row.updatedAt,
+      });
+    }
+
+    const projects = Array.from(merged.entries()).map(([id, row]) => ({
+      id,
+      status: String(row.payload.status || ""),
+      approvalStatus: String(row.payload.approvalStatus || "Pending"),
+      nilaiKontrak: toNumber(row.payload.nilaiKontrak, 0),
+      progress: toNumber(row.payload.progress, 0),
+    }));
 
     const totalContractValue = projects.reduce((sum, p) => sum + p.nilaiKontrak, 0);
     const activeProjects = projects.filter((p) => String(p.status).toUpperCase() !== "COMPLETED").length;
@@ -1216,7 +1784,10 @@ projectsRouter.get("/projects/metrics/summary", authenticate, async (req: AuthRe
         totalContractValue,
         avgProgress,
       },
-      lastUpdatedAt: rows[0]?.updatedAt?.toISOString() || null,
+      lastUpdatedAt:
+        Array.from(merged.values())
+          .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())[0]
+          ?.updatedAt?.toISOString() || null,
     });
   } catch {
     return sendError(res, 500, { code: "INTERNAL_ERROR", message: "Internal server error", legacyError: "Internal server error" });
@@ -1232,27 +1803,26 @@ projectsRouter.get("/projects/:id/financials", authenticate, async (req: AuthReq
 
   try {
     const [projectRow, poRows, stockOutRows, stockItemRows, attendanceRows, employeeRows] = await Promise.all([
-      prisma.appEntity.findUnique({
-        where: {
-          resource_entityId: {
-            resource: PROJECT_RESOURCE,
-            entityId: id,
-          },
+      prisma.projectRecord.findUnique({
+        where: { id },
+        select: {
+          id: true,
+          quotationId: true,
+          customerId: true,
+          kodeProject: true,
+          namaProject: true,
+          customerName: true,
+          status: true,
+          approvalStatus: true,
+          nilaiKontrak: true,
+          progress: true,
+          payload: true,
+          updatedAt: true,
         },
-        select: { entityId: true, payload: true, updatedAt: true },
       }),
-      prisma.appEntity.findMany({
-        where: { resource: "purchase-orders" },
-        select: { payload: true, updatedAt: true },
-      }),
-      prisma.appEntity.findMany({
-        where: { resource: "stock-outs" },
-        select: { payload: true, updatedAt: true },
-      }),
-      prisma.appEntity.findMany({
-        where: { resource: "stock-items" },
-        select: { payload: true, updatedAt: true },
-      }),
+      loadFinancialPurchaseOrders(),
+      loadFinancialStockOuts(),
+      loadFinancialStockItems(),
       prisma.attendanceRecord.findMany({
         select: { employeeId: true, projectId: true, workHours: true, overtime: true, updatedAt: true },
         orderBy: { updatedAt: "desc" },
@@ -1263,37 +1833,59 @@ projectsRouter.get("/projects/:id/financials", authenticate, async (req: AuthReq
       }),
     ]);
 
-    if (!projectRow || !projectRow.payload || typeof projectRow.payload !== "object" || Array.isArray(projectRow.payload)) {
-      return sendError(res, 404, { code: "PROJECT_NOT_FOUND", message: "Project not found", legacyError: "Project not found" });
+    let project: Record<string, unknown>;
+    if (!projectRow) {
+      const legacy = await prisma.appEntity.findUnique({
+        where: {
+          resource_entityId: {
+            resource: PROJECT_RESOURCE,
+            entityId: id,
+          },
+        },
+        select: { payload: true },
+      });
+      if (!legacy) {
+        return sendError(res, 404, { code: "PROJECT_NOT_FOUND", message: "Project not found", legacyError: "Project not found" });
+      }
+      project = ensurePayloadWithId(id, legacy.payload);
+    } else {
+      project = hydrateProjectPayload(projectRow);
     }
-
-    const project = asRecord(projectRow.payload);
     const contractValue = toNumber(project.nilaiKontrak, 0);
 
     const workingExpenses = Array.isArray(project.workingExpenses) ? project.workingExpenses : [];
     const pettyCash = workingExpenses.reduce((sum, e) => sum + toNumber(asRecord(e).nominal, 0), 0);
 
     const poCommitted = poRows
-      .map((r) => asRecord(r.payload))
       .filter((po) => readString(po, "projectId") === id && String(readString(po, "status") || "").toUpperCase() !== "REJECTED")
-      .reduce((sum, po) => sum + (toNumber(po.total, 0) || toNumber(po.totalAmount, 0)), 0);
+      .reduce(
+        (sum, po) =>
+          sum +
+          (toNumber(po.total, 0) ||
+            toNumber(po.totalAmount, 0) ||
+            toNumber(po.grandTotal, 0)),
+        0
+      );
 
     const stockPriceByKode = new Map<string, number>();
-    for (const row of stockItemRows) {
-      const item = asRecord(row.payload);
-      const kode = readString(item, "kode");
+    for (const item of stockItemRows) {
+      const kode = readString(item, "kode") || readString(item, "code") || readString(item, "itemCode");
       if (!kode) continue;
-      stockPriceByKode.set(kode, toNumber(item.hargaSatuan, 0));
+      stockPriceByKode.set(
+        kode,
+        toNumber(item.hargaSatuan, 0) ||
+          toNumber(item.unitPrice, 0) ||
+          toNumber(item.price, 0)
+      );
     }
 
     const stockUsage = stockOutRows
-      .map((r) => asRecord(r.payload))
       .filter((so) => readString(so, "projectId") === id)
       .reduce((sum, so) => {
         const items = Array.isArray(so.items) ? so.items : [];
         const itemValue = items.reduce((itemSum, raw) => {
           const it = asRecord(raw);
-          const kode = readString(it, "kode") || "";
+          const kode = readString(it, "kode") || readString(it, "itemCode") || "";
           const qty = toNumber(it.qty, 0);
           const unitPrice = stockPriceByKode.get(kode) || 0;
           return itemSum + qty * unitPrice;
@@ -1363,7 +1955,8 @@ projectsRouter.get("/projects/:id/financials", authenticate, async (req: AuthReq
         materialRequestEstimated,
         materialRequestUsagePercent,
       },
-      lastUpdatedAt: projectRow.updatedAt.toISOString(),
+      lastUpdatedAt:
+        projectRow?.updatedAt?.toISOString() || new Date().toISOString(),
     });
   } catch {
     return sendError(res, 500, { code: "INTERNAL_ERROR", message: "Internal server error", legacyError: "Internal server error" });

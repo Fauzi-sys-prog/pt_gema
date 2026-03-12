@@ -78,11 +78,12 @@ export default function ApprovalCenterPage() {
 
   const normalizeStatus = (value: unknown) => String(value || "").trim().toUpperCase();
   const currentRole = String(currentUser?.role || "").trim().toUpperCase();
+  const isActualOwner = currentRole === "OWNER";
+  const isSpv = currentRole === "SPV";
   const isOwner = isOwnerLike(currentRole);
   const isAdmin = currentRole === "ADMIN";
   const isManager = currentRole === "MANAGER";
   const canSendQuotation = isOwner || isAdmin || isManager || currentRole === "SALES";
-  const canApproveRejectQuotation = isOwner;
   const canVerifyInvoice = isOwner || isAdmin || isManager || currentRole === "FINANCE";
   const canApproveRejectMr =
     isOwner || isAdmin || isManager || currentRole === "SUPPLY_CHAIN" || currentRole === "WAREHOUSE" || currentRole === "PURCHASING";
@@ -168,7 +169,7 @@ export default function ApprovalCenterPage() {
   // 2. Filter Pending Quotations
   const pendingQuotations = useMemo(() => {
     return serverQuotations.filter(q => 
-      (normalizeStatus(q.status) === 'DRAFT' || normalizeStatus(q.status) === 'SENT') &&
+      (normalizeStatus(q.status) === 'DRAFT' || normalizeStatus(q.status) === 'SENT' || normalizeStatus(q.status) === 'REVIEW') &&
       ((q.noPenawaran || '').toLowerCase().includes(searchTerm.toLowerCase()) || (q.kepada || '').toLowerCase().includes(searchTerm.toLowerCase()))
     );
   }, [serverQuotations, searchTerm]);
@@ -189,6 +190,30 @@ export default function ApprovalCenterPage() {
     );
   }, [serverMaterialRequests, searchTerm]);
 
+  const isPendingQuotationStatus = (status: string) =>
+    status === "DRAFT" || status === "SENT" || status === "REVIEW";
+  const isPendingMaterialRequestStatus = (status: string) =>
+    status === "PENDING" || status === "APPROVED";
+  const canApproveQuotationItem = (q: ApprovalQuotationItem) => {
+    const status = normalizeStatus(q.status);
+    if (status === "SENT") return isSpv;
+    if (status === "REVIEW") return isActualOwner;
+    return false;
+  };
+  const canRejectQuotationItem = (q: ApprovalQuotationItem) => {
+    const status = normalizeStatus(q.status);
+    if (status === "SENT") return isSpv || isActualOwner;
+    if (status === "REVIEW") return isActualOwner;
+    return false;
+  };
+  const getQuotationAuditLabel = (q: ApprovalQuotationItem) => {
+    const status = normalizeStatus(q.status);
+    if (status === "DRAFT") return "Ready to Send";
+    if (status === "SENT") return "SPV Review";
+    if (status === "REVIEW") return "Owner Final Review";
+    return "Processed";
+  };
+
   const executeApprovalAction = async (
     documentType: "PO" | "INVOICE" | "MATERIAL_REQUEST" | "QUOTATION",
     documentId: string,
@@ -208,6 +233,7 @@ export default function ApprovalCenterPage() {
         reason: reason || undefined,
       });
       const nextStatus = normalizeStatus(res?.data?.status);
+      let pendingDelta = -1;
 
       // Local state update only (no global refresh) to avoid UI "kedip" after action.
       if (documentType === "PO") {
@@ -215,11 +241,15 @@ export default function ApprovalCenterPage() {
       } else if (documentType === "INVOICE") {
         setServerInvoices((prev) => prev.filter((item) => item.id !== documentId));
       } else if (documentType === "QUOTATION") {
-        if (action === "SEND") {
+        const currentItem = serverQuotations.find((item) => item.id === documentId);
+        const wasPending = currentItem ? isPendingQuotationStatus(normalizeStatus(currentItem.status)) : true;
+        const remainsPending = isPendingQuotationStatus(nextStatus);
+        pendingDelta = (remainsPending ? 1 : 0) - (wasPending ? 1 : 0);
+        if (remainsPending) {
           setServerQuotations((prev) =>
             prev.map((item) =>
               item.id === documentId
-                ? { ...item, status: nextStatus || "Sent" }
+                ? { ...item, status: nextStatus || item.status }
                 : item
             )
           );
@@ -227,6 +257,10 @@ export default function ApprovalCenterPage() {
           setServerQuotations((prev) => prev.filter((item) => item.id !== documentId));
         }
       } else if (documentType === "MATERIAL_REQUEST") {
+        const currentItem = serverMaterialRequests.find((item) => item.id === documentId);
+        const wasPending = currentItem ? isPendingMaterialRequestStatus(normalizeStatus(currentItem.status)) : true;
+        const remainsPending = isPendingMaterialRequestStatus(nextStatus);
+        pendingDelta = (remainsPending ? 1 : 0) - (wasPending ? 1 : 0);
         if (action === "APPROVE") {
           setServerMaterialRequests((prev) =>
             prev.map((item) =>
@@ -235,14 +269,14 @@ export default function ApprovalCenterPage() {
                 : item
             )
           );
-        } else if (action === "REJECT" || action === "ISSUE") {
+        } else if (!remainsPending) {
           setServerMaterialRequests((prev) => prev.filter((item) => item.id !== documentId));
         }
       }
 
       setServerStats((prev) => {
         if (!prev) return prev;
-        const nextTotal = Math.max(0, Number(prev.total || 0) - 1);
+        const nextTotal = Math.max(0, Number(prev.total || 0) + pendingDelta);
         return {
           ...prev,
           total: nextTotal,
@@ -612,14 +646,15 @@ export default function ApprovalCenterPage() {
                        <td className="px-10 py-8 text-center">
                           {(() => {
                             const quoStatus = normalizeStatus(q.status);
-                            const isDraft = quoStatus === 'DRAFT';
                             return (
                           <span className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase italic border ${
-                            isDraft
+                            quoStatus === 'DRAFT'
                               ? 'bg-slate-100 text-slate-700 border-slate-200'
-                              : 'bg-amber-50 text-amber-600 border-amber-100'
+                              : quoStatus === 'REVIEW'
+                                ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
+                                : 'bg-amber-50 text-amber-600 border-amber-100'
                           }`}>
-                             {isDraft ? 'Ready to Send' : 'Owner Final Review'}
+                             {getQuotationAuditLabel(q)}
                           </span>
                             );
                           })()}
@@ -651,17 +686,23 @@ export default function ApprovalCenterPage() {
                               >
                                 <Eye size={18} />
                               </button>
-                              {canApproveRejectQuotation ? (
+                              {canApproveQuotationItem(q) || canRejectQuotationItem(q) ? (
                                 <>
-                                  <button disabled={!!actionLoadingMap[`QUOTATION:${q.id}:APPROVE`]} onClick={() => { void handleApproveQuotation(q); }} className="w-10 h-10 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center hover:bg-emerald-600 hover:text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed">
-                                     <ThumbsUp size={18} />
-                                  </button>
-                                  <button disabled={!!actionLoadingMap[`QUOTATION:${q.id}:REJECT`]} onClick={() => { void handleRejectQuotation(q); }} className="w-10 h-10 bg-rose-50 text-rose-600 rounded-xl flex items-center justify-center hover:bg-rose-600 hover:text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed">
-                                     <ThumbsDown size={18} />
-                                  </button>
+                                  {canApproveQuotationItem(q) && (
+                                    <button disabled={!!actionLoadingMap[`QUOTATION:${q.id}:APPROVE`]} onClick={() => { void handleApproveQuotation(q); }} className="w-10 h-10 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center hover:bg-emerald-600 hover:text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+                                       <ThumbsUp size={18} />
+                                    </button>
+                                  )}
+                                  {canRejectQuotationItem(q) && (
+                                    <button disabled={!!actionLoadingMap[`QUOTATION:${q.id}:REJECT`]} onClick={() => { void handleRejectQuotation(q); }} className="w-10 h-10 bg-rose-50 text-rose-600 rounded-xl flex items-center justify-center hover:bg-rose-600 hover:text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+                                       <ThumbsDown size={18} />
+                                    </button>
+                                  )}
                                 </>
                               ) : (
-                                <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Owner Only</span>
+                                <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400">
+                                  {normalizeStatus(q.status) === 'SENT' ? 'Menunggu SPV' : 'Owner Only'}
+                                </span>
                               )}
                             </div>
                           )}

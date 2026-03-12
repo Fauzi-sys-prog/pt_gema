@@ -197,7 +197,7 @@ export default function ReceivingPage() {
     setItems([]);
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!formData.poId || items.length === 0) return;
     if (!formData.noSuratJalan) {
       toast.error('Mohon masukkan Nomor Surat Jalan (SJ) dari Vendor');
@@ -232,19 +232,23 @@ export default function ReceivingPage() {
     };
 
     // Centralized Logic: addReceiving now handles inventory entries and PO status updates automatically
-    addReceiving(newReceiving as any);
-    setServerReceivingList((prev) => (prev ? [newReceiving as any, ...prev] : prev));
-    addAuditLog({
-      action: 'RECEIVING_CREATED',
-      module: 'Procurement',
-      entityType: 'Receiving',
-      entityId: newReceiving.id,
-      description: `Receiving ${newReceiving.noReceiving} created for ${newReceiving.noPO}`,
-    });
+    try {
+      await addReceiving(newReceiving as any);
+      setServerReceivingList((prev) => (prev ? [newReceiving as any, ...prev] : prev));
+      addAuditLog({
+        action: 'RECEIVING_CREATED',
+        module: 'Procurement',
+        entityType: 'Receiving',
+        entityId: newReceiving.id,
+        description: `Receiving ${newReceiving.noReceiving} created for ${newReceiving.noPO}`,
+      });
 
-    toast.success(`✅ Receiving ${newNo} berhasil disimpan! Stok gudang dan status PO diperbarui otomatis.`);
-    setShowModal(false);
-    resetForm();
+      toast.success(`✅ Receiving ${newNo} berhasil disimpan! Stok gudang dan status PO diperbarui otomatis.`);
+      setShowModal(false);
+      resetForm();
+    } catch {
+      // toast handled in AppContext
+    }
   };
 
   const handleExportCsv = async () => {

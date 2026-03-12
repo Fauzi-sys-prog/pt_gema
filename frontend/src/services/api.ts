@@ -21,6 +21,30 @@ const API_BASE_URL = rawApiBaseUrl && String(rawApiBaseUrl).trim().length > 0
   ? String(rawApiBaseUrl).trim()
   : resolveFallbackApiBaseUrl();
 
+const safeGetStorageItem = (storage: Storage | undefined, key: string): string | null => {
+  try {
+    return storage?.getItem(key) ?? null;
+  } catch {
+    return null;
+  }
+};
+
+const safeSetStorageItem = (storage: Storage | undefined, key: string, value: string) => {
+  try {
+    storage?.setItem(key, value);
+  } catch {
+    // Ignore storage access failures in auth interceptor.
+  }
+};
+
+const safeRemoveStorageItem = (storage: Storage | undefined, key: string) => {
+  try {
+    storage?.removeItem(key);
+  } catch {
+    // Ignore storage access failures in auth interceptor.
+  }
+};
+
 const api = axios.create({
   baseURL: API_BASE_URL,
   timeout: 20000,
@@ -31,7 +55,7 @@ const api = axios.create({
 
 // 🔥 AUTO ATTACH TOKEN
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem("token");
+  const token = safeGetStorageItem(typeof localStorage !== "undefined" ? localStorage : undefined, "token");
 
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
@@ -64,17 +88,20 @@ api.interceptors.response.use(
       const reqUrl = String(error?.config?.url || "");
       const isLoginRequest = reqUrl.startsWith("/auth/login");
       const hadAuthHeader = Boolean(error?.config?.headers?.Authorization);
-      const hasStoredToken = Boolean(localStorage.getItem("token"));
+      const local = typeof localStorage !== "undefined" ? localStorage : undefined;
+      const session = typeof sessionStorage !== "undefined" ? sessionStorage : undefined;
+      const hasStoredToken = Boolean(safeGetStorageItem(local, "token"));
       // Prevent auth-loop on startup race: only force logout when request
       // actually carried auth header and still got 401.
       if (hadAuthHeader && !isLoginRequest) {
-        localStorage.removeItem("token");
+        safeRemoveStorageItem(local, "token");
+        safeRemoveStorageItem(local, "user");
       }
       const shouldForceRelogin = hadAuthHeader || !hasStoredToken;
       const onLoginPage = window.location.pathname === "/login";
-      const alreadyNotified = sessionStorage.getItem("auth401_notified") === "1";
+      const alreadyNotified = safeGetStorageItem(session, "auth401_notified") === "1";
       if (shouldForceRelogin && !alreadyNotified) {
-        sessionStorage.setItem("auth401_notified", "1");
+        safeSetStorageItem(session, "auth401_notified", "1");
         toast.error("Sesi login habis. Silakan login ulang.");
       }
       if (shouldForceRelogin && !onLoginPage && !isLoginRequest) {

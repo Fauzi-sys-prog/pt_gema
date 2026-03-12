@@ -115,11 +115,24 @@ export default function PayrollPage() {
     setIsProcessing(true);
     try {
       const closeDate = new Date().toISOString().split('T')[0];
+      const closeRef = `PAY/${new Date(closeDate).getFullYear()}/${String(new Date(closeDate).getMonth() + 1).padStart(2, '0')}`;
+      const existingArchiveRes = await api.get<any[]>('/archive-registry');
+      const existingArchiveRows = Array.isArray(existingArchiveRes.data) ? existingArchiveRes.data : [];
+      const alreadyClosed = existingArchiveRows.some((row: any) => {
+        const payload = row?.payload ?? row ?? {};
+        const ref = String(payload.reference || payload.ref || '');
+        const source = String(payload.source || '');
+        return ref === closeRef && source === 'payroll-close|module=payroll';
+      });
+      if (alreadyClosed) {
+        toast.info(`Payroll periode ${payrollPeriodLabel} sudah pernah ditutup.`);
+        return;
+      }
       const closeId = `PAY-CLOSE-${Date.now()}`;
       await api.post('/archive-registry', {
         id: closeId,
         date: closeDate,
-        ref: `PAY/${new Date(closeDate).getFullYear()}/${String(new Date(closeDate).getMonth() + 1).padStart(2, '0')}`,
+        ref: closeRef,
         description: `Gaji & Upah THL ${payrollPeriodLabel} (${Number(serverPayrollStats?.employeeCount || liveEmployeeList.length)} staff)`,
         amount: totalPayroll,
         project: 'OVERHEAD/MULTISITE',

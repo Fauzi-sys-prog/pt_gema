@@ -500,7 +500,6 @@ function registerRoutes(resource: InventoryResource) {
         if (existingIds.has(item.id)) await updateResource(resource, item.id, item);
         else await createResource(resource, item);
       }
-      for (const existingId of existingIds) if (!incomingIds.has(existingId)) await deleteResource(resource, existingId);
       await writeAuditLog(req, "bulk-upsert", resource, null, { count: parsed.data.length });
       return res.json({ message: "Bulk upsert completed", count: parsed.data.length });
     } catch (err) {

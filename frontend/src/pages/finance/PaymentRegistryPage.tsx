@@ -38,8 +38,8 @@ interface PaymentRecord {
 export default function PaymentRegistryPage() {
   const { customerInvoiceList, expenseList, addAuditLog, currentUser } = useApp();
   const [syncing, setSyncing] = useState(false);
-  const [serverCustomerInvoices, setServerCustomerInvoices] = useState<any[]>([]);
-  const [serverExpenses, setServerExpenses] = useState<any[]>([]);
+  const [serverCustomerInvoices, setServerCustomerInvoices] = useState<any[] | null>(null);
+  const [serverExpenses, setServerExpenses] = useState<any[] | null>(null);
   const [serverPaymentSummary, setServerPaymentSummary] = useState<{
     arOutstanding: number;
     paidIn: number;
@@ -112,6 +112,8 @@ export default function PaymentRegistryPage() {
       });
       if (!silent) toast.success('Payment registry disinkronkan.');
     } catch {
+      setServerCustomerInvoices(null);
+      setServerExpenses(null);
       setServerPaymentSummary(null);
       setReconciliationCheck(null);
       if (!silent) toast.error('Gagal refresh payment registry.');
@@ -124,8 +126,8 @@ export default function PaymentRegistryPage() {
     fetchPaymentRegistryData(true);
   }, []);
 
-  const liveCustomerInvoiceList = serverCustomerInvoices.length > 0 ? serverCustomerInvoices : customerInvoiceList;
-  const liveExpenseList = serverExpenses.length > 0 ? serverExpenses : expenseList;
+  const liveCustomerInvoiceList = serverCustomerInvoices ?? customerInvoiceList;
+  const liveExpenseList = serverExpenses ?? expenseList;
 
   const payments = useMemo<PaymentRecord[]>(() => {
     const inbound: PaymentRecord[] = liveCustomerInvoiceList.flatMap((inv) =>

@@ -366,8 +366,10 @@ export default function Layout({ children }: LayoutProps) {
           <div className="p-3 lg:p-4 border-t border-gray-200">
             <button
               onClick={() => {
+                setSidebarOpen(false);
+                setShowMobileMenu(false);
                 logout();
-                navigate('/login');
+                navigate('/login', { replace: true });
               }}
               className="w-full flex items-center gap-3 px-3 lg:px-4 py-3 rounded-lg text-red-600 hover:bg-red-50 active:bg-red-100 transition-colors touch-manipulation"
             >

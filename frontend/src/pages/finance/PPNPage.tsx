@@ -165,8 +165,10 @@ export default function PPNPage() {
 
   const totalKeluaran = useMemo(
     () =>
-      Number(serverPpnSummary?.totalKeluaran ?? ppnKeluaran.reduce((sum, item) => sum + item.ppn, 0)) +
-      ppnQuotation.reduce((sum, item) => sum + item.ppn, 0),
+      serverPpnSummary
+        ? Number(serverPpnSummary.totalKeluaran || 0)
+        : ppnKeluaran.reduce((sum, item) => sum + item.ppn, 0) +
+          ppnQuotation.reduce((sum, item) => sum + item.ppn, 0),
     [ppnKeluaran, ppnQuotation, serverPpnSummary]
   );
   const totalMasukan = useMemo(

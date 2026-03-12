@@ -359,7 +359,7 @@ export default function AccountsReceivablePage() {
   };
 
   // Submit payment
-  const handleSubmitPayment = () => {
+  const handleSubmitPayment = async () => {
     if (!selectedInvoice || paymentForm.nominal <= 0) {
       toast.error('Nominal pembayaran harus lebih dari 0!');
       return;
@@ -382,7 +382,9 @@ export default function AccountsReceivablePage() {
       createdAt: new Date().toISOString()
     };
 
-    addInvoicePayment(selectedInvoice.id, newPayment);
+    const ok = await addInvoicePayment(selectedInvoice.id, newPayment);
+    if (!ok) return;
+
     setShowPaymentModal(false);
     resetPaymentForm();
     setSelectedInvoice(null);

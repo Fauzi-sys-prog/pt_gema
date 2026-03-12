@@ -112,7 +112,7 @@ export default function FleetMaintenancePage() {
     );
   }, [effectiveMaintenanceList, serviceLogSearch]);
 
-  const handleScheduleService = (asset: Asset) => {
+  const handleScheduleService = async (asset: Asset) => {
     const newMaint: MaintenanceRecord = {
       id: `MNT-${Date.now()}`,
       maintenanceNo: `MNT-${new Date().getFullYear()}-${Math.floor(Math.random() * 1000)}`,
@@ -126,21 +126,22 @@ export default function FleetMaintenancePage() {
       performedBy: 'External Workshop'
     };
     
-    addMaintenance(newMaint);
-    
-    // Update next maintenance in 3 months
     const threeMonthsLater = new Date();
     threeMonthsLater.setMonth(threeMonthsLater.getMonth() + 3);
-    
-    updateAsset(asset.id, { 
-      status: 'Under Maintenance',
-      nextMaintenance: threeMonthsLater.toISOString().split('T')[0]
-    });
-    
-    toast.success(`Unit ${asset.name} masuk jadwal servis & status diperbarui.`);
+
+    try {
+      await addMaintenance(newMaint);
+      await updateAsset(asset.id, { 
+        status: 'Under Maintenance',
+        nextMaintenance: threeMonthsLater.toISOString().split('T')[0]
+      });
+      toast.success(`Unit ${asset.name} masuk jadwal servis & status diperbarui.`);
+    } catch {
+      // toast handled in context
+    }
   };
 
-  const handleRecordMaintenance = (e: React.FormEvent) => {
+  const handleRecordMaintenance = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedAssetId) {
       toast.error("Pilih Unit Asset terlebih dahulu!");
@@ -164,18 +165,20 @@ export default function FleetMaintenancePage() {
       notes: maintForm.notes || ''
     };
 
-    addMaintenance(maintenanceRecord);
-    
-    // Auto-update asset status
-    updateAsset(asset.id, { 
-      status: maintenanceRecord.status === 'Completed' ? 'Available' : 'Under Maintenance',
-      lastMaintenance: maintenanceRecord.status === 'Completed' ? new Date().toISOString().split('T')[0] : asset.lastMaintenance
-    });
+    try {
+      await addMaintenance(maintenanceRecord);
+      await updateAsset(asset.id, { 
+        status: maintenanceRecord.status === 'Completed' ? 'Available' : 'Under Maintenance',
+        lastMaintenance: maintenanceRecord.status === 'Completed' ? new Date().toISOString().split('T')[0] : asset.lastMaintenance
+      });
 
-    toast.success(`Laporan servis unit ${asset.name} berhasil dicatat.`);
-    setShowMaintModal(false);
-    setMaintForm({ maintenanceType: 'Routine', status: 'In Progress', cost: 0, performedBy: 'External Workshop' });
-    setSelectedAssetId('');
+      toast.success(`Laporan servis unit ${asset.name} berhasil dicatat.`);
+      setShowMaintModal(false);
+      setMaintForm({ maintenanceType: 'Routine', status: 'In Progress', cost: 0, performedBy: 'External Workshop' });
+      setSelectedAssetId('');
+    } catch {
+      // toast handled in context
+    }
   };
 
   const handleViewServiceLogs = () => {

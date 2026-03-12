@@ -265,7 +265,6 @@ function registerResourceRoutes(basePath: string, resource: string) {
     try {
       await prisma.$transaction(async (tx) => {
         if (resource === "employees") {
-          const incomingIds = new Set(items.map((item) => item.id));
           for (const item of items) {
             const payload = sanitizeEmployeePayload(item.id, item as unknown as Record<string, unknown>);
             await tx.employeeRecord.upsert({
@@ -274,18 +273,10 @@ function registerResourceRoutes(basePath: string, resource: string) {
               create: payload,
             });
           }
-          await tx.employeeRecord.deleteMany({
-            where: {
-              id: {
-                notIn: Array.from(incomingIds),
-              },
-            },
-          });
           return;
         }
 
         if (resource === "attendances") {
-          const incomingIds = new Set(items.map((item) => item.id));
           const readProjectId = (value: { id: string }) => {
             const rawProjectId = (value as Record<string, unknown>).projectId;
             return typeof rawProjectId === "string" ? rawProjectId.trim() : "";
@@ -337,13 +328,6 @@ function registerResourceRoutes(basePath: string, resource: string) {
               },
             });
           }
-          await tx.attendanceRecord.deleteMany({
-            where: {
-              id: {
-                notIn: Array.from(incomingIds),
-              },
-            },
-          });
         }
       });
       await writeAuditLog(req, "bulk-upsert", resource, null, { count: items.length });

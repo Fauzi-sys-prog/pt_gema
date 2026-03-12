@@ -264,6 +264,7 @@ export default function AutomatedInvoicingPage() {
 
     setIsGenerating(false);
     if (successCount > 0) {
+      await fetchInvoicingSources();
       setSelectedSJ([]);
       toast.success(`${successCount} Invoice otomatis berhasil diterbitkan`, { id: 'gen-inv' });
     } else {

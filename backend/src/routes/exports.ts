@@ -26,6 +26,11 @@ function asRecord(input: unknown): Record<string, unknown> {
     : {};
 }
 
+function readString(payload: Record<string, unknown>, key: string): string | null {
+  const value = payload[key];
+  return typeof value === "string" && value.trim() ? value : null;
+}
+
 const CURRENCY_KEY_RE = /(harga|price|nilai|total|grand|nominal|kontrak|amount|cost)/i;
 const DATE_KEY_RE = /(tanggal|date|approvedat|snapshotat|createdat|updatedat)$/i;
 const COUNT_KEY_RE = /(qty|jumlah|progress|hari|day|volume|density|weight|wight|percent|reverse)/i;
@@ -138,8 +143,31 @@ function keyValueTableHtml(title: string, rows: Array<{ label: string; key: stri
 }
 
 async function getDataCollectionPayload(id: string): Promise<Record<string, unknown> | null> {
-  const direct = await prisma.dataCollection.findUnique({ where: { id }, select: { payload: true } });
-  if (direct) return asRecord(direct.payload);
+  const direct = await prisma.dataCollection.findUnique({
+    where: { id },
+    select: {
+      id: true,
+      namaResponden: true,
+      lokasi: true,
+      tipePekerjaan: true,
+      status: true,
+      tanggalSurvey: true,
+      payload: true,
+    },
+  });
+  if (direct) {
+    const payload = asRecord(direct.payload);
+    return {
+      ...payload,
+      id: typeof payload.id === "string" && payload.id.trim() ? payload.id : direct.id,
+      namaResponden: direct.namaResponden || (typeof payload.namaResponden === "string" ? payload.namaResponden : undefined),
+      lokasi: direct.lokasi || (typeof payload.lokasi === "string" ? payload.lokasi : undefined),
+      tipePekerjaan: direct.tipePekerjaan || (typeof payload.tipePekerjaan === "string" ? payload.tipePekerjaan : undefined),
+      status: direct.status || (typeof payload.status === "string" ? payload.status : undefined),
+      tanggalSurvey:
+        direct.tanggalSurvey || (typeof payload.tanggalSurvey === "string" ? payload.tanggalSurvey : undefined),
+    };
+  }
 
   const legacy = await prisma.appEntity.findUnique({
     where: { resource_entityId: { resource: "data-collections", entityId: id } },
@@ -150,8 +178,42 @@ async function getDataCollectionPayload(id: string): Promise<Record<string, unkn
 }
 
 async function getQuotationPayload(id: string): Promise<Record<string, unknown> | null> {
-  const direct = await prisma.quotation.findUnique({ where: { id }, select: { payload: true } });
-  if (direct) return asRecord(direct.payload);
+  const direct = await prisma.quotation.findUnique({
+    where: { id },
+    select: {
+      id: true,
+      noPenawaran: true,
+      tanggal: true,
+      status: true,
+      kepada: true,
+      perihal: true,
+      grandTotal: true,
+      dataCollectionId: true,
+      payload: true,
+    },
+  });
+  if (direct) {
+    const payload = asRecord(direct.payload);
+    return {
+      ...payload,
+      id: typeof payload.id === "string" && payload.id.trim() ? payload.id : direct.id,
+      noPenawaran:
+        direct.noPenawaran || (typeof payload.noPenawaran === "string" ? payload.noPenawaran : undefined),
+      tanggal: direct.tanggal || (typeof payload.tanggal === "string" ? payload.tanggal : undefined),
+      status: direct.status || (typeof payload.status === "string" ? payload.status : undefined),
+      kepada: direct.kepada || (typeof payload.kepada === "string" ? payload.kepada : undefined),
+      perihal: direct.perihal || (typeof payload.perihal === "string" ? payload.perihal : undefined),
+      grandTotal:
+        typeof direct.grandTotal === "number"
+          ? direct.grandTotal
+          : typeof payload.grandTotal === "number"
+            ? payload.grandTotal
+            : undefined,
+      dataCollectionId:
+        direct.dataCollectionId ||
+        (typeof payload.dataCollectionId === "string" ? payload.dataCollectionId : undefined),
+    };
+  }
 
   const legacy = await prisma.appEntity.findUnique({
     where: { resource_entityId: { resource: "quotations", entityId: id } },
@@ -186,12 +248,92 @@ async function isQuotationApproved(id: string): Promise<boolean | null> {
 }
 
 async function getProjectPayload(id: string): Promise<Record<string, unknown> | null> {
-  const direct = await prisma.appEntity.findUnique({
+  const direct = await prisma.projectRecord.findUnique({
+    where: { id },
+    select: {
+      id: true,
+      quotationId: true,
+      customerId: true,
+      kodeProject: true,
+      namaProject: true,
+      customerName: true,
+      status: true,
+      approvalStatus: true,
+      nilaiKontrak: true,
+      progress: true,
+      payload: true,
+    },
+  });
+  if (direct) {
+    const payload = asRecord(direct.payload);
+    return {
+      ...payload,
+      id: typeof payload.id === "string" && payload.id.trim() ? payload.id : direct.id,
+      quotationId:
+        direct.quotationId ??
+        (typeof payload.quotationId === "string" && payload.quotationId.trim() ? payload.quotationId : undefined),
+      customerId:
+        direct.customerId ??
+        (typeof payload.customerId === "string" && payload.customerId.trim() ? payload.customerId : undefined),
+      kodeProject:
+        direct.kodeProject ??
+        (typeof payload.kodeProject === "string" && payload.kodeProject.trim() ? payload.kodeProject : undefined),
+      namaProject:
+        direct.namaProject ??
+        (typeof payload.namaProject === "string" && payload.namaProject.trim()
+          ? payload.namaProject
+          : typeof payload.projectName === "string" && payload.projectName.trim()
+          ? payload.projectName
+          : undefined),
+      customer:
+        direct.customerName ??
+        (typeof payload.customer === "string" && payload.customer.trim()
+          ? payload.customer
+          : typeof payload.customerName === "string" && payload.customerName.trim()
+          ? payload.customerName
+          : undefined),
+      customerName:
+        direct.customerName ??
+        (typeof payload.customerName === "string" && payload.customerName.trim()
+          ? payload.customerName
+          : typeof payload.customer === "string" && payload.customer.trim()
+          ? payload.customer
+          : undefined),
+      status:
+        direct.status ??
+        (typeof payload.status === "string" && payload.status.trim() ? payload.status : undefined),
+      approvalStatus:
+        direct.approvalStatus ??
+        (typeof payload.approvalStatus === "string" && payload.approvalStatus.trim()
+          ? payload.approvalStatus
+          : "Pending"),
+      nilaiKontrak:
+        direct.nilaiKontrak ??
+        (typeof payload.nilaiKontrak === "number"
+          ? payload.nilaiKontrak
+          : typeof payload.nilaiKontrak === "string" && payload.nilaiKontrak.trim()
+          ? Number(payload.nilaiKontrak)
+          : typeof payload.contractValue === "number"
+          ? payload.contractValue
+          : typeof payload.totalContractValue === "number"
+          ? payload.totalContractValue
+          : undefined),
+      progress:
+        direct.progress ??
+        (typeof payload.progress === "number"
+          ? payload.progress
+          : typeof payload.progress === "string" && payload.progress.trim()
+          ? Number(payload.progress)
+          : undefined),
+    };
+  }
+
+  const legacy = await prisma.appEntity.findUnique({
     where: { resource_entityId: { resource: "projects", entityId: id } },
     select: { payload: true },
   });
 
-  return direct ? asRecord(direct.payload) : null;
+  return legacy ? asRecord(legacy.payload) : null;
 }
 
 async function getAppEntityPayload(resource: string, id: string): Promise<Record<string, unknown> | null> {
@@ -269,6 +411,227 @@ async function getAppEntityPayload(resource: string, id: string): Promise<Record
           total: item.total,
           sourceRef: item.sourceRef ?? undefined,
           batchNo: item.batchNo ?? undefined,
+        })),
+      };
+    }
+  }
+
+  if (resource === "purchase-orders") {
+    const purchaseOrder = await prisma.procurementPurchaseOrder.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        number: true,
+        tanggal: true,
+        supplierName: true,
+        vendorId: true,
+        projectId: true,
+        supplierAddress: true,
+        supplierPhone: true,
+        supplierFax: true,
+        supplierContact: true,
+        attention: true,
+        notes: true,
+        ppnRate: true,
+        topDays: true,
+        ref: true,
+        poCode: true,
+        deliveryDate: true,
+        signatoryName: true,
+        totalAmount: true,
+        status: true,
+        items: {
+          select: {
+            id: true,
+            itemCode: true,
+            itemName: true,
+            qty: true,
+            unit: true,
+            unitPrice: true,
+            total: true,
+            qtyReceived: true,
+            source: true,
+            sourceRef: true,
+          },
+          orderBy: { id: "asc" },
+        },
+      },
+    });
+    if (purchaseOrder) {
+      return {
+        id: purchaseOrder.id,
+        noPO: purchaseOrder.number,
+        tanggal: purchaseOrder.tanggal.toISOString().slice(0, 10),
+        supplier: purchaseOrder.supplierName,
+        vendorId: purchaseOrder.vendorId ?? undefined,
+        projectId: purchaseOrder.projectId ?? undefined,
+        supplierAddress: purchaseOrder.supplierAddress ?? "",
+        supplierPhone: purchaseOrder.supplierPhone ?? "",
+        supplierFax: purchaseOrder.supplierFax ?? "",
+        supplierContact: purchaseOrder.supplierContact ?? "",
+        attention: purchaseOrder.attention ?? "",
+        notes: purchaseOrder.notes ?? "",
+        ppn: purchaseOrder.ppnRate,
+        ppnRate: purchaseOrder.ppnRate,
+        top: purchaseOrder.topDays,
+        ref: purchaseOrder.ref ?? "",
+        po: purchaseOrder.poCode ?? "",
+        deliveryDate: purchaseOrder.deliveryDate
+          ? purchaseOrder.deliveryDate.toISOString().slice(0, 10)
+          : undefined,
+        signatoryName: purchaseOrder.signatoryName ?? "",
+        total: purchaseOrder.totalAmount,
+        totalAmount: purchaseOrder.totalAmount,
+        grandTotal: purchaseOrder.totalAmount,
+        status: purchaseOrder.status,
+        items: purchaseOrder.items.map((item) => ({
+          id: item.id,
+          kode: item.itemCode ?? "",
+          itemCode: item.itemCode ?? "",
+          nama: item.itemName,
+          itemName: item.itemName,
+          qty: item.qty,
+          unit: item.unit,
+          unitPrice: item.unitPrice,
+          harga: item.unitPrice,
+          total: item.total,
+          qtyReceived: item.qtyReceived,
+          source: item.source ?? undefined,
+          sourceRef: item.sourceRef ?? undefined,
+        })),
+      };
+    }
+  }
+
+  if (resource === "receivings") {
+    const receiving = await prisma.procurementReceiving.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        purchaseOrderId: true,
+        projectId: true,
+        number: true,
+        suratJalanNo: true,
+        suratJalanPhoto: true,
+        tanggal: true,
+        purchaseOrderNo: true,
+        supplierName: true,
+        projectName: true,
+        status: true,
+        warehouseLocation: true,
+        notes: true,
+        items: {
+          select: {
+            id: true,
+            itemCode: true,
+            itemName: true,
+            qtyOrdered: true,
+            qtyReceived: true,
+            qtyGood: true,
+            qtyDamaged: true,
+            qtyPreviouslyReceived: true,
+            unit: true,
+            condition: true,
+            batchNo: true,
+            expiryDate: true,
+            photoUrl: true,
+            notes: true,
+          },
+          orderBy: { id: "asc" },
+        },
+      },
+    });
+    if (receiving) {
+      return {
+        id: receiving.id,
+        noReceiving: receiving.number,
+        noSuratJalan: receiving.suratJalanNo ?? "",
+        fotoSuratJalan: receiving.suratJalanPhoto ?? "",
+        tanggal: receiving.tanggal.toISOString().slice(0, 10),
+        noPO: receiving.purchaseOrderNo ?? undefined,
+        poId: receiving.purchaseOrderId,
+        supplier: receiving.supplierName,
+        project: receiving.projectName ?? "",
+        projectId: receiving.projectId ?? undefined,
+        status: receiving.status,
+        lokasiGudang: receiving.warehouseLocation ?? "",
+        notes: receiving.notes ?? "",
+        items: receiving.items.map((item) => ({
+          id: item.id,
+          itemKode: item.itemCode ?? "",
+          itemCode: item.itemCode ?? "",
+          itemName: item.itemName,
+          qtyOrdered: item.qtyOrdered,
+          qtyReceived: item.qtyReceived,
+          qtyGood: item.qtyGood,
+          qtyDamaged: item.qtyDamaged,
+          qtyPreviouslyReceived: item.qtyPreviouslyReceived,
+          unit: item.unit,
+          condition: item.condition ?? undefined,
+          batchNo: item.batchNo ?? "",
+          expiryDate: item.expiryDate ? item.expiryDate.toISOString().slice(0, 10) : undefined,
+          photoUrl: item.photoUrl ?? undefined,
+          notes: item.notes ?? "",
+          qty: item.qtyReceived,
+        })),
+      };
+    }
+  }
+
+  if (resource === "stock-outs") {
+    const stockOut = await prisma.inventoryStockOut.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        number: true,
+        tanggal: true,
+        type: true,
+        status: true,
+        recipientName: true,
+        notes: true,
+        createdByName: true,
+        projectId: true,
+        workOrderId: true,
+        productionReportId: true,
+        legacyPayload: true,
+        items: {
+          select: {
+            itemCode: true,
+            itemName: true,
+            qty: true,
+            unit: true,
+            batchNo: true,
+          },
+          orderBy: { id: "asc" },
+        },
+      },
+    });
+    if (stockOut) {
+      const legacy = asRecord(stockOut.legacyPayload);
+      return {
+        ...legacy,
+        id: typeof legacy.id === "string" && legacy.id.trim() ? legacy.id : stockOut.id,
+        noStockOut: readString(legacy, "noStockOut") || stockOut.number,
+        noWorkOrder: readString(legacy, "noWorkOrder") || stockOut.workOrderId || undefined,
+        workOrderId: stockOut.workOrderId || undefined,
+        productionReportId:
+          readString(legacy, "productionReportId") || stockOut.productionReportId || undefined,
+        projectId: readString(legacy, "projectId") || stockOut.projectId || undefined,
+        penerima: readString(legacy, "penerima") || stockOut.recipientName || "",
+        tanggal: readString(legacy, "tanggal") || stockOut.tanggal.toISOString().slice(0, 10),
+        type: readString(legacy, "type") || stockOut.type,
+        status: readString(legacy, "status") || stockOut.status,
+        createdBy: readString(legacy, "createdBy") || stockOut.createdByName || "SYSTEM",
+        notes: readString(legacy, "notes") || stockOut.notes || undefined,
+        items: stockOut.items.map((item) => ({
+          kode: item.itemCode,
+          itemCode: item.itemCode,
+          nama: item.itemName,
+          itemName: item.itemName,
+          qty: item.qty,
+          satuan: item.unit,
+          unit: item.unit,
+          batchNo: item.batchNo || undefined,
         })),
       };
     }
@@ -479,13 +842,22 @@ async function getProjectQuotationContext(payload: Record<string, unknown>): Pro
 }
 
 async function isProjectApproved(id: string): Promise<boolean | null> {
-  const direct = await prisma.appEntity.findUnique({
+  const direct = await prisma.projectRecord.findUnique({
+    where: { id },
+    select: { approvalStatus: true, payload: true },
+  });
+  if (direct) {
+    const payload = asRecord(direct.payload);
+    return isApprovedStatus(direct.approvalStatus || payload.approvalStatus);
+  }
+
+  const legacy = await prisma.appEntity.findUnique({
     where: { resource_entityId: { resource: "projects", entityId: id } },
     select: { payload: true },
   });
-  if (!direct) return null;
+  if (!legacy) return null;
 
-  const payload = asRecord(direct.payload);
+  const payload = asRecord(legacy.payload);
   return isApprovedStatus(payload.approvalStatus);
 }
 

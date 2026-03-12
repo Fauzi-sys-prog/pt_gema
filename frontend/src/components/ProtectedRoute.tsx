@@ -1,4 +1,4 @@
-import { Navigate } from 'react-router-dom';
+import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 
 interface ProtectedRouteProps {
@@ -7,6 +7,7 @@ interface ProtectedRouteProps {
 
 export default function ProtectedRoute({ children }: ProtectedRouteProps) {
   const { isAuthenticated, loading } = useAuth();
+  const location = useLocation();
 
   // Show loading while checking authentication
   if (loading) {
@@ -21,7 +22,8 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
   }
 
   if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
+    const next = encodeURIComponent(location.pathname + location.search);
+    return <Navigate to={`/login?next=${next}`} replace />;
   }
 
   return <>{children}</>;
