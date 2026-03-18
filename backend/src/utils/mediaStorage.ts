@@ -88,7 +88,7 @@ function parseDataUrl(input: string): { mime: string; data: Buffer } | null {
   }
 }
 
-async function storeImageDataUrl(params: {
+export async function storeImageDataUrl(params: {
   dataUrl: string;
   resource: string;
   entityIdHint?: string;

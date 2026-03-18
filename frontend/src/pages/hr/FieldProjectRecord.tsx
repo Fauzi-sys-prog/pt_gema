@@ -3,37 +3,25 @@ import { Plus, Search, Calendar, Briefcase, MapPin, Download, ChevronLeft, Chevr
 import { useAuth } from '../../contexts/AuthContext';
 import { toast } from 'sonner@2.0.3';
 import { motion, AnimatePresence } from 'motion/react';
-import type { Asset, Attendance, Employee, Project } from '../../contexts/AppContext';
+import type { Asset, Employee, Project } from '../../contexts/AppContext';
 import api from '../../services/api';
 
-interface FieldAttendance {
-  employeeId: string;
-  name: string;
-  position: string;
-  records: {
-    [date: string]: { in: string; out: string };
-  };
-}
-
-interface FieldKasbon {
+interface ProjectWorker {
   id: string;
   employeeId: string;
-  employeeName: string;
-  entries: {
-    id: string;
-    date: string;
-    amount: number;
-    approved: boolean;
-  }[];
+  workerType: 'internal' | 'thl' | 'borongan' | 'subkon';
+  workerName: string;
+  role: string;
+  rate: number;
 }
 
 export default function FieldProjectRecord() {
-  const { projectList = [], employeeList = [], assetList = [], updateProject, addAttendanceBulk, attendanceList = [], materialRequestList = [], addAuditLog } = useApp();
+  const { projectList = [], employeeList = [], assetList = [], updateProject, materialRequestList = [], addAuditLog } = useApp();
   const { currentUser } = useAuth();
   const [serverProjectList, setServerProjectList] = useState<Project[] | null>(null);
   const [serverEmployeeList, setServerEmployeeList] = useState<Employee[] | null>(null);
   const [serverAssetList, setServerAssetList] = useState<Asset[] | null>(null);
-  const [serverAttendanceList, setServerAttendanceList] = useState<Attendance[] | null>(null);
+  const [serverProjectLaborList, setServerProjectLaborList] = useState<any[] | null>(null);
   const [serverKasbonList, setServerKasbonList] = useState<any[] | null>(null);
   const [serverMaterialRequestList, setServerMaterialRequestList] = useState<any[] | null>(null);
   const [serverFleetHealthList, setServerFleetHealthList] = useState<any[] | null>(null);
@@ -43,7 +31,8 @@ export default function FieldProjectRecord() {
   const [showEquipmentModal, setShowEquipmentModal] = useState(false);
   const [showMaterialModal, setShowMaterialModal] = useState(false);
   const [showFinalizeModal, setShowFinalizeModal] = useState(false);
-  const [selectedWorker, setSelectedWorker] = useState<any>(null);
+  const [selectedWorker, setSelectedWorker] = useState<ProjectWorker | null>(null);
+  const [workerRoster, setWorkerRoster] = useState<ProjectWorker[]>([]);
 
   // New states to fix ReferenceErrors
   const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
@@ -51,32 +40,33 @@ export default function FieldProjectRecord() {
   const [kasbonAmount, setKasbonAmount] = useState('');
   const [kasbonDate, setKasbonDate] = useState(new Date().toISOString().split('T')[0]);
 
+  const normalizeList = <T,>(payload: unknown): T[] => {
+    if (Array.isArray(payload)) {
+      return payload.map((row: any) => {
+        if (row && typeof row === 'object' && 'payload' in row) {
+          const item = (row as { payload?: any }).payload || {};
+          const id = item.id || row.entityId || row.id;
+          return { id, ...item } as T;
+        }
+        return row as T;
+      });
+    }
+    if (payload && Array.isArray((payload as { items?: unknown[] }).items)) {
+      return normalizeList<T>((payload as { items: unknown[] }).items);
+    }
+    return [];
+  };
+
   useEffect(() => {
     let mounted = true;
-    const normalizeList = <T,>(payload: unknown): T[] => {
-      if (Array.isArray(payload)) {
-        return payload.map((row: any) => {
-          if (row && typeof row === 'object' && 'payload' in row) {
-            const item = (row as { payload?: any }).payload || {};
-            const id = item.id || row.entityId || row.id;
-            return { id, ...item } as T;
-          }
-          return row as T;
-        });
-      }
-      if (payload && Array.isArray((payload as { items?: unknown[] }).items)) {
-        return normalizeList<T>((payload as { items: unknown[] }).items);
-      }
-      return [];
-    };
 
     const loadPageData = async () => {
       try {
-        const [projectsRes, employeesRes, assetsRes, attendancesRes, kasbonsRes, materialRequestsRes, fleetHealthRes] = await Promise.all([
+        const [projectsRes, employeesRes, assetsRes, projectLaborRes, kasbonsRes, materialRequestsRes, fleetHealthRes] = await Promise.all([
           api.get('/projects'),
           api.get('/employees'),
           api.get('/assets'),
-          api.get('/attendances'),
+          api.get('/project-labor-entries'),
           api.get('/hr/kasbons'),
           api.get('/material-requests'),
           api.get('/fleet-health'),
@@ -85,7 +75,7 @@ export default function FieldProjectRecord() {
         setServerProjectList(normalizeList<Project>(projectsRes.data));
         setServerEmployeeList(normalizeList<Employee>(employeesRes.data));
         setServerAssetList(normalizeList<Asset>(assetsRes.data));
-        setServerAttendanceList(normalizeList<Attendance>(attendancesRes.data));
+        setServerProjectLaborList(normalizeList<any>(projectLaborRes.data));
         setServerKasbonList(normalizeList<any>(kasbonsRes.data));
         setServerMaterialRequestList(normalizeList<any>(materialRequestsRes.data));
         setServerFleetHealthList(normalizeList<any>(fleetHealthRes.data));
@@ -94,7 +84,7 @@ export default function FieldProjectRecord() {
         setServerProjectList(null);
         setServerEmployeeList(null);
         setServerAssetList(null);
-        setServerAttendanceList(null);
+        setServerProjectLaborList(null);
         setServerKasbonList(null);
         setServerMaterialRequestList(null);
         setServerFleetHealthList(null);
@@ -110,7 +100,7 @@ export default function FieldProjectRecord() {
   const effectiveProjectList = serverProjectList ?? projectList;
   const effectiveEmployeeList = serverEmployeeList ?? employeeList;
   const effectiveAssetList = serverAssetList ?? assetList;
-  const effectiveAttendanceList = serverAttendanceList ?? attendanceList;
+  const effectiveProjectLaborList = serverProjectLaborList ?? [];
   const effectiveMaterialRequestList = serverMaterialRequestList ?? materialRequestList;
   const effectiveFleetHealthList = serverFleetHealthList ?? [];
 
@@ -134,7 +124,6 @@ export default function FieldProjectRecord() {
     }));
   }, [selectedProject?.kasbon, selectedProjectId]);
   const effectiveKasbonList = serverKasbonList ?? projectPayloadKasbon;
-  const workers = effectiveEmployeeList;
 
   const dates = useMemo(() => {
     const arr = [];
@@ -146,6 +135,68 @@ export default function FieldProjectRecord() {
     }
     return arr;
   }, [startDate]);
+
+  const createWorkerId = () => `worker-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const workerSignature = (input: Partial<ProjectWorker> | any) => `${String(input.employeeId || '').trim()}::${String(input.workerName || input.employeeName || '').trim().toLowerCase()}::${String(input.workerType || '').trim().toLowerCase()}`;
+
+  useEffect(() => {
+    const laborRows = effectiveProjectLaborList.filter(
+      (row: any) => String(row?.projectId || '').trim() === String(selectedProjectId || '').trim()
+    );
+    const rosterMap = new Map<string, ProjectWorker>();
+
+    laborRows.forEach((row: any) => {
+      const signature = workerSignature(row);
+      if (!signature || rosterMap.has(signature)) return;
+      rosterMap.set(signature, {
+        id: createWorkerId(),
+        employeeId: String(row.employeeId || ''),
+        workerType: (String(row.workerType || 'thl').toLowerCase() as ProjectWorker['workerType']),
+        workerName: String(row.workerName || '').trim(),
+        role: String(row.role || '').trim(),
+        rate: Number(row.rate || 0),
+      });
+    });
+
+    effectiveKasbonList
+      .filter((row: any) => String(row?.projectId || '').trim() === String(selectedProjectId || '').trim())
+      .forEach((row: any) => {
+        const seed = {
+          employeeId: String(row.employeeId || ''),
+          workerName: String(row.employeeName || '').trim(),
+          workerType: 'thl',
+        };
+        const signature = workerSignature(seed);
+        if (!signature || rosterMap.has(signature)) return;
+        rosterMap.set(signature, {
+          id: createWorkerId(),
+          employeeId: seed.employeeId,
+          workerType: 'thl',
+          workerName: seed.workerName,
+          role: '',
+          rate: 0,
+        });
+      });
+
+    setWorkerRoster(rosterMap.size > 0 ? Array.from(rosterMap.values()) : [{
+      id: createWorkerId(),
+      employeeId: '',
+      workerType: 'thl',
+      workerName: '',
+      role: '',
+      rate: 0,
+    }]);
+
+    const seededAttendance: Record<string, string> = {};
+    laborRows.forEach((row: any) => {
+      const rowDate = String(row.date || '');
+      if (!dates.includes(rowDate)) return;
+      const signature = workerSignature(row);
+      seededAttendance[`${signature}-${rowDate}-in`] = String(row.checkIn || '07:00');
+      seededAttendance[`${signature}-${rowDate}-out`] = String(row.checkOut || '17:00');
+    });
+    setAttendanceData(seededAttendance);
+  }, [selectedProjectId, effectiveProjectLaborList, effectiveKasbonList, dates]);
   
   // Equipment State
   const [selectedAssetId, setSelectedAssetId] = useState('');
@@ -158,57 +209,85 @@ export default function FieldProjectRecord() {
   const [requestDate, setRequestDate] = useState(new Date().toISOString().split('T')[0]);
 
   const handleSaveAttendance = async () => {
-    const newRecords: any[] = [];
+    const validWorkers = workerRoster
+      .map((worker) => ({
+        ...worker,
+        workerName: String(worker.workerName || '').trim(),
+        role: String(worker.role || '').trim(),
+        rate: Number(worker.rate || 0),
+      }))
+      .filter((worker) => worker.workerName);
 
-    // Generate real attendance objects from the matrix
-    workers.forEach(worker => {
-      dates.forEach(date => {
-        const inTime = attendanceData[`${worker.id}-${date}-in`] || "07:00";
-        const outTime = attendanceData[`${worker.id}-${date}-out`] || "17:00";
-        
-        // Only save if it doesn't exist yet for this worker/date/project
-        const exists = effectiveAttendanceList.some(a => a.employeeId === worker.id && a.date === date && a.projectId === selectedProjectId);
-        
-        if (!exists) {
-          const [inH, inM] = inTime.split(':').map(Number);
-          const [outH, outM] = outTime.split(':').map(Number);
-          const workHours = (outH * 60 + outM - inH * 60 - inM) / 60;
+    if (validWorkers.length === 0) {
+      toast.error('Tambahkan minimal satu tenaga kerja proyek terlebih dulu.');
+      return;
+    }
 
-          newRecords.push({
-            id: `ATT-${worker.id}-${date}-${selectedProjectId}`,
-            employeeId: worker.id,
-            employeeName: worker.name,
-            projectId: selectedProjectId,
-            date: date,
-            status: 'Present',
-            checkIn: inTime,
-            checkOut: outTime,
-            workHours: workHours,
-            overtime: Math.max(0, workHours - 8),
-            location: selectedProject?.namaProject
-          });
+    const existingRows = effectiveProjectLaborList.filter(
+      (row: any) => String(row?.projectId || '').trim() === String(selectedProjectId || '').trim()
+    );
+    const existingMap = new Map<string, any>();
+    existingRows.forEach((row: any) => {
+      const key = `${workerSignature(row)}::${String(row.date || '').trim()}`;
+      existingMap.set(key, row);
+    });
+
+    const requests: Promise<any>[] = [];
+    validWorkers.forEach((worker) => {
+      dates.forEach((date) => {
+        const signature = workerSignature(worker);
+        const inTime = attendanceData[`${signature}-${date}-in`] || '07:00';
+        const outTime = attendanceData[`${signature}-${date}-out`] || '17:00';
+        const [inH, inM] = inTime.split(':').map(Number);
+        const [outH, outM] = outTime.split(':').map(Number);
+        const totalMinutes = Math.max(0, (outH * 60 + outM) - (inH * 60 + inM));
+        const workHours = totalMinutes / 60;
+        const overtimeHours = Math.max(0, workHours - 8);
+        const qtyDays = workHours > 0 ? 1 : 0;
+        const amount = worker.workerType === 'internal' ? 0 : Number(worker.rate || 0) * qtyDays;
+        const payload = {
+          projectId: selectedProjectId,
+          employeeId: worker.employeeId || undefined,
+          date,
+          workerType: worker.workerType,
+          workerName: worker.workerName,
+          role: worker.role,
+          qtyDays,
+          checkIn: inTime,
+          checkOut: outTime,
+          hoursWorked: workHours,
+          overtimeHours,
+          rate: Number(worker.rate || 0),
+          amount,
+          source: 'FIELD_RECORD',
+          notes: selectedProject?.namaProject || undefined,
+          createdByUserId: currentUser?.id,
+          createdByName: currentUser?.fullName || currentUser?.username || 'System',
+        };
+        const existing = existingMap.get(`${signature}::${date}`);
+        if (existing?.id) {
+          requests.push(api.patch(`/project-labor-entries/${existing.id}`, payload));
+        } else {
+          requests.push(api.post('/project-labor-entries', { id: `PLB-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, ...payload }));
         }
       });
     });
 
-    if (newRecords.length > 0) {
-      try {
-        await addAttendanceBulk(newRecords);
-        setServerAttendanceList((prev) => [...newRecords, ...(prev || [])]);
+    try {
+      await Promise.all(requests);
+      const refreshed = await api.get('/project-labor-entries');
+      setServerProjectLaborList(normalizeList<any>(refreshed.data));
         addAuditLog({
-          action: 'FIELD_ATTENDANCE_BULK_CREATED',
+          action: 'PROJECT_LABOR_BULK_SYNCED',
           module: 'HR',
-          entityType: 'Attendance',
+          entityType: 'ProjectLaborEntry',
           entityId: selectedProjectId || 'unknown-project',
-          description: `${newRecords.length} data absensi lapangan disimpan untuk proyek ${selectedProject?.namaProject || selectedProjectId || '-'}`,
+          description: `${requests.length} entry tenaga kerja proyek disimpan untuk proyek ${selectedProject?.namaProject || selectedProjectId || '-'}`,
         });
-        toast.success(`${newRecords.length} Data Absensi Lapangan berhasil disinkronkan ke Ledger Biaya Proyek!`);
-      } catch (err: any) {
-        const apiMessage = err?.response?.data?.error || err?.response?.data?.message || err?.message || 'Gagal simpan absensi lapangan';
-        toast.error(apiMessage);
-      }
-    } else {
-      toast.info("Tidak ada data baru untuk disimpan.");
+      toast.success(`${requests.length} entry tenaga kerja proyek berhasil disimpan ke ledger proyek.`);
+    } catch (err: any) {
+      const apiMessage = err?.response?.data?.error || err?.response?.data?.message || err?.message || 'Gagal simpan tenaga kerja proyek';
+      toast.error(apiMessage);
     }
   };
 
@@ -233,15 +312,20 @@ export default function FieldProjectRecord() {
   };
 
   const buildAttendanceRows = () => {
-    return workers.flatMap((worker) =>
+    return workerRoster
+      .filter((worker) => String(worker.workerName || '').trim())
+      .flatMap((worker) =>
       dates.map((date) => {
-        const inTime = attendanceData[`${worker.id}-${date}-in`] || '07:00';
-        const outTime = attendanceData[`${worker.id}-${date}-out`] || '17:00';
+        const signature = workerSignature(worker);
+        const inTime = attendanceData[`${signature}-${date}-in`] || '07:00';
+        const outTime = attendanceData[`${signature}-${date}-out`] || '17:00';
         return {
           date,
-          employeeId: worker.id,
-          employeeName: worker.name,
-          position: worker.position || '-',
+          employeeId: worker.employeeId || '',
+          employeeName: worker.workerName,
+          position: worker.role || '-',
+          workerType: worker.workerType,
+          rate: Number(worker.rate || 0),
           inTime,
           outTime,
         };
@@ -491,8 +575,8 @@ export default function FieldProjectRecord() {
     const newKasbon = {
       id: `KSB-${Date.now()}`,
       projectId: selectedProjectId,
-      employeeId: selectedWorker.id,
-      employeeName: selectedWorker.name,
+      employeeId: selectedWorker.employeeId || undefined,
+      employeeName: selectedWorker.workerName,
       date: kasbonDate,
       amount: amount,
       status: 'Approved',
@@ -511,7 +595,7 @@ export default function FieldProjectRecord() {
         module: 'HR',
         entityType: 'Kasbon',
         entityId: String(savedRaw.id || newKasbon.id),
-        description: `Kasbon ${formatCurrency(amount)} untuk ${selectedWorker.name} dicatat pada proyek ${selectedProjectId}`,
+        description: `Kasbon ${formatCurrency(amount)} untuk ${selectedWorker.workerName} dicatat pada proyek ${selectedProjectId}`,
       });
     } catch (err: any) {
       const apiMessage = err?.response?.data?.message || err?.message || 'Gagal simpan kasbon';
@@ -519,7 +603,7 @@ export default function FieldProjectRecord() {
       return;
     }
 
-    toast.success(`Kasbon senilai ${formatCurrency(amount)} untuk ${selectedWorker.name} berhasil dicatat.`);
+    toast.success(`Kasbon senilai ${formatCurrency(amount)} untuk ${selectedWorker.workerName} berhasil dicatat.`);
     setShowKasbonModal(false);
     setKasbonAmount('');
     setKasbonDate(new Date().toISOString().split('T')[0]);
@@ -537,6 +621,25 @@ export default function FieldProjectRecord() {
   const formatDateShort = (dateStr: string) => {
     const d = new Date(dateStr);
     return d.toLocaleDateString('id-ID', { day: '2-digit', month: 'short' });
+  };
+
+  const matchesWorkerKasbon = (row: any, worker: ProjectWorker) => {
+    if (worker.employeeId && String(row.employeeId || '') === String(worker.employeeId)) return true;
+    return String(row.employeeName || '').trim().toLowerCase() === String(worker.workerName || '').trim().toLowerCase();
+  };
+
+  const addWorkerRow = () => {
+    setWorkerRoster((prev) => [
+      ...prev,
+      {
+        id: createWorkerId(),
+        employeeId: '',
+        workerType: 'thl',
+        workerName: '',
+        role: '',
+        rate: 0,
+      },
+    ]);
   };
 
   const getMaterialView = () => (
@@ -778,12 +881,20 @@ export default function FieldProjectRecord() {
                     <ChevronRight size={18} />
                  </button>
               </div>
-              <button 
-                onClick={handleSaveAttendance}
-                className="px-6 py-2.5 bg-blue-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg hover:bg-blue-700 transition-all flex items-center gap-2"
-              >
-                 <Save size={16} /> Save Changes
-              </button>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={addWorkerRow}
+                  className="px-4 py-2.5 bg-white border border-slate-200 text-slate-700 rounded-xl text-[10px] font-black uppercase tracking-widest shadow-sm hover:bg-slate-50 transition-all flex items-center gap-2"
+                >
+                  <Plus size={16} /> Tambah Tenaga
+                </button>
+                <button
+                  onClick={handleSaveAttendance}
+                  className="px-6 py-2.5 bg-blue-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg hover:bg-blue-700 transition-all flex items-center gap-2"
+                >
+                   <Save size={16} /> Save Changes
+                </button>
+              </div>
            </div>
 
            {/* The ABSEN Table Grid */}
@@ -793,8 +904,10 @@ export default function FieldProjectRecord() {
                     <thead>
                        <tr className="bg-slate-900 text-white">
                           <th rowSpan={2} className="px-6 py-4 text-[9px] font-black uppercase tracking-widest border-r border-white/10 text-center w-12">No</th>
-                          <th rowSpan={2} className="px-6 py-4 text-[9px] font-black uppercase tracking-widest border-r border-white/10 min-w-[150px]">Name</th>
-                          <th rowSpan={2} className="px-6 py-4 text-[9px] font-black uppercase tracking-widest border-r border-white/10 min-w-[100px]">Position</th>
+                          <th rowSpan={2} className="px-6 py-4 text-[9px] font-black uppercase tracking-widest border-r border-white/10 min-w-[170px]">Worker</th>
+                          <th rowSpan={2} className="px-6 py-4 text-[9px] font-black uppercase tracking-widest border-r border-white/10 min-w-[110px]">Type</th>
+                          <th rowSpan={2} className="px-6 py-4 text-[9px] font-black uppercase tracking-widest border-r border-white/10 min-w-[120px]">Role</th>
+                          <th rowSpan={2} className="px-6 py-4 text-[9px] font-black uppercase tracking-widest border-r border-white/10 min-w-[100px]">Rate/Day</th>
                           {dates.map(date => (
                             <th key={date} colSpan={2} className="px-4 py-2 text-[9px] font-black uppercase tracking-widest border-b border-white/10 text-center border-r border-white/10">
                                {formatDateShort(date)}
@@ -809,35 +922,70 @@ export default function FieldProjectRecord() {
                        </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                       {workers.map((worker, idx) => (
+                       {workerRoster.map((worker, idx) => {
+                         const signature = workerSignature(worker);
+                         return (
                          <tr key={worker.id} className="hover:bg-slate-50 transition-all group">
                             <td className="px-6 py-4 text-[10px] font-bold text-slate-400 text-center border-r border-slate-50">{idx + 1}</td>
                             <td className="px-6 py-4">
-                               <p className="text-xs font-black text-slate-900 uppercase italic leading-tight">{worker.name}</p>
+                               <input
+                                 type="text"
+                                 value={worker.workerName}
+                                 onChange={(e) => setWorkerRoster((prev) => prev.map((row) => row.id === worker.id ? { ...row, workerName: e.target.value } : row))}
+                                 placeholder="Nama tenaga kerja"
+                                 className="w-full bg-transparent text-xs font-black text-slate-900 uppercase italic leading-tight outline-none"
+                               />
                             </td>
                             <td className="px-6 py-4 border-r border-slate-50">
-                               <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none">{worker.position}</p>
+                              <select
+                                value={worker.workerType}
+                                onChange={(e) => setWorkerRoster((prev) => prev.map((row) => row.id === worker.id ? { ...row, workerType: e.target.value as ProjectWorker['workerType'] } : row))}
+                                className="w-full bg-transparent text-[9px] font-black text-slate-500 uppercase tracking-widest outline-none"
+                              >
+                                <option value="internal">Internal</option>
+                                <option value="thl">THL</option>
+                                <option value="borongan">Borongan</option>
+                                <option value="subkon">Subkon</option>
+                              </select>
+                            </td>
+                            <td className="px-6 py-4 border-r border-slate-50">
+                              <input
+                                type="text"
+                                value={worker.role}
+                                onChange={(e) => setWorkerRoster((prev) => prev.map((row) => row.id === worker.id ? { ...row, role: e.target.value } : row))}
+                                placeholder="Role / posisi"
+                                className="w-full bg-transparent text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none outline-none"
+                              />
+                            </td>
+                            <td className="px-3 py-4 border-r border-slate-50">
+                              <input
+                                type="number"
+                                min="0"
+                                value={worker.rate}
+                                onChange={(e) => setWorkerRoster((prev) => prev.map((row) => row.id === worker.id ? { ...row, rate: Number(e.target.value || 0) } : row))}
+                                className="w-24 bg-transparent text-[10px] font-black text-right text-slate-700 outline-none"
+                              />
                             </td>
                             {dates.flatMap(date => [
                                <td key={`in-${worker.id}-${date}`} className="px-1 py-1 border-r border-slate-50">
                                   <input 
                                     type="text" 
-                                    value={attendanceData[`${worker.id}-${date}-in`] || "07:00"}
-                                    onChange={(e) => setAttendanceData({...attendanceData, [`${worker.id}-${date}-in`]: e.target.value})}
+                                    value={attendanceData[`${signature}-${date}-in`] || "07:00"}
+                                    onChange={(e) => setAttendanceData({...attendanceData, [`${signature}-${date}-in`]: e.target.value})}
                                     className="w-full text-[10px] font-black text-center bg-transparent border-none outline-none focus:bg-blue-50 focus:text-blue-600 rounded transition-colors"
                                   />
                                </td>,
                                <td key={`out-${worker.id}-${date}`} className="px-1 py-1 border-r border-slate-50">
                                   <input 
                                     type="text" 
-                                    value={attendanceData[`${worker.id}-${date}-out`] || "17:00"}
-                                    onChange={(e) => setAttendanceData({...attendanceData, [`${worker.id}-${date}-out`]: e.target.value})}
+                                    value={attendanceData[`${signature}-${date}-out`] || "17:00"}
+                                    onChange={(e) => setAttendanceData({...attendanceData, [`${signature}-${date}-out`]: e.target.value})}
                                     className="w-full text-[10px] font-black text-center bg-transparent border-none outline-none focus:bg-blue-50 focus:text-blue-600 rounded transition-colors"
                                   />
                                </td>
                             ])}
                          </tr>
-                       ))}
+                       )})}
                     </tbody>
                  </table>
               </div>
@@ -846,16 +994,16 @@ export default function FieldProjectRecord() {
       ) : activeView === 'kasbon' ? (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
            {/* Kasbon Section */}
-           {workers.map((worker) => (
+           {workerRoster.filter((worker) => String(worker.workerName || '').trim()).map((worker) => (
              <div key={worker.id} className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm hover:shadow-md transition-all">
                 <div className="flex items-center justify-between mb-6">
                    <div className="flex items-center gap-4">
                       <div className="w-12 h-12 bg-slate-900 text-white rounded-2xl flex items-center justify-center font-black italic">
-                         {String(worker.name || "?").charAt(0)}
+                         {String(worker.workerName || "?").charAt(0)}
                       </div>
                       <div>
-                         <h4 className="text-lg font-black text-slate-900 uppercase italic tracking-tighter leading-none">{worker.name}</h4>
-                         <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-1">{worker.position}</p>
+                         <h4 className="text-lg font-black text-slate-900 uppercase italic tracking-tighter leading-none">{worker.workerName}</h4>
+                         <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-1">{worker.role || worker.workerType}</p>
                       </div>
                    </div>
                    <div className="bg-blue-50 px-4 py-2 rounded-xl border border-blue-100 text-right">
@@ -863,7 +1011,7 @@ export default function FieldProjectRecord() {
                       <p className="text-sm font-black text-blue-600 italic">
                         {formatCurrency(
                           kasbonRows
-                            .filter((row) => String(row.employeeId) === String(worker.id))
+                            .filter((row) => matchesWorkerKasbon(row, worker))
                             .reduce((sum, row) => sum + Number(row.amount || 0), 0)
                         )}
                       </p>
@@ -882,7 +1030,7 @@ export default function FieldProjectRecord() {
                       </thead>
                       <tbody className="divide-y divide-slate-50">
                         {kasbonRows
-                          .filter((row) => String(row.employeeId) === String(worker.id))
+                          .filter((row) => matchesWorkerKasbon(row, worker))
                           .map((row, idx) => (
                             <tr key={row.id || `${worker.id}-${idx}`} className="group">
                               <td className="px-4 py-3 text-[10px] font-bold text-slate-400 text-center">{idx + 1}</td>
@@ -901,7 +1049,7 @@ export default function FieldProjectRecord() {
                               </td>
                             </tr>
                           ))}
-                        {kasbonRows.filter((row) => String(row.employeeId) === String(worker.id)).length === 0 && (
+                        {kasbonRows.filter((row) => matchesWorkerKasbon(row, worker)).length === 0 && (
                           <tr>
                             <td colSpan={4} className="px-4 py-4 text-center text-[10px] font-bold text-slate-300 uppercase italic">
                               Belum ada kasbon
@@ -911,9 +1059,9 @@ export default function FieldProjectRecord() {
                       </tbody>
                    </table>
                 </div>
-                
-                <button 
-                  onClick={() => handleAddKasbon(worker)}
+
+                   <button
+                      onClick={() => handleAddKasbon(worker)}
                   className="mt-6 w-full py-3 bg-slate-50 text-slate-400 border border-slate-200 border-dashed rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-100 hover:text-slate-600 transition-all flex items-center justify-center gap-2"
                 >
                    <Plus size={14} /> Add New Entry
@@ -999,7 +1147,7 @@ export default function FieldProjectRecord() {
                    <div className="p-6 bg-slate-50 rounded-[2rem] border border-slate-100">
                       <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Total Personnel</p>
                       <p className="text-sm font-black text-slate-900 uppercase italic leading-tight">
-                         {workers.length} Members
+                         {workerRoster.filter((worker) => String(worker.workerName || '').trim()).length} Members
                       </p>
                    </div>
                    <div className="p-6 bg-blue-50/50 rounded-[2rem] border border-blue-100/50">
@@ -1011,7 +1159,7 @@ export default function FieldProjectRecord() {
                    <div className="p-6 bg-emerald-50/50 rounded-[2rem] border border-emerald-100/50">
                       <p className="text-[10px] font-black text-emerald-400 uppercase tracking-widest mb-2">Total Advances</p>
                       <p className="text-sm font-black text-emerald-600 uppercase italic leading-tight">
-                         {formatCurrency(4800000)}
+                         {formatCurrency(totalKasbonAmount)}
                       </p>
                    </div>
                 </div>
@@ -1098,11 +1246,11 @@ export default function FieldProjectRecord() {
                 <div className="space-y-4">
                   <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 flex items-center gap-4">
                     <div className="w-10 h-10 bg-slate-900 text-white rounded-xl flex items-center justify-center font-black italic">
-                      {String(selectedWorker?.name || "?").charAt(0)}
+                         {String(selectedWorker?.workerName || "?").charAt(0)}
                     </div>
                     <div>
                       <p className="text-[10px] font-black text-slate-400 uppercase">Worker Name</p>
-                      <p className="text-sm font-black text-slate-900 uppercase italic">{selectedWorker?.name}</p>
+                      <p className="text-sm font-black text-slate-900 uppercase italic">{selectedWorker?.workerName}</p>
                     </div>
                   </div>
 

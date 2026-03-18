@@ -60,11 +60,12 @@ export default function SuratMasukPage() {
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (editMode && selectedSurat) {
-      updateSuratMasuk(selectedSurat.id, formData);
+      const ok = await updateSuratMasuk(selectedSurat.id, formData);
+      if (!ok) return;
       addAuditLog({
         action: 'SURAT_MASUK_UPDATED',
         module: 'Correspondence',
@@ -79,7 +80,8 @@ export default function SuratMasukPage() {
         createdAt: new Date().toISOString(),
         ...formData as SuratMasuk,
       };
-      addSuratMasuk(newSurat);
+      const ok = await addSuratMasuk(newSurat);
+      if (!ok) return;
       addAuditLog({
         action: 'SURAT_MASUK_CREATED',
         module: 'Correspondence',
@@ -100,10 +102,11 @@ export default function SuratMasukPage() {
     setShowModal(true);
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
     if (window.confirm('Apakah Anda yakin ingin menghapus surat ini?')) {
       const deleted = effectiveSuratMasukList.find((s) => s.id === id);
-      deleteSuratMasuk(id);
+      const ok = await deleteSuratMasuk(id);
+      if (!ok) return;
       addAuditLog({
         action: 'SURAT_MASUK_DELETED',
         module: 'Correspondence',
@@ -114,14 +117,15 @@ export default function SuratMasukPage() {
     }
   };
 
-  const handleDisposisi = (e: React.FormEvent) => {
+  const handleDisposisi = async (e: React.FormEvent) => {
     e.preventDefault();
     if (selectedSurat) {
-      updateSuratMasuk(selectedSurat.id, {
+      const ok = await updateSuratMasuk(selectedSurat.id, {
         status: 'Disposisi',
         disposisiKe: formData.disposisiKe,
         catatan: formData.catatan,
       });
+      if (!ok) return;
       addAuditLog({
         action: 'SURAT_MASUK_DISPOSISI',
         module: 'Correspondence',

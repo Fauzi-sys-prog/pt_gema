@@ -90,6 +90,64 @@ function inventoryPoNumber(po: { payload: unknown } | null | undefined): string 
   return asTrimmedString(payload.noPO ?? payload.number ?? payload.id) ?? undefined;
 }
 
+async function resolveInventoryWorkOrderRef(ref: string | null | undefined) {
+  const key = asTrimmedString(ref);
+  if (!key) return null;
+
+  const relationalById = await prisma.productionWorkOrder.findUnique({
+    where: { id: key },
+    select: { id: true, projectId: true, number: true },
+  });
+  if (relationalById) return relationalById;
+
+  const relationalByNumber = await prisma.productionWorkOrder.findUnique({
+    where: { number: key },
+    select: { id: true, projectId: true, number: true },
+  });
+  if (relationalByNumber) return relationalByNumber;
+
+  const legacyById = await prisma.workOrderRecord.findUnique({
+    where: { id: key },
+    select: { id: true, projectId: true, payload: true },
+  });
+  if (legacyById) {
+    return {
+      id: legacyById.id,
+      projectId: legacyById.projectId,
+      number: asTrimmedString(asRecord(legacyById.payload).woNumber ?? asRecord(legacyById.payload).number) || key,
+    };
+  }
+
+  const legacyRows = await prisma.workOrderRecord.findMany({
+    select: { id: true, projectId: true, payload: true },
+  });
+  const legacyByNumber = legacyRows.find((row) => {
+    const payload = asRecord(row.payload);
+    return asTrimmedString(payload.woNumber) === key || asTrimmedString(payload.number) === key;
+  });
+  if (legacyByNumber) {
+    return {
+      id: legacyByNumber.id,
+      projectId: legacyByNumber.projectId,
+      number: asTrimmedString(asRecord(legacyByNumber.payload).woNumber ?? asRecord(legacyByNumber.payload).number) || key,
+    };
+  }
+
+  return null;
+}
+
+async function findInventoryItemByCodeOrName(code: string, name: string) {
+  if (code) {
+    const byCode = await prisma.inventoryItem.findUnique({ where: { code } });
+    if (byCode) return byCode;
+  }
+  if (name) {
+    const byName = await prisma.inventoryItem.findFirst({ where: { name } });
+    if (byName) return byName;
+  }
+  return null;
+}
+
 function mapInventoryItem(row: {
   id: string; code: string; name: string; category: string; unit: string; location: string; minStock: number;
   onHandQty: number; unitPrice: number | null; supplierName: string | null; lastStockUpdateAt: Date | null; metadata: Prisma.JsonValue | null;
@@ -261,7 +319,8 @@ async function writeAuditLog(req: AuthRequest, action: "create" | "update" | "de
 async function assertRefs(resource: InventoryResource, payload: Record<string, unknown>) {
   const projectId = asTrimmedString(payload.projectId);
   const poId = asTrimmedString(payload.poId);
-  const workOrderId = asTrimmedString(payload.workOrderId ?? payload.noWorkOrder);
+  const workOrderId = asTrimmedString(payload.workOrderId);
+  const workOrderRef = asTrimmedString(payload.workOrderId ?? payload.noWorkOrder);
   if (projectId) {
     const row = await prisma.projectRecord.findUnique({ where: { id: projectId }, select: { id: true } });
     if (!row) throw new Error(`${resource}: projectId '${projectId}' tidak ditemukan`);
@@ -271,10 +330,10 @@ async function assertRefs(resource: InventoryResource, payload: Record<string, u
     if (!row) throw new Error(`${resource}: poId '${poId}' tidak ditemukan`);
     if (projectId && row.projectId && row.projectId !== projectId) throw new Error(`${resource}: projectId '${projectId}' tidak match dengan projectId PO '${row.projectId}'`);
   }
-  if (workOrderId) {
-    const row = await prisma.workOrderRecord.findUnique({ where: { id: workOrderId }, select: { id: true, projectId: true } });
-    if (!row) throw new Error(`${resource}: workOrderId '${workOrderId}' tidak ditemukan`);
-    if (projectId && row.projectId && row.projectId !== projectId) throw new Error(`${resource}: projectId '${projectId}' tidak match dengan projectId WO '${row.projectId}'`);
+  if (workOrderRef) {
+    const row = await resolveInventoryWorkOrderRef(workOrderRef);
+    if (workOrderId && !row) throw new Error(`${resource}: workOrderId '${workOrderId}' tidak ditemukan`);
+    if (projectId && row?.projectId && row.projectId !== projectId) throw new Error(`${resource}: projectId '${projectId}' tidak match dengan projectId WO '${row.projectId}'`);
   }
 }
 
@@ -342,26 +401,147 @@ async function createResource(resource: InventoryResource, payload: Record<strin
       } });
       break;
     case "stock-ins":
-      await prisma.inventoryStockIn.create({ data: {
-        id: entityId, number: asTrimmedString(payload.noStockIn) || entityId, tanggal: new Date(inventoryDateString(asTrimmedString(payload.tanggal))),
-        type: asTrimmedString(payload.type) || "Receiving", status: asTrimmedString(payload.status) || "Draft",
-        supplierName: asTrimmedString(payload.supplier) || undefined, suratJalanNumber: asTrimmedString(payload.noSuratJalan) || undefined,
-        notes: asTrimmedString(payload.notes) || undefined, createdByName: asTrimmedString(payload.createdBy) || undefined,
-        poId: asTrimmedString(payload.poId) || undefined, projectId: asTrimmedString(payload.projectId) || undefined, legacyPayload: payload as Prisma.InputJsonValue,
-        items: { create: (Array.isArray(payload.items) ? payload.items : []).map((raw, index) => {
-          const item = asRecord(raw); return { id: `${entityId}-ITEM-${String(index + 1).padStart(3, "0")}`, itemCode: asTrimmedString(item.kode) || "", itemName: asTrimmedString(item.nama) || "", qty: toFiniteNumber(item.qty, 0), unit: asTrimmedString(item.satuan) || "pcs", batchNo: asTrimmedString(item.batchNo) || undefined, expiryDate: asTrimmedString(item.expiryDate) ? new Date(String(item.expiryDate)) : undefined, notes: asTrimmedString(item.notes) || undefined };
-        }).filter((item) => item.itemCode) } } });
+      {
+        const tanggal = new Date(inventoryDateString(asTrimmedString(payload.tanggal)));
+        const supplierName = asTrimmedString(payload.supplier) || undefined;
+        const createdByName = asTrimmedString(payload.createdBy) || undefined;
+        const location = "Gudang Utama";
+        const rawItems = (Array.isArray(payload.items) ? payload.items : []).map((raw) => asRecord(raw));
+        const normalizedItems = [] as Array<{
+          code: string;
+          name: string;
+          qty: number;
+          unit: string;
+          batchNo?: string;
+          expiryDate?: Date;
+          notes?: string;
+          inventoryItemId?: string;
+          stockBefore?: number;
+          stockAfter?: number;
+        }>;
+
+        for (const raw of rawItems) {
+          const code = asTrimmedString(raw.kode) || "";
+          const name = asTrimmedString(raw.nama) || "";
+          const qty = toFiniteNumber(raw.qty, 0);
+          if (!code || qty <= 0) continue;
+          const unit = asTrimmedString(raw.satuan) || "pcs";
+          const existingItem = await findInventoryItemByCodeOrName(code, name);
+          let inventoryItemId = existingItem?.id;
+          let stockBefore = existingItem?.onHandQty || 0;
+          let stockAfter = stockBefore + qty;
+
+          if (existingItem) {
+            await prisma.inventoryItem.update({
+              where: { id: existingItem.id },
+              data: {
+                name: name || existingItem.name,
+                unit,
+                supplierName: supplierName ?? existingItem.supplierName,
+                onHandQty: stockAfter,
+                lastStockUpdateAt: tanggal,
+              },
+            });
+          } else {
+            inventoryItemId = `INV-${randomUUID()}`;
+            stockBefore = 0;
+            stockAfter = qty;
+            await prisma.inventoryItem.create({
+              data: {
+                id: inventoryItemId,
+                code,
+                name: name || code,
+                category: "General",
+                unit,
+                location,
+                minStock: 0,
+                onHandQty: stockAfter,
+                reservedQty: 0,
+                onOrderQty: 0,
+                supplierName,
+                lastStockUpdateAt: tanggal,
+                metadata: {
+                  source: "stock-in",
+                  stockInId: entityId,
+                } as Prisma.InputJsonValue,
+              },
+            });
+          }
+
+          normalizedItems.push({
+            code,
+            name: name || code,
+            qty,
+            unit,
+            batchNo: asTrimmedString(raw.batchNo) || undefined,
+            expiryDate: asTrimmedString(raw.expiryDate) ? new Date(String(raw.expiryDate)) : undefined,
+            notes: asTrimmedString(raw.notes) || undefined,
+            inventoryItemId,
+            stockBefore,
+            stockAfter,
+          });
+        }
+
+        await prisma.inventoryStockIn.create({ data: {
+          id: entityId, number: asTrimmedString(payload.noStockIn) || entityId, tanggal,
+          type: asTrimmedString(payload.type) || "Receiving", status: asTrimmedString(payload.status) || "Draft",
+          supplierName, suratJalanNumber: asTrimmedString(payload.noSuratJalan) || undefined,
+          notes: asTrimmedString(payload.notes) || undefined, createdByName,
+          poId: asTrimmedString(payload.poId) || undefined, projectId: asTrimmedString(payload.projectId) || undefined, legacyPayload: payload as Prisma.InputJsonValue,
+          items: { create: normalizedItems.map((item, index) => ({
+            id: `${entityId}-ITEM-${String(index + 1).padStart(3, "0")}`,
+            inventoryItem: item.inventoryItemId ? { connect: { id: item.inventoryItemId } } : undefined,
+            itemCode: item.code,
+            itemName: item.name,
+            qty: item.qty,
+            unit: item.unit,
+            batchNo: item.batchNo,
+            expiryDate: item.expiryDate,
+            notes: item.notes,
+          })) },
+          movementRows: { create: normalizedItems.map((item, index) => ({
+            id: `${entityId}-MOV-${String(index + 1).padStart(3, "0")}`,
+            tanggal,
+            direction: "IN",
+            referenceNo: asTrimmedString(payload.noStockIn) || entityId,
+            referenceType: asTrimmedString(payload.type) || "Stock In",
+            inventoryItem: item.inventoryItemId ? { connect: { id: item.inventoryItemId } } : undefined,
+            itemCode: item.code,
+            itemName: item.name,
+            qty: item.qty,
+            unit: item.unit,
+            location,
+            stockBefore: item.stockBefore || 0,
+            stockAfter: item.stockAfter || item.qty,
+            batchNo: item.batchNo,
+            expiryDate: item.expiryDate,
+            supplierName,
+            poNumber: asTrimmedString(payload.noPO) || undefined,
+            createdByName,
+            projectId: asTrimmedString(payload.projectId) || undefined,
+            legacyPayload: {
+              source: "stock-in",
+              stockInId: entityId,
+            } as Prisma.InputJsonValue,
+          })) },
+        } });
+      }
       break;
     case "stock-outs":
+      {
+        const resolvedWorkOrder = await resolveInventoryWorkOrderRef(
+          asTrimmedString(payload.workOrderId ?? payload.noWorkOrder)
+        );
       await prisma.inventoryStockOut.create({ data: {
         id: entityId, number: asTrimmedString(payload.noStockOut) || entityId, tanggal: new Date(inventoryDateString(asTrimmedString(payload.tanggal))),
         type: asTrimmedString(payload.type) || "Project Issue", status: asTrimmedString(payload.status) || "Draft", recipientName: asTrimmedString(payload.penerima) || undefined,
         notes: asTrimmedString(payload.notes) || undefined, createdByName: asTrimmedString(payload.createdBy) || undefined, projectId: asTrimmedString(payload.projectId) || undefined,
-        workOrderId: asTrimmedString(payload.workOrderId ?? payload.noWorkOrder) || undefined, productionReportId: asTrimmedString(payload.productionReportId) || undefined, legacyPayload: payload as Prisma.InputJsonValue,
+        workOrderId: resolvedWorkOrder?.id || undefined, productionReportId: asTrimmedString(payload.productionReportId) || undefined, legacyPayload: payload as Prisma.InputJsonValue,
         items: { create: (Array.isArray(payload.items) ? payload.items : []).map((raw, index) => {
           const item = asRecord(raw); return { id: `${entityId}-ITEM-${String(index + 1).padStart(3, "0")}`, itemCode: asTrimmedString(item.kode) || "", itemName: asTrimmedString(item.nama) || "", qty: toFiniteNumber(item.qty, 0), unit: asTrimmedString(item.satuan) || "pcs", batchNo: asTrimmedString(item.batchNo) || undefined, notes: asTrimmedString(item.notes) || undefined };
         }).filter((item) => item.itemCode) } } });
       break;
+      }
     case "stock-movements":
       await prisma.inventoryStockMovement.create({ data: {
         id: entityId, tanggal: new Date(inventoryDateString(asTrimmedString(payload.tanggal))), direction: asTrimmedString(payload.type) || "IN",
@@ -401,11 +581,16 @@ async function updateResource(resource: InventoryResource, id: string, payload: 
       } });
       break;
     case "stock-outs":
-      await prisma.inventoryStockOut.update({ where: { id }, data: {
-        number: asTrimmedString(payload.noStockOut) || id, tanggal: new Date(inventoryDateString(asTrimmedString(payload.tanggal))), type: asTrimmedString(payload.type) || "Project Issue", status: asTrimmedString(payload.status) || "Draft", recipientName: asTrimmedString(payload.penerima) || null, notes: asTrimmedString(payload.notes) || null, createdByName: asTrimmedString(payload.createdBy) || null, projectId: asTrimmedString(payload.projectId) || null, workOrderId: asTrimmedString(payload.workOrderId ?? payload.noWorkOrder) || null, productionReportId: asTrimmedString(payload.productionReportId) || null, legacyPayload: payload as Prisma.InputJsonValue,
-        items: { deleteMany: {}, create: (Array.isArray(payload.items) ? payload.items : []).map((raw, index) => { const item = asRecord(raw); return { id: `${id}-ITEM-${String(index + 1).padStart(3, "0")}`, itemCode: asTrimmedString(item.kode) || "", itemName: asTrimmedString(item.nama) || "", qty: toFiniteNumber(item.qty, 0), unit: asTrimmedString(item.satuan) || "pcs", batchNo: asTrimmedString(item.batchNo) || undefined, notes: asTrimmedString(item.notes) || undefined }; }).filter((item) => item.itemCode) },
-      } });
-      break;
+      {
+        const resolvedWorkOrder = await resolveInventoryWorkOrderRef(
+          asTrimmedString(payload.workOrderId ?? payload.noWorkOrder)
+        );
+        await prisma.inventoryStockOut.update({ where: { id }, data: {
+          number: asTrimmedString(payload.noStockOut) || id, tanggal: new Date(inventoryDateString(asTrimmedString(payload.tanggal))), type: asTrimmedString(payload.type) || "Project Issue", status: asTrimmedString(payload.status) || "Draft", recipientName: asTrimmedString(payload.penerima) || null, notes: asTrimmedString(payload.notes) || null, createdByName: asTrimmedString(payload.createdBy) || null, projectId: asTrimmedString(payload.projectId) || null, workOrderId: resolvedWorkOrder?.id || null, productionReportId: asTrimmedString(payload.productionReportId) || null, legacyPayload: payload as Prisma.InputJsonValue,
+          items: { deleteMany: {}, create: (Array.isArray(payload.items) ? payload.items : []).map((raw, index) => { const item = asRecord(raw); return { id: `${id}-ITEM-${String(index + 1).padStart(3, "0")}`, itemCode: asTrimmedString(item.kode) || "", itemName: asTrimmedString(item.nama) || "", qty: toFiniteNumber(item.qty, 0), unit: asTrimmedString(item.satuan) || "pcs", batchNo: asTrimmedString(item.batchNo) || undefined, notes: asTrimmedString(item.notes) || undefined }; }).filter((item) => item.itemCode) },
+        } });
+        break;
+      }
     case "stock-movements":
       await prisma.inventoryStockMovement.update({ where: { id }, data: {
         tanggal: new Date(inventoryDateString(asTrimmedString(payload.tanggal))), direction: asTrimmedString(payload.type) || "IN", referenceNo: asTrimmedString(payload.refNo) || id, referenceType: asTrimmedString(payload.refType) || "Manual", itemCode: asTrimmedString(payload.itemKode) || "", itemName: asTrimmedString(payload.itemNama) || "", qty: toFiniteNumber(payload.qty, 0), unit: asTrimmedString(payload.unit) || "pcs", location: asTrimmedString(payload.lokasi) || "Gudang Utama", stockBefore: toFiniteNumber(payload.stockBefore, 0), stockAfter: toFiniteNumber(payload.stockAfter, 0), batchNo: asTrimmedString(payload.batchNo) || null, expiryDate: asTrimmedString(payload.expiryDate) ? new Date(String(payload.expiryDate)) : null, supplierName: asTrimmedString(payload.supplier) || null, poNumber: asTrimmedString(payload.noPO) || null, createdByName: asTrimmedString(payload.createdBy) || null, projectId: asTrimmedString(payload.projectId) || null, stockInId: asTrimmedString(payload.stockInId) || null, stockOutId: asTrimmedString(payload.stockOutId) || null, stockOpnameId: asTrimmedString(payload.stockOpnameId) || null, legacyPayload: payload as Prisma.InputJsonValue,

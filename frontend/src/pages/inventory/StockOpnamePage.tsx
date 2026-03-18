@@ -21,6 +21,7 @@ import {
 import { toast } from 'sonner@2.0.3';
 import { motion, AnimatePresence } from 'motion/react';
 import api from '../../services/api';
+import { normalizeEntityRows } from '../../utils/normalizeEntityRows';
 
 export default function StockOpnamePage() {
   const { stockItemList, stockOpnameList, addStockOpname, confirmStockOpname, currentUser } = useApp();
@@ -33,15 +34,6 @@ export default function StockOpnamePage() {
   const effectiveStockItemList = serverStockItemList ?? stockItemList;
   const effectiveStockOpnameList = serverStockOpnameList ?? stockOpnameList;
 
-  const normalizeEntityRows = <T,>(rows: any[]): T[] =>
-    rows.map((row: any) => {
-      const payload = row?.payload ?? {};
-      if (payload && typeof payload === 'object' && !Array.isArray(payload) && !payload.id) {
-        return { ...payload, id: row.entityId } as T;
-      }
-      return payload as T;
-    });
-
   const fetchStockOpnameSources = async () => {
     try {
       setIsRefreshing(true);
@@ -49,8 +41,8 @@ export default function StockOpnamePage() {
         api.get('/inventory/items'),
         api.get('/inventory/stock-opnames'),
       ]);
-      setServerStockItemList(normalizeEntityRows<any>(Array.isArray(stockItemRes.data) ? stockItemRes.data : []));
-      setServerStockOpnameList(normalizeEntityRows<any>(Array.isArray(opnameRes.data) ? opnameRes.data : []));
+      setServerStockItemList(normalizeEntityRows<any>(stockItemRes.data));
+      setServerStockOpnameList(normalizeEntityRows<any>(opnameRes.data));
     } catch {
       setServerStockItemList(null);
       setServerStockOpnameList(null);

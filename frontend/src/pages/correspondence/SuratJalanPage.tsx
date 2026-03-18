@@ -37,7 +37,8 @@ export default function SuratJalanPage() {
     projectList, 
     assetList,
     createStockOut,
-    addAuditLog
+    addAuditLog,
+    currentUser,
   } = useApp();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedSJ, setSelectedSJ] = useState<SuratJalan | null>(null);
@@ -178,7 +179,7 @@ export default function SuratJalanPage() {
     }));
   };
 
-  const handleCreateSJ = (e: React.FormEvent) => {
+  const handleCreateSJ = async (e: React.FormEvent) => {
     e.preventDefault();
     if (formData.sjType === 'Equipment Loan' && !formData.assetId) {
       toast.error('Untuk Equipment Loan, pilih asset unit dulu.');
@@ -194,37 +195,46 @@ export default function SuratJalanPage() {
     };
 
       // 1. Add Surat Jalan
-      addSuratJalan(newSJ);
+      const created = await addSuratJalan(newSJ);
+      if (!created) {
+        setIsSubmitting(false);
+        return;
+      }
 
       // 2. Automated Stock Out (ONLY for Material Delivery, skip for Equipment Loan)
+      let stockOutSynced = formData.sjType !== 'Material Delivery';
       if (formData.sjType === 'Material Delivery') {
-      const stockOutItems = formData.items
-        .filter(item => item.itemKode && item.jumlah > 0)
-        .map(item => ({
-          kode: item.itemKode,
-          nama: item.namaItem,
-          qty: item.jumlah,
-          satuan: item.satuan,
-          batchNo: item.batchNo
-        }));
+        const stockOutItems = formData.items
+          .filter(item => item.itemKode && item.jumlah > 0)
+          .map(item => ({
+            kode: item.itemKode,
+            nama: item.namaItem,
+            qty: item.jumlah,
+            satuan: item.satuan,
+            batchNo: item.batchNo
+          }));
 
-      if (stockOutItems.length > 0) {
-        const newStockOut = {
-          id: `SO-${Date.now()}`,
-          noStockOut: `SO-AUTO-${formData.noSurat.replace(/\//g, '-')}`,
-          projectId: formData.projectId,
-          projectName: effectiveProjectList.find((p) => p.id === formData.projectId)?.namaProject || undefined,
-          penerima: formData.sopir || 'Logistics Officer',
-          tanggal: formData.tanggal,
-          type: 'Project Issue' as const,
-          status: 'Posted' as const,
-          createdBy: 'Logistics Command Center',
-          items: stockOutItems,
-          notes: `Auto-generated from SJ ${formData.noSurat}`
-        };
-        // Centralized stock logic is handled inside createStockOut (inventory + movement + API sync)
-        createStockOut(newStockOut as any);
-      }
+        if (stockOutItems.length > 0) {
+          const newStockOut = {
+            id: `SO-${Date.now()}`,
+            noStockOut: `SO-AUTO-${formData.noSurat.replace(/\//g, '-')}`,
+            projectId: formData.projectId,
+            projectName: effectiveProjectList.find((p) => p.id === formData.projectId)?.namaProject || undefined,
+            penerima: formData.sopir || 'Logistics Officer',
+            tanggal: formData.tanggal,
+            type: 'Project Issue' as const,
+            status: 'Posted' as const,
+            createdBy: currentUser?.fullName || currentUser?.username || 'System',
+            items: stockOutItems,
+            notes: `Auto-generated from SJ ${formData.noSurat}`
+          };
+          try {
+            await createStockOut(newStockOut as any);
+            stockOutSynced = true;
+          } catch {
+            stockOutSynced = false;
+          }
+        }
       }
       
       addAuditLog({
@@ -233,8 +243,10 @@ export default function SuratJalanPage() {
         details: `Membuat Surat Jalan ${formData.noSurat} untuk ${formData.tujuan}`,
         status: "Success"
       });
-      toast.success('Surat Jalan Berhasil Dibuat', {
-        description: `No: ${formData.noSurat} tujuan ${formData.tujuan}`
+      toast.success(stockOutSynced ? 'Surat Jalan Berhasil Dibuat' : 'Surat Jalan dibuat, tetapi auto Stock Out gagal', {
+        description: stockOutSynced
+          ? `No: ${formData.noSurat} tujuan ${formData.tujuan}`
+          : `No: ${formData.noSurat} tersimpan. Cek stok keluar otomatis.`
       });
       setShowCreateModal(false);
       setIsSubmitting(false);
@@ -348,6 +360,7 @@ export default function SuratJalanPage() {
   const getStatusColor = (status?: string) => {
     switch(status) {
       case 'Delivered': return 'bg-emerald-50 text-emerald-600 border-emerald-100';
+      case 'On Delivery':
       case 'In Transit': return 'bg-blue-50 text-blue-600 border-blue-100';
       case 'Returned': return 'bg-rose-50 text-rose-600 border-rose-100';
       default: return 'bg-slate-50 text-slate-400 border-slate-100';

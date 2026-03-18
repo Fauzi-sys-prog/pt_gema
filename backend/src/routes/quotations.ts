@@ -37,6 +37,32 @@ function buildAuditMetadata(req: AuthRequest, extra?: Record<string, unknown>): 
   };
 }
 
+async function resolveActorSnapshot(userId?: string | null, role?: Role | null) {
+  if (!userId) {
+    return {
+      actorName: role || "SYSTEM",
+      actorRole: role || null,
+      actorUserId: null,
+    };
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      id: true,
+      username: true,
+      name: true,
+      role: true,
+    },
+  });
+
+  return {
+    actorName: user?.name || user?.username || userId,
+    actorRole: user?.role || role || null,
+    actorUserId: user?.id || userId,
+  };
+}
+
 function toPayloadBytes(payload: unknown): number {
   try {
     return Buffer.byteLength(JSON.stringify(payload), "utf8");
@@ -1047,6 +1073,7 @@ quotationsRouter.post("/quotations", authenticate, async (req: AuthRequest, res:
   }
 
   const item = normalizeQuotationPayload(parsed.data.id, parsed.data);
+  const actor = await resolveActorSnapshot(req.user?.id, req.user?.role);
   const lockInfo = await getApprovedProjectLockForQuotation(item.id);
   if (lockInfo) {
     return res.status(400).json({
@@ -1067,21 +1094,31 @@ quotationsRouter.post("/quotations", authenticate, async (req: AuthRequest, res:
   if (nextStatus === "Review") {
     if (!readString(item, "sentAt")) item.sentAt = new Date().toISOString();
     item.spvApprovedAt = new Date().toISOString();
-    item.spvApprovedBy = req.user?.id || "SPV";
+    item.spvApprovedBy = actor.actorName;
+    item.spvApprovedByUserId = actor.actorUserId;
+    item.spvApprovedByRole = actor.actorRole;
     item.approvedAt = undefined;
     item.approvedBy = undefined;
+    item.approvedByUserId = undefined;
+    item.approvedByRole = undefined;
     item.rejectedAt = undefined;
     item.rejectedBy = undefined;
+    item.rejectedByUserId = undefined;
+    item.rejectedByRole = undefined;
   }
   if (nextStatus === "Approved") {
     if (!readString(item, "sentAt")) item.sentAt = new Date().toISOString();
     item.approvedAt = new Date().toISOString();
-    item.approvedBy = req.user?.id || "OWNER";
+    item.approvedBy = actor.actorName;
+    item.approvedByUserId = actor.actorUserId;
+    item.approvedByRole = actor.actorRole;
     item.noPenawaran = await generateFinalNoPenawaran(item.id, readString(item, "tanggal"));
   }
   if (nextStatus === "Rejected") {
     item.rejectedAt = new Date().toISOString();
-    item.rejectedBy = req.user?.id || "OWNER";
+    item.rejectedBy = actor.actorName;
+    item.rejectedByUserId = actor.actorUserId;
+    item.rejectedByRole = actor.actorRole;
   }
 
   if (toPayloadBytes(item) > MAX_PAYLOAD_BYTES) {
@@ -1183,6 +1220,7 @@ quotationsRouter.post("/quotations", authenticate, async (req: AuthRequest, res:
       fromStatus: null,
       toStatus: nextStatus,
       metadata: buildAuditMetadata(req, {
+        actorName: actor.actorName,
         noPenawaran: readString(savedPayload, "noPenawaran"),
         dataCollectionId: readString(savedPayload, "dataCollectionId"),
         sourceType: readString(savedPayload, "sourceType"),
@@ -1262,6 +1300,7 @@ quotationsRouter.patch("/quotations/:id", authenticate, async (req: AuthRequest,
     } else {
       existingPayload = hydrateQuotationPayload(existing);
     }
+    const actor = await resolveActorSnapshot(req.user?.id, req.user?.role);
     const previousStatus = normalizeWorkflowStatus(existingPayload.status);
 
     const merged: QuotationPayload = {
@@ -1284,21 +1323,31 @@ quotationsRouter.patch("/quotations/:id", authenticate, async (req: AuthRequest,
     if (nextStatus === "Review" && previousStatus !== "Review") {
       if (!readString(normalizedMerged, "sentAt")) normalizedMerged.sentAt = new Date().toISOString();
       normalizedMerged.spvApprovedAt = new Date().toISOString();
-      normalizedMerged.spvApprovedBy = req.user?.id || "SPV";
+      normalizedMerged.spvApprovedBy = actor.actorName;
+      normalizedMerged.spvApprovedByUserId = actor.actorUserId;
+      normalizedMerged.spvApprovedByRole = actor.actorRole;
       normalizedMerged.approvedAt = undefined;
       normalizedMerged.approvedBy = undefined;
+      normalizedMerged.approvedByUserId = undefined;
+      normalizedMerged.approvedByRole = undefined;
       normalizedMerged.rejectedAt = undefined;
       normalizedMerged.rejectedBy = undefined;
+      normalizedMerged.rejectedByUserId = undefined;
+      normalizedMerged.rejectedByRole = undefined;
     }
     if (nextStatus === "Approved" && previousStatus !== "Approved") {
       if (!readString(normalizedMerged, "sentAt")) normalizedMerged.sentAt = new Date().toISOString();
       normalizedMerged.approvedAt = new Date().toISOString();
-      normalizedMerged.approvedBy = req.user?.id || "OWNER";
+      normalizedMerged.approvedBy = actor.actorName;
+      normalizedMerged.approvedByUserId = actor.actorUserId;
+      normalizedMerged.approvedByRole = actor.actorRole;
       normalizedMerged.noPenawaran = await generateFinalNoPenawaran(id, readString(normalizedMerged, "tanggal"));
     }
     if (nextStatus === "Rejected" && previousStatus !== "Rejected") {
       normalizedMerged.rejectedAt = new Date().toISOString();
-      normalizedMerged.rejectedBy = req.user?.id || "OWNER";
+      normalizedMerged.rejectedBy = actor.actorName;
+      normalizedMerged.rejectedByUserId = actor.actorUserId;
+      normalizedMerged.rejectedByRole = actor.actorRole;
     }
 
     const parsed = quotationSchema.safeParse(normalizedMerged);
@@ -1427,6 +1476,7 @@ quotationsRouter.patch("/quotations/:id", authenticate, async (req: AuthRequest,
         fromStatus: previousStatus,
         toStatus: nextStatus,
         metadata: buildAuditMetadata(req, {
+          actorName: actor.actorName,
           noPenawaran: readString(savedPayload, "noPenawaran"),
           dataCollectionId: readString(savedPayload, "dataCollectionId"),
           sourceType: readString(savedPayload, "sourceType"),

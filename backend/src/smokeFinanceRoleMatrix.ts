@@ -1,4 +1,4 @@
-type RoleKey = "owner" | "finance" | "sales";
+type RoleKey = "owner" | "spv" | "finance" | "sales";
 
 type Session = {
   token: string;
@@ -14,13 +14,18 @@ type ApiResult = {
 const BASE_URL = process.env.SMOKE_BASE_URL || "http://localhost:3000";
 const tokenOverrides: Partial<Record<RoleKey, string>> = {
   owner: process.env.SMOKE_OWNER_TOKEN,
+  spv: process.env.SMOKE_SPV_TOKEN,
   finance: process.env.SMOKE_FINANCE_TOKEN,
   sales: process.env.SMOKE_SALES_TOKEN,
 };
 const credentials: Record<RoleKey, { username: string; password: string }> = {
   owner: {
-    username: process.env.SMOKE_OWNER_USERNAME || "owner",
+    username: process.env.SMOKE_OWNER_USERNAME || "syamsudin",
     password: process.env.SMOKE_OWNER_PASSWORD || "owner",
+  },
+  spv: {
+    username: process.env.SMOKE_SPV_USERNAME || "aji",
+    password: process.env.SMOKE_SPV_PASSWORD || "AjiBaru#2026Aman",
   },
   finance: {
     username: process.env.SMOKE_FINANCE_USERNAME || "ening",
@@ -92,6 +97,7 @@ async function run() {
   console.log(`Base URL: ${BASE_URL}`);
 
   const owner = await login("owner");
+  const spv = await login("spv");
   const finance = await login("finance");
   const sales = await login("sales");
 
@@ -160,11 +166,23 @@ async function run() {
     });
     assertStatus("FINANCE cannot approve quotation", financeApprove.status, 403);
 
+    const ownerApproveTooEarly = await api("POST", "/dashboard/finance-approval-action", {
+      token: owner.token,
+      body: { documentType: "QUOTATION", documentId: quoId, action: "APPROVE" },
+    });
+    assertStatus("OWNER cannot skip SPV quotation review", ownerApproveTooEarly.status, 400);
+
+    const spvApprove = await api("POST", "/dashboard/finance-approval-action", {
+      token: spv.token,
+      body: { documentType: "QUOTATION", documentId: quoId, action: "APPROVE" },
+    });
+    assertStatus("SPV approve quotation to review", spvApprove.status, 200);
+
     const ownerApprove = await api("POST", "/dashboard/finance-approval-action", {
       token: owner.token,
       body: { documentType: "QUOTATION", documentId: quoId, action: "APPROVE" },
     });
-    assertStatus("OWNER approve quotation", ownerApprove.status, 200);
+    assertStatus("OWNER final approve quotation", ownerApprove.status, 200);
   } finally {
     await api("DELETE", `/quotations/${quoId}`, { token: owner.token });
   }

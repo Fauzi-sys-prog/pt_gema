@@ -15,6 +15,7 @@
     "seed:coverage-pack": "tsx src/seedCoveragePack.ts",
     "seed:all": "npm run seed:accounts && npm run seed:data-collections && npm run seed:demo-flow && npm run seed:platform-data && npm run backfill:quotation-numbers",
     "backfill:quotation-numbers": "tsx src/backfillQuotationNumbers.ts",
+    "backfill:approval-actors": "tsx src/backfillApprovalActors.ts",
     "backfill:dedicated": "tsx src/backfillDedicatedResources.ts",
     "backfill:spk-wo-links": "tsx src/backfillSpkWoLinks.ts",
     "backfill:inventory-relational": "node scripts/backfillInventoryRelational.cjs",

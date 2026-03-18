@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'; import { Truck, ArrowUpRight, ShoppingCart, Boxes, ArrowRight, Zap, AlertCircle, Building2 } from 'lucide-react'; import PurchaseOrderPage from './PurchaseOrderPage'; import ReceivingPage from './ReceivingPage'; import StockOutPage from '../inventory/StockOutPage'; import InventoryCenter from '../inventory/InventoryCenter'; import ProcurementCommandCenter from './ProcurementCommandCenter'; import VendorAnalysisPage from './VendorAnalysisPage'; import { useApp } from '../../contexts/AppContext';
 import api from '../../services/api';
+import { normalizeEntityRows } from '../../utils/normalizeEntityRows';
 
 type TabType = 'replenishment' | 'procurement' | 'inbound' | 'outbound' | 'inventory' | 'vendors';
 
@@ -20,15 +21,7 @@ export default function ProcurementHubPage() {
         api.get('/inventory/items'),
       ]);
       setServerPoList(Array.isArray(poRes.data) ? poRes.data : []);
-      const stockRows = Array.isArray(stockRes.data) ? stockRes.data : [];
-      const stockItems = stockRows.map((row: any) => {
-        const payload = row?.payload ?? {};
-        if (payload && typeof payload === 'object' && !Array.isArray(payload) && !payload.id) {
-          return { ...payload, id: row.entityId };
-        }
-        return payload;
-      });
-      setServerStockItemList(stockItems);
+      setServerStockItemList(normalizeEntityRows<any>(stockRes.data));
     } catch {
       setServerPoList(null);
       setServerStockItemList(null);

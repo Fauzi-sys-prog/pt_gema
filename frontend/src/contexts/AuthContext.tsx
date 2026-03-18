@@ -3,6 +3,8 @@ import api from "../services/api"; // axios instance kamu (yang auto attach toke
 
 import type { User } from "./AppContext"; // atau pindahin type User ke types biar clean
 
+const AUTH_STATE_CHANGE_EVENT = "app-auth-state-changed";
+
 interface AuthContextType {
   currentUser: User | null;
   isAuthenticated: boolean;
@@ -64,6 +66,11 @@ const persistUser = (user: User | null) => {
   safeSetStorageItem("user", JSON.stringify(user));
 };
 
+const notifyAuthStateChanged = () => {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new CustomEvent(AUTH_STATE_CHANGE_EVENT));
+};
+
 const readPersistedUser = (): User | null => {
   try {
     if (!safeGetStorageItem("token")) {
@@ -102,6 +109,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     safeRemoveStorageItem("token");
     persistUser(null);
     safeRemoveSessionStorageItem("auth401_notified");
+    notifyAuthStateChanged();
     if (isMountedRef.current) {
       setCurrentUser(null);
     }
@@ -128,6 +136,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const normalizedUser = normalizeUser(res.data);
         setCurrentUser(normalizedUser);
         persistUser(normalizedUser);
+        notifyAuthStateChanged();
       })
       .catch(() => {
         if (authRequestVersionRef.current !== requestVersion || !isMountedRef.current) return;
@@ -173,6 +182,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const normalizedUser = normalizeUser(res.data);
           setCurrentUser(normalizedUser);
           persistUser(normalizedUser);
+          notifyAuthStateChanged();
         })
         .catch(() => {
           if (authRequestVersionRef.current !== requestVersion || !isMountedRef.current) return;
@@ -208,6 +218,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setCurrentUser(normalizedUser);
       }
       persistUser(normalizedUser);
+      notifyAuthStateChanged();
       if (isMountedRef.current) {
         setLoading(false);
       }

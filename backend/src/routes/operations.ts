@@ -85,6 +85,77 @@ function asNumber(value: unknown, fallback = 0): number {
   return Number.isFinite(num) ? num : fallback;
 }
 
+function toDateOnly(value: unknown): string {
+  return asString(value) || new Date().toISOString().slice(0, 10);
+}
+
+function productionTrackerIdFromWorkOrderId(workOrderId: string): string {
+  return `TRK-${workOrderId}`;
+}
+
+function normalizeTrackerStatusFromWorkOrderPayload(payload: Record<string, unknown>): string {
+  const status = (asString(payload.status) || "Draft").toUpperCase().replace(/[\s-]+/g, "_");
+  if (status === "COMPLETED" || status === "DONE") return "Completed";
+  if (status === "IN_PROGRESS" || status === "QC" || status === "FOLLOW_UP") return "In Progress";
+  const deadline = asString(payload.deadline);
+  const today = new Date().toISOString().slice(0, 10);
+  if (deadline && deadline < today) {
+    return "Delayed";
+  }
+  return "Planned";
+}
+
+function toLegacyWorkOrderPayloadFromRelational(row: {
+  id: string;
+  number: string;
+  projectId: string;
+  projectName: string;
+  itemToProduce: string;
+  targetQty: number;
+  completedQty: number;
+  status: string;
+  priority: string;
+  leadTechnician: string;
+  machineId: string | null;
+  startDate: Date | null;
+  endDate: Date | null;
+  bomItems: Array<{
+    id: string;
+    itemCode: string | null;
+    itemName: string;
+    unit: string;
+    qty: number;
+    completedQty: number;
+  }>;
+}): Record<string, unknown> {
+  return {
+    id: row.id,
+    woNumber: row.number,
+    number: row.number,
+    projectId: row.projectId,
+    projectName: row.projectName,
+    itemToProduce: row.itemToProduce,
+    targetQty: row.targetQty,
+    completedQty: row.completedQty,
+    status: row.status,
+    priority: row.priority,
+    leadTechnician: row.leadTechnician,
+    machineId: row.machineId || undefined,
+    startDate: row.startDate ? row.startDate.toISOString().slice(0, 10) : undefined,
+    endDate: row.endDate ? row.endDate.toISOString().slice(0, 10) : undefined,
+    bom: row.bomItems.map((item) => ({
+      id: item.id,
+      kode: item.itemCode || undefined,
+      itemKode: item.itemCode || undefined,
+      nama: item.itemName,
+      materialName: item.itemName,
+      qty: item.qty,
+      completedQty: item.completedQty,
+      unit: item.unit,
+    })),
+  };
+}
+
 function sanitizeUpdateFields(updates: Record<string, unknown>): Record<string, unknown> {
   const blocked = new Set(["id", "createdAt", "createdBy"]);
   return Object.fromEntries(Object.entries(updates).filter(([key]) => !blocked.has(key)));
@@ -359,57 +430,147 @@ operationsRouter.post("/production/submit-lhp", authenticate, async (req: AuthRe
       const selectedItem = asString(reportInput.selectedItem);
       const isAutoDeduct = !selectedItem || selectedItem.toLowerCase() === "auto";
 
-      let woRow = woIdInput
+      let legacyWo = woIdInput
         ? await tx.workOrderRecord.findUnique({
             where: { id: woIdInput },
             select: { id: true, projectId: true, payload: true },
           })
         : null;
+      let relationalWo = woIdInput
+        ? await tx.productionWorkOrder.findUnique({
+            where: { id: woIdInput },
+            select: {
+              id: true,
+              number: true,
+              projectId: true,
+              projectName: true,
+              itemToProduce: true,
+              targetQty: true,
+              completedQty: true,
+              status: true,
+              priority: true,
+              leadTechnician: true,
+              machineId: true,
+              startDate: true,
+              endDate: true,
+              bomItems: {
+                select: {
+                  id: true,
+                  itemCode: true,
+                  itemName: true,
+                  unit: true,
+                  qty: true,
+                  completedQty: true,
+                },
+              },
+            },
+          })
+        : null;
 
-      if (!woRow && woNumberInput) {
-        const woRows = await tx.workOrderRecord.findMany({
-          select: { id: true, projectId: true, payload: true },
-        });
-        woRow =
-          woRows.find((row) => asString(asObject(row.payload).woNumber) === woNumberInput) ??
-          null;
+      if ((!legacyWo || !relationalWo) && woNumberInput) {
+        if (!legacyWo) {
+          const woRows = await tx.workOrderRecord.findMany({
+            select: { id: true, projectId: true, payload: true },
+          });
+          legacyWo =
+            woRows.find((row) => asString(asObject(row.payload).woNumber) === woNumberInput) ??
+            null;
+        }
+        if (!relationalWo) {
+          relationalWo = await tx.productionWorkOrder.findUnique({
+            where: { number: woNumberInput },
+            select: {
+              id: true,
+              number: true,
+              projectId: true,
+              projectName: true,
+              itemToProduce: true,
+              targetQty: true,
+              completedQty: true,
+              status: true,
+              priority: true,
+              leadTechnician: true,
+              machineId: true,
+              startDate: true,
+              endDate: true,
+              bomItems: {
+                select: {
+                  id: true,
+                  itemCode: true,
+                  itemName: true,
+                  unit: true,
+                  qty: true,
+                  completedQty: true,
+                },
+              },
+            },
+          });
+        }
       }
 
-      if (!woRow) {
+      if (!legacyWo && !relationalWo) {
         throw new Error("Work Order tidak ditemukan untuk submit LHP");
       }
 
-      const woPayload = asObject(woRow.payload);
-      const woNumber = asString(woPayload.woNumber) || woRow.id;
-      let woProjectName = asString(woPayload.projectName);
-      if (!woProjectName && woRow.projectId) {
+      const woPayload =
+        legacyWo?.payload
+          ? asObject(legacyWo.payload)
+          : relationalWo
+            ? toLegacyWorkOrderPayloadFromRelational(relationalWo)
+            : {};
+      const woNumber =
+        asString(woPayload.woNumber) ||
+        relationalWo?.number ||
+        legacyWo?.id ||
+        relationalWo?.id ||
+        "";
+      const projectId =
+        relationalWo?.projectId || legacyWo?.projectId || asString(woPayload.projectId);
+      let woProjectName =
+        relationalWo?.projectName || asString(woPayload.projectName);
+      if (!woProjectName && projectId) {
         const projectRow = await tx.projectRecord.findUnique({
-          where: { id: woRow.projectId },
+          where: { id: projectId },
           select: { payload: true },
         });
         const projectPayload = asObject(projectRow?.payload);
         woProjectName = asString(projectPayload.namaProject) || asString(projectPayload.projectName);
       }
+      if (!projectId) {
+        throw new Error(`WO ${woNumber || woIdInput || "-"} belum terhubung ke project`);
+      }
+
       const outputQty = asNumber(reportInput.outputQty, 0);
       if (outputQty <= 0) {
         throw new Error("outputQty harus lebih dari 0");
       }
 
-      const targetQty = asNumber(woPayload.targetQty, 0);
+      const targetQty = relationalWo?.targetQty || asNumber(woPayload.targetQty, 0);
       if (targetQty <= 0) {
         throw new Error(`WO ${woNumber}: targetQty harus lebih dari 0`);
       }
       const denominator = targetQty;
 
-      const bomRaw = Array.isArray(woPayload.bom)
-        ? (woPayload.bom as Array<Record<string, unknown>>)
-        : [];
+      const bomRaw = relationalWo
+        ? relationalWo.bomItems.map((item) => ({
+            id: item.id,
+            kode: item.itemCode || undefined,
+            itemKode: item.itemCode || undefined,
+            nama: item.itemName,
+            materialName: item.itemName,
+            qty: item.qty,
+            completedQty: item.completedQty,
+            unit: item.unit,
+          }))
+        : Array.isArray(woPayload.bom)
+          ? (woPayload.bom as Array<Record<string, unknown>>)
+          : [];
       const bomCandidates = isAutoDeduct
         ? bomRaw
         : bomRaw.filter((item) => {
-            const itemName =
-              asString(item.nama) || asString(item.materialName) || "";
-            return itemName === selectedItem;
+            const itemName = asString(item.nama) || asString(item.materialName) || "";
+            const itemCode = asString(item.kode) || asString(item.itemKode) || "";
+            return itemName === selectedItem || itemCode === selectedItem;
           });
 
       const stockOutItems = bomCandidates
@@ -440,82 +601,40 @@ operationsRouter.post("/production/submit-lhp", authenticate, async (req: AuthRe
       let createdStockOutPayload: Record<string, unknown> | null = null;
 
       if (stockOutItems.length > 0) {
-        const stockRows = await tx.stockItemRecord.findMany({
-          select: { id: true, payload: true },
-        });
-        const stockByCode = new Map<string, { id: string; payload: Record<string, unknown> }>();
+        const [stockRows, inventoryRows] = await Promise.all([
+          tx.stockItemRecord.findMany({
+            select: { id: true, payload: true },
+          }),
+          tx.inventoryItem.findMany({
+            select: {
+              id: true,
+              code: true,
+              name: true,
+              unit: true,
+              location: true,
+              onHandQty: true,
+              metadata: true,
+            },
+          }),
+        ]);
+        const legacyByCode = new Map<string, { id: string; payload: Record<string, unknown> }>();
         for (const row of stockRows) {
           const payload = asObject(row.payload);
           const kode = asString(payload.kode);
-          if (kode) stockByCode.set(kode, { id: row.id, payload });
+          if (kode) legacyByCode.set(kode, { id: row.id, payload });
         }
-
-        for (const usage of stockOutItems) {
-          const stock = stockByCode.get(usage.kode);
-          if (!stock) {
-            throw new Error(`Item ${usage.kode} tidak ditemukan di master stok`);
-          }
-          const before = asNumber(stock.payload.stok, 0);
-          if (before < usage.qty) {
-            throw new Error(
-              `Stok ${usage.nama} (${usage.kode}) kurang. Tersedia ${before}, butuh ${usage.qty}`
-            );
-          }
-        }
-
-        for (const usage of stockOutItems) {
-          const stock = stockByCode.get(usage.kode)!;
-          const before = asNumber(stock.payload.stok, 0);
-          const after = before - usage.qty;
-          const nextStockPayload: Record<string, unknown> = {
-            ...stock.payload,
-            stok: after,
-            lastUpdate: nowIso,
-          };
-          await tx.stockItemRecord.update({
-            where: { id: stock.id },
-            data: { payload: nextStockPayload as Prisma.InputJsonValue },
-          });
-          updatedStockItemPayloads.push(nextStockPayload);
-
-          const movementId = `${movementPrefix}-${createdStockMovementPayloads.length + 1}`;
-          const movementPayload: Record<string, unknown> = {
-            id: movementId,
-            tanggal: asString(reportInput.tanggal) || nowIso.split("T")[0],
-            type: "OUT",
-            refNo: stockOutId,
-            refType: "Stock Out",
-            itemKode: usage.kode,
-            itemNama: usage.nama,
-            qty: usage.qty,
-            unit: usage.satuan,
-            lokasi: asString(stock.payload.lokasi) || "Main Warehouse",
-            stockBefore: before,
-            stockAfter: after,
-            createdBy: "Production System",
-            productionReportId: asString(reportInput.id),
-            projectId: woRow.projectId || null,
-            projectName: woProjectName || undefined,
-          };
-          await tx.stockMovementRecord.create({
-            data: {
-              id: movementId,
-              projectId: woRow.projectId || null,
-              payload: movementPayload as Prisma.InputJsonValue,
-            },
-          });
-          createdStockMovementPayloads.push(movementPayload);
-        }
+        const inventoryByCode = new Map(inventoryRows.map((row) => [row.code, row] as const));
 
         createdStockOutPayload = {
           id: stockOutId,
           noStockOut: stockOutId,
           noWorkOrder: woNumber,
+          workOrderId: relationalWo?.id || legacyWo?.id || undefined,
           productionReportId: asString(reportInput.id),
-          projectId: woRow.projectId || null,
+          projectId,
           projectName: woProjectName || undefined,
           penerima: asString(reportInput.workerName) || "Production",
-          tanggal: asString(reportInput.tanggal) || nowIso.split("T")[0],
+          tanggal: toDateOnly(reportInput.tanggal),
           type: "Project Issue",
           status: "Posted",
           createdBy: "Production System",
@@ -525,17 +644,176 @@ operationsRouter.post("/production/submit-lhp", authenticate, async (req: AuthRe
         await tx.stockOutRecord.create({
           data: {
             id: stockOutId,
-            projectId: woRow.projectId || null,
-            workOrderId: woRow.id,
+            projectId,
+            workOrderId: legacyWo?.id || null,
             payload: createdStockOutPayload as Prisma.InputJsonValue,
           },
         });
+        await tx.inventoryStockOut.create({
+          data: {
+            id: stockOutId,
+            number: stockOutId,
+            tanggal: new Date(toDateOnly(reportInput.tanggal)),
+            type: "Project Issue",
+            status: "Posted",
+            recipientName: asString(reportInput.workerName) || "Production",
+            notes: `Auto deduct dari LHP ${asString(reportInput.id) || "-"}`,
+            createdByName: "Production System",
+            projectId,
+            workOrderId: legacyWo?.id || undefined,
+            productionReportId: asString(reportInput.id) || undefined,
+            legacyPayload: createdStockOutPayload as Prisma.InputJsonValue,
+            items: {
+              create: stockOutItems.map((usage, index) => ({
+                id: `${stockOutId}-ITEM-${String(index + 1).padStart(3, "0")}`,
+                inventoryItemId: inventoryByCode.get(usage.kode)?.id || undefined,
+                itemCode: usage.kode,
+                itemName: usage.nama,
+                qty: usage.qty,
+                unit: usage.satuan,
+              })),
+            },
+          },
+        });
+
+        for (const usage of stockOutItems) {
+          const inventory = inventoryByCode.get(usage.kode);
+          const legacy = legacyByCode.get(usage.kode);
+          const available =
+            inventory?.onHandQty ??
+            (legacy ? asNumber(legacy.payload.stok, 0) : null);
+          if (available == null) {
+            throw new Error(`Item ${usage.kode} tidak ditemukan di master stok`);
+          }
+          if (available < usage.qty) {
+            throw new Error(
+              `Stok ${usage.nama} (${usage.kode}) kurang. Tersedia ${available}, butuh ${usage.qty}`
+            );
+          }
+        }
+
+        for (const usage of stockOutItems) {
+          const inventory = inventoryByCode.get(usage.kode) || null;
+          const legacy = legacyByCode.get(usage.kode) || null;
+          const before =
+            inventory?.onHandQty ??
+            (legacy ? asNumber(legacy.payload.stok, 0) : 0);
+          const after = before - usage.qty;
+          if (legacy) {
+            const nextStockPayload: Record<string, unknown> = {
+              ...legacy.payload,
+              stok: after,
+              lastUpdate: nowIso,
+            };
+            await tx.stockItemRecord.update({
+              where: { id: legacy.id },
+              data: { payload: nextStockPayload as Prisma.InputJsonValue },
+            });
+          }
+          if (inventory) {
+            const metadata = asObject(inventory.metadata);
+            await tx.inventoryItem.update({
+              where: { id: inventory.id },
+              data: {
+                onHandQty: after,
+                lastStockUpdateAt: new Date(nowIso),
+                metadata: {
+                  ...metadata,
+                  id: asString(metadata.id) || inventory.id,
+                  kode: asString(metadata.kode) || inventory.code,
+                  nama: asString(metadata.nama) || inventory.name,
+                  satuan: asString(metadata.satuan) || inventory.unit,
+                  lokasi: asString(metadata.lokasi) || inventory.location,
+                  stok: after,
+                  lastUpdate: nowIso,
+                } as Prisma.InputJsonValue,
+              },
+            });
+          }
+          updatedStockItemPayloads.push({
+            ...(inventory ? asObject(inventory.metadata) : legacy?.payload || {}),
+            id: inventory?.id || asString(legacy?.payload?.id) || legacy?.id || usage.kode,
+            kode: usage.kode,
+            nama: usage.nama,
+            satuan:
+              (inventory ? asString(asObject(inventory.metadata).satuan) : null) ||
+              inventory?.unit ||
+              asString(legacy?.payload?.satuan) ||
+              usage.satuan,
+            lokasi:
+              (inventory ? asString(asObject(inventory.metadata).lokasi) : null) ||
+              inventory?.location ||
+              asString(legacy?.payload?.lokasi) ||
+              "Main Warehouse",
+            stok: after,
+            lastUpdate: nowIso,
+          });
+
+          const movementId = `${movementPrefix}-${createdStockMovementPayloads.length + 1}`;
+          const movementPayload: Record<string, unknown> = {
+            id: movementId,
+            tanggal: toDateOnly(reportInput.tanggal),
+            type: "OUT",
+            refNo: stockOutId,
+            refType: "Stock Out",
+            itemKode: usage.kode,
+            itemNama: usage.nama,
+            qty: usage.qty,
+            unit: usage.satuan,
+            lokasi:
+              (inventory ? asString(asObject(inventory.metadata).lokasi) : null) ||
+              inventory?.location ||
+              asString(legacy?.payload?.lokasi) ||
+              "Main Warehouse",
+            stockBefore: before,
+            stockAfter: after,
+            createdBy: "Production System",
+            productionReportId: asString(reportInput.id),
+            projectId,
+            projectName: woProjectName || undefined,
+          };
+          await tx.stockMovementRecord.create({
+            data: {
+              id: movementId,
+              projectId,
+              payload: movementPayload as Prisma.InputJsonValue,
+            },
+          });
+          await tx.inventoryStockMovement.create({
+            data: {
+              id: movementId,
+              tanggal: new Date(toDateOnly(reportInput.tanggal)),
+              direction: "OUT",
+              referenceNo: stockOutId,
+              referenceType: "Stock Out",
+              inventoryItemId: inventory?.id || undefined,
+              itemCode: usage.kode,
+              itemName: usage.nama,
+              qty: usage.qty,
+              unit: usage.satuan,
+              location:
+                (inventory ? asString(asObject(inventory.metadata).lokasi) : null) ||
+                inventory?.location ||
+                asString(legacy?.payload?.lokasi) ||
+                "Main Warehouse",
+              stockBefore: before,
+              stockAfter: after,
+              createdByName: "Production System",
+              projectId,
+              stockOutId,
+              legacyPayload: movementPayload as Prisma.InputJsonValue,
+            },
+          });
+          createdStockMovementPayloads.push(movementPayload);
+        }
       }
 
-      const nextCompleted = asNumber(woPayload.completedQty, 0) + outputQty;
+      const nextCompleted =
+        (relationalWo?.completedQty ?? asNumber(woPayload.completedQty, 0)) + outputQty;
       const nextBom = bomRaw.map((item) => {
         const itemName = asString(item.nama) || asString(item.materialName) || "";
-        if (!isAutoDeduct && itemName !== selectedItem) return item;
+        const itemCode = asString(item.kode) || asString(item.itemKode) || "";
+        if (!isAutoDeduct && itemName !== selectedItem && itemCode !== selectedItem) return item;
         const consumed = asNumber(item.qty, 0) * (outputQty / denominator);
         if (!Number.isFinite(consumed) || consumed <= 0) return item;
         return {
@@ -549,31 +827,133 @@ operationsRouter.post("/production/submit-lhp", authenticate, async (req: AuthRe
         status: nextCompleted >= targetQty ? "Completed" : "In Progress",
         bom: nextBom,
       };
-      await tx.workOrderRecord.update({
-        where: { id: woRow.id },
-        data: { payload: nextWorkOrderPayload as Prisma.InputJsonValue },
-      });
+      if (legacyWo) {
+        await tx.workOrderRecord.update({
+          where: { id: legacyWo.id },
+          data: { payload: nextWorkOrderPayload as Prisma.InputJsonValue },
+        });
+      }
+      if (relationalWo) {
+        await tx.productionWorkOrder.update({
+          where: { id: relationalWo.id },
+          data: {
+            completedQty: nextCompleted,
+            status: nextCompleted >= targetQty ? "Completed" : "In Progress",
+            bomItems: {
+              deleteMany: {},
+              create: nextBom.map((item, index) => ({
+                id:
+                  asString(item.id) ||
+                  `${relationalWo.id}-BOM-${String(index + 1).padStart(3, "0")}`,
+                itemCode: asString(item.kode) || asString(item.itemKode) || undefined,
+                itemName:
+                  asString(item.nama) ||
+                  asString(item.materialName) ||
+                  `Item ${index + 1}`,
+                unit: asString(item.unit) || "Unit",
+                qty: asNumber(item.qty, 0),
+                completedQty: asNumber(item.completedQty, 0),
+                needsProcurement: Boolean(asObject(item).needsProcurement),
+                stockAvailable:
+                  asObject(item).stockAvailable == null
+                    ? undefined
+                    : asNumber(asObject(item).stockAvailable, 0),
+              })),
+            },
+          },
+        });
+
+        await tx.productionTrackerEntry.upsert({
+          where: { id: productionTrackerIdFromWorkOrderId(relationalWo.id) },
+          create: {
+            id: productionTrackerIdFromWorkOrderId(relationalWo.id),
+            projectId,
+            workOrderId: relationalWo.id,
+            customer: woProjectName || undefined,
+            itemType: asString(nextWorkOrderPayload.itemToProduce) || "",
+            qty: asNumber(nextWorkOrderPayload.targetQty, 0),
+            startDate: asString(nextWorkOrderPayload.startDate)
+              ? new Date(String(nextWorkOrderPayload.startDate))
+              : undefined,
+            finishDate: asString(nextWorkOrderPayload.endDate || nextWorkOrderPayload.deadline)
+              ? new Date(String(nextWorkOrderPayload.endDate || nextWorkOrderPayload.deadline))
+              : undefined,
+            status: normalizeTrackerStatusFromWorkOrderPayload(nextWorkOrderPayload),
+            machineId: relationalWo.machineId || undefined,
+            workflowStatus: asString(nextWorkOrderPayload.workflowStatus) || undefined,
+          },
+          update: {
+            projectId,
+            workOrderId: relationalWo.id,
+            customer: woProjectName || null,
+            itemType: asString(nextWorkOrderPayload.itemToProduce) || "",
+            qty: asNumber(nextWorkOrderPayload.targetQty, 0),
+            startDate: asString(nextWorkOrderPayload.startDate)
+              ? new Date(String(nextWorkOrderPayload.startDate))
+              : null,
+            finishDate: asString(nextWorkOrderPayload.endDate || nextWorkOrderPayload.deadline)
+              ? new Date(String(nextWorkOrderPayload.endDate || nextWorkOrderPayload.deadline))
+              : null,
+            status: normalizeTrackerStatusFromWorkOrderPayload(nextWorkOrderPayload),
+            machineId: relationalWo.machineId || null,
+            workflowStatus: asString(nextWorkOrderPayload.workflowStatus) || null,
+          },
+        });
+      }
 
       const reportId = asString(reportInput.id) || `lhp-${Date.now()}`;
       const reportPayload: Record<string, unknown> = {
         ...reportInput,
         id: reportId,
-        woId: woRow.id,
+        projectId,
+        projectName: woProjectName || undefined,
+        tanggal: toDateOnly(reportInput.tanggal),
+        woId: relationalWo?.id || legacyWo?.id,
+        workOrderId: relationalWo?.id || legacyWo?.id,
         woNumber,
+        notes: asString(reportInput.notes) || asString(reportInput.remarks) || undefined,
+        remarks: asString(reportInput.remarks) || asString(reportInput.notes) || undefined,
       };
-      const exists = await tx.productionReportRecord.findUnique({
-        where: { id: reportId },
-        select: { id: true },
-      });
-      if (exists) {
+      const [legacyReport, relationalReport] = await Promise.all([
+        tx.productionReportRecord.findUnique({
+          where: { id: reportId },
+          select: { id: true },
+        }),
+        tx.productionExecutionReport.findUnique({
+          where: { id: reportId },
+          select: { id: true },
+        }),
+      ]);
+      if (legacyReport || relationalReport) {
         throw new Error(`Production report '${reportId}' sudah ada`);
       }
       await tx.productionReportRecord.create({
         data: {
           id: reportId,
-          projectId: woRow.projectId || null,
-          workOrderId: woRow.id,
+          projectId,
+          workOrderId: legacyWo?.id || null,
           payload: reportPayload as Prisma.InputJsonValue,
+        },
+      });
+      await tx.productionExecutionReport.create({
+        data: {
+          id: reportId,
+          projectId,
+          workOrderId: relationalWo?.id || undefined,
+          photoAssetId: asString(reportInput.photoAssetId) || undefined,
+          tanggal: new Date(toDateOnly(reportInput.tanggal)),
+          shift: asString(reportInput.shift) || undefined,
+          outputQty,
+          rejectQty: asNumber(reportInput.rejectQty, 0),
+          notes: asString(reportInput.notes) || asString(reportInput.remarks) || undefined,
+          workerName: asString(reportInput.workerName) || undefined,
+          activity: asString(reportInput.activity) || undefined,
+          machineNo: asString(reportInput.machineNo) || undefined,
+          startTime: asString(reportInput.startTime) || undefined,
+          endTime: asString(reportInput.endTime) || undefined,
+          unit: asString(reportInput.unit) || undefined,
+          photoUrl: asString(reportInput.photoUrl) || undefined,
+          workflowStatus: "SUBMITTED",
         },
       });
 

@@ -2,9 +2,10 @@ import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { useNavigate, Link } from "react-router-dom";
 import { Wrench, ClipboardList, Play, CheckCircle2, Clock, AlertCircle, Plus, ArrowRight, MoreHorizontal, Settings, Users, Box, Check, X, ArrowLeft, AlertTriangle, Package, Trash2, Calendar, Search, ChevronDown, ChevronUp, Layers, BookOpen } from 'lucide-react';
 import { useApp } from '../../contexts/AppContext';
-import type { WorkOrder, StockItem } from '../../contexts/AppContext';
+import type { WorkOrder, StockItem, Project } from '../../contexts/AppContext';
 import { toast } from 'sonner@2.0.3';
 import api from '../../services/api';
+import { normalizeEntityRows } from '../../utils/normalizeEntityRows';
 
 type ProductionSummaryResponse = {
   workOrders?: {
@@ -32,6 +33,7 @@ export default function ProductionDashboard() {
   const [showBOM, setShowBOM] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showAddItemModal, setShowAddItemModal] = useState(false);
+  const [isCreatingWO, setIsCreatingWO] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [expandedWO, setExpandedWO] = useState<string | null>(null);
   const [productionSummary, setProductionSummary] = useState<ProductionSummaryResponse | null>(null);
@@ -40,6 +42,8 @@ export default function ProductionDashboard() {
   const [serverWorkOrders, setServerWorkOrders] = useState<WorkOrder[]>([]);
   const [serverStockItems, setServerStockItems] = useState<StockItem[]>([]);
   const [serverAssets, setServerAssets] = useState<any[]>([]);
+  const [serverProjects, setServerProjects] = useState<Project[]>([]);
+  const creatingWORef = useRef(false);
   const dataLoadInFlightRef = useRef(false);
   const summaryLoadInFlightRef = useRef(false);
   const PRODUCTION_POLL_INTERVAL_MS = 15000;
@@ -64,10 +68,16 @@ export default function ProductionDashboard() {
     () => (serverAssets.length > 0 ? serverAssets : assetList),
     [serverAssets, assetList]
   );
+  const effectiveProjects = useMemo(
+    () => serverProjects.filter((project) => String(project?.id || '').trim() && String(project?.namaProject || '').trim()),
+    [serverProjects]
+  );
 
   // Form State for new WO
   const [formData, setFormData] = useState({
     woNumber: generateWONumber(),
+    projectId: '',
+    projectName: '',
     itemToProduce: '',
     targetQty: 1,
     priority: 'Normal' as WorkOrder['priority'],
@@ -167,10 +177,11 @@ export default function ProductionDashboard() {
         });
       };
 
-      const [woRes, stockRes, assetRes] = await Promise.all([
+      const [woRes, stockRes, assetRes, projectRes] = await Promise.all([
         api.get('/work-orders'),
         api.get('/inventory/items'),
         api.get('/assets'),
+        api.get('/projects'),
       ]);
 
       const nextStockItems = normalizeList<StockItem>(stockRes.data);
@@ -237,6 +248,7 @@ export default function ProductionDashboard() {
       setServerWorkOrders(nextWorkOrders);
       setServerStockItems(nextStockItems);
       setServerAssets(normalizeList(assetRes.data));
+      setServerProjects(normalizeEntityRows<Project>(projectRes.data));
       if (!silent) toast.success('Production data diperbarui.');
     } catch {
       if (!silent) toast.error('Gagal refresh production data.');
@@ -331,16 +343,21 @@ export default function ProductionDashboard() {
 
   const handleCreateWO = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (creatingWORef.current || isCreatingWO) return;
     if (!formData.itemToProduce || !formData.leadTechnician) {
       toast.error("Harap isi semua field yang wajib.");
+      return;
+    }
+    if (!formData.projectId || !formData.projectName) {
+      toast.error("Work Order harus terhubung ke project yang valid.");
       return;
     }
 
     const newWO: WorkOrder = {
       id: `wo-${Date.now()}`,
       woNumber: formData.woNumber,
-      projectId: 'manual',
-      projectName: 'Manual Input',
+      projectId: formData.projectId,
+      projectName: formData.projectName,
       itemToProduce: formData.itemToProduce,
       targetQty: formData.targetQty,
       completedQty: 0,
@@ -353,6 +370,8 @@ export default function ProductionDashboard() {
     };
 
     try {
+      creatingWORef.current = true;
+      setIsCreatingWO(true);
       await addWorkOrder(newWO);
       await loadData(true);
       await loadSummary(true);
@@ -361,12 +380,17 @@ export default function ProductionDashboard() {
       resetForm();
     } catch {
       // toast handled in context
+    } finally {
+      creatingWORef.current = false;
+      setIsCreatingWO(false);
     }
   };
 
   const resetForm = () => {
     setFormData({
       woNumber: generateWONumber(),
+      projectId: '',
+      projectName: '',
       itemToProduce: '',
       targetQty: 1,
       priority: 'Normal',
@@ -390,6 +414,7 @@ export default function ProductionDashboard() {
         bom: [...formData.bom, { kode: item.kode, nama: item.nama, qty: 1, unit: item.satuan }]
       });
     }
+    setShowAddItemModal(false);
     toast.success(`${item.nama} ditambahkan ke BOM`);
   };
 
@@ -406,6 +431,7 @@ export default function ProductionDashboard() {
     
     updateWorkOrder(selectedWO.id, { bom: newBOM });
     setSelectedWO({ ...selectedWO, bom: newBOM });
+    setShowAddItemModal(false);
     toast.success(`${item.nama} ditambahkan ke BOM`);
   };
 
@@ -757,7 +783,9 @@ export default function ProductionDashboard() {
                         <div className="flex flex-col">
                           <span className="text-xs font-black text-blue-600 tracking-tighter">{wo.woNumber}</span>
                           <span className="text-sm font-black text-slate-900 mt-0.5">{wo.itemToProduce}</span>
-                          <span className="text-[10px] text-slate-400 font-bold uppercase mt-1">Source: Manual</span>
+                          <span className="text-[10px] text-slate-400 font-bold uppercase mt-1">
+                            {wo.projectName || 'Tanpa Project'}
+                          </span>
                         </div>
                       </div>
                     </td>
@@ -901,6 +929,29 @@ export default function ProductionDashboard() {
             <form onSubmit={handleCreateWO} className="p-8 space-y-6">
               <div className="grid grid-cols-2 gap-6">
                 <div className="col-span-2">
+                  <label className="block text-[10px] font-black text-slate-400 uppercase mb-2">Project</label>
+                  <select
+                    value={formData.projectId}
+                    onChange={(e) => {
+                      const project = effectiveProjects.find((item) => item.id === e.target.value);
+                      setFormData((prev) => ({
+                        ...prev,
+                        projectId: project?.id || '',
+                        projectName: project?.namaProject || '',
+                      }));
+                    }}
+                    className="w-full px-4 py-3 bg-white border-2 border-slate-100 rounded-xl text-sm font-bold"
+                    required
+                  >
+                    <option value="">-- Pilih Project --</option>
+                    {effectiveProjects.map((project) => (
+                      <option key={project.id} value={project.id}>
+                        {project.namaProject} ({project.customer || '-'})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="col-span-2">
                   <label className="block text-[10px] font-black text-slate-400 uppercase mb-2">Item to Produce</label>
                   <input 
                     type="text" 
@@ -933,9 +984,10 @@ export default function ProductionDashboard() {
               </div>
               <button 
                 type="submit"
-                className="w-full py-4 bg-slate-900 text-white rounded-2xl text-sm font-black"
+                disabled={isCreatingWO}
+                className="w-full py-4 bg-slate-900 text-white rounded-2xl text-sm font-black disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                CREATE WORK ORDER
+                {isCreatingWO ? "CREATING..." : "CREATE WORK ORDER"}
               </button>
             </form>
           </div>

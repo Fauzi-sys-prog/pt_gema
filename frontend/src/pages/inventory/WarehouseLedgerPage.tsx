@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner@2.0.3';
 import api from '../../services/api';
+import { normalizeEntityRows } from '../../utils/normalizeEntityRows';
 
 export default function WarehouseLedgerPage() {
   const navigate = useNavigate();
@@ -19,18 +20,14 @@ export default function WarehouseLedgerPage() {
   const receivingList = serverReceivingList ?? ctxReceivingList;
   const projectList = serverProjectList ?? ctxProjectList;
   const poList = serverPoList ?? ctxPoList;
+  const safeStockItemList = useMemo(() => (Array.isArray(stockItemList) ? stockItemList.filter(Boolean) : []), [stockItemList]);
+  const safeReceivingList = useMemo(() => (Array.isArray(receivingList) ? receivingList.filter(Boolean) : []), [receivingList]);
+  const safeProjectList = useMemo(() => (Array.isArray(projectList) ? projectList.filter(Boolean) : []), [projectList]);
+  const safePoList = useMemo(() => (Array.isArray(poList) ? poList.filter(Boolean) : []), [poList]);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [selectedLocation, setSelectedLocation] = useState('All');
 
-  const normalizeEntityRows = <T,>(rows: any[]): T[] =>
-    rows.map((row: any) => {
-      const payload = row?.payload ?? {};
-      if (payload && typeof payload === 'object' && !Array.isArray(payload) && !payload.id) {
-        return { ...payload, id: row.entityId } as T;
-      }
-      return payload as T;
-    });
   const normalizeList = <T,>(payload: unknown): T[] => {
     if (Array.isArray(payload)) return payload as T[];
     if (payload && Array.isArray((payload as { items?: unknown[] }).items)) {
@@ -71,54 +68,56 @@ export default function WarehouseLedgerPage() {
 
   // Logic: Check for Approved Material Requests from Projects that haven't been fulfilled
   const approvedRequests = useMemo(() => {
-    return projectList.reduce((acc, p) => {
-      const approved = (p.materialRequests || []).filter((r: any) => r.status === 'Approved');
+    return safeProjectList.reduce((acc, p) => {
+      const approved = (Array.isArray(p?.materialRequests) ? p.materialRequests : []).filter((r: any) => r?.status === 'Approved');
       return acc + approved.length;
     }, 0);
-  }, [projectList]);
+  }, [safeProjectList]);
 
   // Derived stats
   const stats = useMemo(() => {
-    const totalItems = stockItemList.length;
-    const lowStockCount = stockItemList.filter(i => i.stok <= i.minStock).length;
-    const totalValue = stockItemList.reduce((acc, curr) => acc + (curr.stok * curr.hargaSatuan), 0);
-    const pendingRecv = receivingList.filter(r => r.status === 'Partial' || r.status === 'Pending').length;
+    const totalItems = safeStockItemList.length;
+    const lowStockCount = safeStockItemList.filter(i => Number(i?.stok || 0) <= Number(i?.minStock || 0)).length;
+    const totalValue = safeStockItemList.reduce((acc, curr) => acc + (Number(curr?.stok || 0) * Number(curr?.hargaSatuan || 0)), 0);
+    const pendingRecv = safeReceivingList.filter(r => r?.status === 'Partial' || r?.status === 'Pending').length;
 
     return { totalItems, lowStockCount, totalValue, pendingRecv };
-  }, [stockItemList, receivingList]);
+  }, [safeStockItemList, safeReceivingList]);
 
   const categories = useMemo(() => {
-    const cats = ['All', ...new Set(stockItemList.map(i => i.kategori))];
+    const cats = ['All', ...new Set(safeStockItemList.map(i => String(i?.kategori || '').trim()).filter(Boolean))];
     return cats;
-  }, [stockItemList]);
+  }, [safeStockItemList]);
 
   const locations = useMemo(() => {
-    const locs = ['All', ...new Set(stockItemList.map(i => i.lokasi))];
+    const locs = ['All', ...new Set(safeStockItemList.map(i => String(i?.lokasi || '').trim()).filter(Boolean))];
     return locs;
-  }, [stockItemList]);
+  }, [safeStockItemList]);
 
   const filteredItems = useMemo(() => {
-    return stockItemList.filter(item => {
-      const matchSearch = item.nama.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                          item.kode.toLowerCase().includes(searchTerm.toLowerCase());
-      const matchCat = selectedCategory === 'All' || item.kategori === selectedCategory;
-      const matchLoc = selectedLocation === 'All' || item.lokasi === selectedLocation;
+    const keyword = String(searchTerm || '').toLowerCase();
+    return safeStockItemList.filter(item => {
+      const matchSearch = String(item?.nama || '').toLowerCase().includes(keyword) ||
+                          String(item?.kode || '').toLowerCase().includes(keyword);
+      const matchCat = selectedCategory === 'All' || String(item?.kategori || '') === selectedCategory;
+      const matchLoc = selectedLocation === 'All' || String(item?.lokasi || '') === selectedLocation;
       return matchSearch && matchCat && matchLoc;
     });
-  }, [stockItemList, searchTerm, selectedCategory, selectedLocation]);
+  }, [safeStockItemList, searchTerm, selectedCategory, selectedLocation]);
 
   const itemsByCategory = useMemo(() => {
     const groups: { [key: string]: typeof stockItemList } = {};
     filteredItems.forEach(item => {
-      if (!groups[item.kategori]) groups[item.kategori] = [];
-      groups[item.kategori].push(item);
+      const key = String(item?.kategori || 'GENERAL');
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(item);
     });
     return groups;
   }, [filteredItems]);
 
   const supplierBySku = useMemo(() => {
     const map = new Map<string, string>();
-    const normalizedPo = (Array.isArray(poList) ? poList : []) as any[];
+    const normalizedPo = safePoList as any[];
     for (const po of normalizedPo) {
       const supplier = String(po?.supplier || '').trim();
       if (!supplier) continue;
@@ -130,7 +129,7 @@ export default function WarehouseLedgerPage() {
         if (nama && !map.has(`nama:${nama.toLowerCase()}`)) map.set(`nama:${nama.toLowerCase()}`, supplier);
       }
     }
-    for (const rcv of (Array.isArray(receivingList) ? receivingList : []) as any[]) {
+    for (const rcv of safeReceivingList as any[]) {
       const supplier = String(rcv?.supplier || '').trim();
       if (!supplier) continue;
       for (const row of Array.isArray(rcv?.items) ? rcv.items : []) {
@@ -141,7 +140,7 @@ export default function WarehouseLedgerPage() {
       }
     }
     return map;
-  }, [poList, receivingList]);
+  }, [safePoList, safeReceivingList]);
 
   const resolveItemSupplier = (item: any): string =>
     String(item?.supplier || '').trim() ||
@@ -429,7 +428,7 @@ export default function WarehouseLedgerPage() {
                         <td className="px-6 py-4 border-r border-slate-50">
                           <div className="flex items-baseline justify-center gap-1">
                             <span className={`text-sm font-black italic ${item.stok <= item.minStock ? 'text-rose-600' : 'text-slate-900'}`}>
-                              {item.stok.toLocaleString()}
+                              {Number(item?.stok || 0).toLocaleString()}
                             </span>
                             <span className="text-[9px] font-bold text-slate-400 uppercase">{item.satuan}</span>
                           </div>

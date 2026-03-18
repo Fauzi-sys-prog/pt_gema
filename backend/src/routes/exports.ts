@@ -637,6 +637,143 @@ async function getAppEntityPayload(resource: string, id: string): Promise<Record
     }
   }
 
+  if (resource === "surat-jalan") {
+    const row = await prisma.logisticsSuratJalan.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        noSurat: true,
+        tanggal: true,
+        sjType: true,
+        tujuan: true,
+        alamat: true,
+        upPerson: true,
+        noPO: true,
+        projectId: true,
+        assetId: true,
+        sopir: true,
+        noPolisi: true,
+        pengirim: true,
+        deliveryStatus: true,
+        podName: true,
+        podTime: true,
+        podPhoto: true,
+        podSignature: true,
+        expectedReturnDate: true,
+        actualReturnDate: true,
+        returnStatus: true,
+        workflowStatus: true,
+        items: {
+          select: {
+            itemKode: true,
+            namaItem: true,
+            jumlah: true,
+            satuan: true,
+            batchNo: true,
+            keterangan: true,
+          },
+          orderBy: { id: "asc" },
+        },
+      },
+    });
+    if (row) {
+      return {
+        id: row.id,
+        noSurat: row.noSurat,
+        tanggal: row.tanggal.toISOString().slice(0, 10),
+        sjType: row.sjType,
+        tujuan: row.tujuan,
+        alamat: row.alamat,
+        upPerson: row.upPerson ?? undefined,
+        noPO: row.noPO ?? undefined,
+        projectId: row.projectId ?? undefined,
+        assetId: row.assetId ?? undefined,
+        sopir: row.sopir ?? undefined,
+        noPolisi: row.noPolisi ?? undefined,
+        pengirim: row.pengirim ?? undefined,
+        deliveryStatus: row.deliveryStatus,
+        podName: row.podName ?? undefined,
+        podTime: row.podTime ? row.podTime.toISOString() : undefined,
+        podPhoto: row.podPhoto ?? undefined,
+        podSignature: row.podSignature ?? undefined,
+        expectedReturnDate: row.expectedReturnDate ? row.expectedReturnDate.toISOString().slice(0, 10) : undefined,
+        actualReturnDate: row.actualReturnDate ? row.actualReturnDate.toISOString().slice(0, 10) : undefined,
+        returnStatus: row.returnStatus ?? undefined,
+        workflowStatus: row.workflowStatus,
+        status: row.workflowStatus,
+        items: row.items.map((item) => ({
+          itemKode: item.itemKode ?? undefined,
+          namaItem: item.namaItem,
+          jumlah: item.jumlah,
+          satuan: item.satuan,
+          batchNo: item.batchNo ?? undefined,
+          keterangan: item.keterangan ?? undefined,
+        })),
+      };
+    }
+  }
+
+  if (resource === "proof-of-delivery") {
+    const row = await prisma.logisticsProofOfDelivery.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        suratJalanId: true,
+        projectId: true,
+        workOrderId: true,
+        status: true,
+        receiverName: true,
+        deliveredAt: true,
+        photo: true,
+        signature: true,
+        noSurat: true,
+        tujuan: true,
+        receiver: true,
+        driver: true,
+        plate: true,
+        note: true,
+        items: {
+          select: {
+            itemKode: true,
+            namaItem: true,
+            jumlah: true,
+            satuan: true,
+            batchNo: true,
+            keterangan: true,
+          },
+          orderBy: { id: "asc" },
+        },
+      },
+    });
+    if (row) {
+      return {
+        id: row.id,
+        suratJalanId: row.suratJalanId,
+        projectId: row.projectId ?? undefined,
+        workOrderId: row.workOrderId ?? undefined,
+        status: row.status,
+        receiverName: row.receiverName,
+        deliveredAt: row.deliveredAt.toISOString(),
+        photo: row.photo ?? undefined,
+        signature: row.signature ?? undefined,
+        noSurat: row.noSurat ?? undefined,
+        tujuan: row.tujuan ?? undefined,
+        receiver: row.receiver ?? undefined,
+        driver: row.driver ?? undefined,
+        plate: row.plate ?? undefined,
+        note: row.note ?? undefined,
+        items: row.items.map((item) => ({
+          itemKode: item.itemKode ?? undefined,
+          namaItem: item.namaItem,
+          jumlah: item.jumlah,
+          satuan: item.satuan,
+          batchNo: item.batchNo ?? undefined,
+          keterangan: item.keterangan ?? undefined,
+        })),
+      };
+    }
+  }
+
   const row = await prisma.appEntity.findUnique({
     where: { resource_entityId: { resource, entityId: id } },
     select: { payload: true },
@@ -1795,6 +1932,52 @@ function suratJalanExportHtml(payload: Record<string, unknown>): string {
   return `${companyLetterheadHtml("Surat Jalan")} ${meta} ${itemsTable} ${companyFooterHtml(signer)}`;
 }
 
+function proofOfDeliveryExportHtml(payload: Record<string, unknown>): string {
+  const items = Array.isArray(payload.items) ? payload.items.map((row) => asRecord(row)) : [];
+  const photo = readString(payload, "photo") || readString(payload, "podPhoto");
+  const signature = readString(payload, "signature") || readString(payload, "podSignature");
+  const mediaBlock = `
+    <div style="display:flex;gap:16px;margin-top:14px;">
+      <div style="flex:1;">
+        <div style="font-size:12px;font-weight:700;margin-bottom:6px;">POD Photo</div>
+        ${
+          photo
+            ? `<div style="border:1px solid #d1d5db;border-radius:8px;padding:8px;background:#fff;"><img src="${escapeHtml(photo)}" alt="POD Photo" style="max-width:100%;max-height:220px;object-fit:contain;" /></div>`
+            : `<div style="border:1px dashed #d1d5db;border-radius:8px;padding:24px;text-align:center;color:#6b7280;">No photo uploaded</div>`
+        }
+      </div>
+      <div style="flex:1;">
+        <div style="font-size:12px;font-weight:700;margin-bottom:6px;">Receiver Signature</div>
+        ${
+          signature
+            ? `<div style="border:1px solid #d1d5db;border-radius:8px;padding:8px;background:#fff;"><img src="${escapeHtml(signature)}" alt="Receiver Signature" style="max-width:100%;max-height:220px;object-fit:contain;" /></div>`
+            : `<div style="border:1px dashed #d1d5db;border-radius:8px;padding:24px;text-align:center;color:#6b7280;">No signature uploaded</div>`
+        }
+      </div>
+    </div>
+  `;
+
+  return `
+    ${companyLetterheadHtml("Proof Of Delivery")}
+    ${keyValueTableHtml("Delivery Confirmation", [
+      { label: "POD Number", key: "id", value: payload.id },
+      { label: "Surat Jalan", key: "noSurat", value: payload.noSurat || payload.suratJalanId },
+      { label: "Delivery Status", key: "status", value: payload.status },
+      { label: "Delivered At", key: "deliveredAt", value: payload.deliveredAt || payload.podTime },
+      { label: "Receiver Name", key: "receiverName", value: payload.receiverName || payload.receiver },
+      { label: "Destination", key: "tujuan", value: payload.tujuan },
+      { label: "Driver", key: "driver", value: payload.driver },
+      { label: "Vehicle Plate", key: "plate", value: payload.plate },
+      { label: "Project", key: "projectId", value: payload.projectId },
+      { label: "Work Order", key: "workOrderId", value: payload.workOrderId },
+      { label: "Note", key: "note", value: payload.note },
+    ])}
+    ${items.length ? listTable("Delivered Items", items, ["itemKode", "namaItem", "jumlah", "satuan", "batchNo", "keterangan"]) : ""}
+    ${mediaBlock}
+    ${companyFooterHtml(payload.receiverName || payload.receiver || payload.approvedBy)}
+  `;
+}
+
 function beritaAcaraExportHtml(payload: Record<string, unknown>): string {
   const signer = payload.pihakPertama || payload.createdBy || payload.approvedBy;
   const pekerjaan = asRecords(payload.pekerjaanList || payload.items);
@@ -2648,6 +2831,18 @@ exportsRouter.get("/exports/surat-jalan/:id/excel", authenticate, async (req: Au
   return sendExcel(res, `surat-jalan-${req.params.id}`, suratJalanExportHtml(payload));
 });
 
+exportsRouter.get("/exports/proof-of-delivery/:id/word", authenticate, async (req: AuthRequest, res: Response) => {
+  const payload = await getAppEntityPayload("proof-of-delivery", req.params.id);
+  if (!payload) return res.status(404).json({ error: "Proof of delivery not found" });
+  return sendWord(res, `proof-of-delivery-${req.params.id}`, proofOfDeliveryExportHtml(payload));
+});
+
+exportsRouter.get("/exports/proof-of-delivery/:id/excel", authenticate, async (req: AuthRequest, res: Response) => {
+  const payload = await getAppEntityPayload("proof-of-delivery", req.params.id);
+  if (!payload) return res.status(404).json({ error: "Proof of delivery not found" });
+  return sendExcel(res, `proof-of-delivery-${req.params.id}`, proofOfDeliveryExportHtml(payload));
+});
+
 exportsRouter.get("/exports/berita-acara/:id/word", authenticate, async (req: AuthRequest, res: Response) => {
   const payload = await getAppEntityPayload("berita-acara", req.params.id);
   if (!payload) return res.status(404).json({ error: "Berita acara not found" });
@@ -3088,6 +3283,12 @@ exportsRouter.get("/exports/preview/:resource/:id", authenticate, async (req: Au
     return sendPreview(res, suratJalanExportHtml(payload));
   }
 
+  if (resource === "proof-of-delivery") {
+    const payload = await getAppEntityPayload("proof-of-delivery", id);
+    if (!payload) return res.status(404).json({ error: "Proof of delivery not found" });
+    return sendPreview(res, proofOfDeliveryExportHtml(payload));
+  }
+
   if (resource === "berita-acara") {
     const payload = await getAppEntityPayload("berita-acara", id);
     if (!payload) return res.status(404).json({ error: "Berita acara not found" });
@@ -3126,6 +3327,7 @@ exportsRouter.get("/exports/preview/:resource/:id", authenticate, async (req: Au
       "projects",
       "invoices",
       "surat-jalan",
+      "proof-of-delivery",
       "berita-acara",
       "purchase-orders",
       "stock-outs",

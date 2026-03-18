@@ -41,20 +41,29 @@ export default function MainDashboard() {
     attendanceList = [],
   } = useApp();
   const [serverProjects, setServerProjects] = useState<Project[]>([]);
+  const [summaryMetrics, setSummaryMetrics] = useState<{
+    projects?: { approved?: number; pending?: number; inProgress?: number; completed?: number; total?: number };
+    finance?: { revenue?: number };
+  } | null>(null);
 
   useEffect(() => {
     let mounted = true;
-    const loadProjects = async () => {
+    const loadDashboardData = async () => {
       try {
-        const res = await api.get('/projects');
+        const [projectsRes, summaryRes] = await Promise.all([
+          api.get('/projects'),
+          api.get('/dashboard/summary'),
+        ]);
         if (!mounted) return;
-        setServerProjects(Array.isArray(res.data) ? (res.data as Project[]) : []);
+        setServerProjects(Array.isArray(projectsRes.data) ? (projectsRes.data as Project[]) : []);
+        setSummaryMetrics(summaryRes.data ?? null);
       } catch {
         if (!mounted) return;
         setServerProjects([]);
+        setSummaryMetrics(null);
       }
     };
-    void loadProjects();
+    void loadDashboardData();
     return () => {
       mounted = false;
     };
@@ -68,8 +77,11 @@ export default function MainDashboard() {
   const stocks = safeArray(stockItemList);
   const attendances = safeArray(attendanceList);
 
-  const totalRevenue = invoices.reduce((sum, inv: any) => sum + toNumber(inv?.totalBayar), 0);
-  const activeProjects = projects.filter((p: any) => String(p?.status || '').toLowerCase() !== 'completed').length;
+  const localRevenue = invoices.reduce((sum, inv: any) => sum + toNumber(inv?.totalBayar), 0);
+  const totalRevenue = toNumber(summaryMetrics?.finance?.revenue) || localRevenue;
+  const localActiveProjects = projects.filter((p: any) => String(p?.status || '').toLowerCase() !== 'completed').length;
+  const serverActiveProjects = toNumber(summaryMetrics?.projects?.inProgress) + toNumber(summaryMetrics?.projects?.pending);
+  const activeProjects = serverActiveProjects || localActiveProjects;
   const lowStockCount = stocks.filter((s: any) => toNumber(s?.stok) <= toNumber(s?.minStock || 0)).length;
   const totalHours = attendances.reduce((sum, a: any) => sum + toNumber(a?.workHours), 0);
 
@@ -176,7 +188,7 @@ export default function MainDashboard() {
                 <span className="text-xs font-black uppercase tracking-widest">Project P&L</span>
                 <Calendar size={16} />
               </Link>
-              <Link to="/inventory/warehouse-ledger" className="flex items-center justify-between rounded-2xl bg-emerald-600 text-white p-4">
+              <Link to="/inventory/center" className="flex items-center justify-between rounded-2xl bg-emerald-600 text-white p-4">
                 <span className="text-xs font-black uppercase tracking-widest">Warehouse</span>
                 <Activity size={16} />
               </Link>

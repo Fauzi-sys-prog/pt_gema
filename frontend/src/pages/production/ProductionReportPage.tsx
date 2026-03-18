@@ -4,6 +4,7 @@ import type { ProductionReport, WorkOrder } from '../../contexts/AppContext';
 import { toast } from 'sonner@2.0.3';
 import api from '../../services/api';
 import { ImageWithFallback } from '../../components/figma/ImageWithFallback';
+import { normalizeEntityRows } from '../../utils/normalizeEntityRows';
 
 export default function ProductionReportPage() {
   const { 
@@ -18,6 +19,7 @@ export default function ProductionReportPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [serverReports, setServerReports] = useState<ProductionReport[]>([]);
   const [serverWorkOrders, setServerWorkOrders] = useState<WorkOrder[]>([]);
   const [serverStockItems, setServerStockItems] = useState<any[]>([]);
@@ -53,14 +55,9 @@ export default function ProductionReportPage() {
         api.get<Array<{ entityId: string; payload: any }>>('/assets'),
       ]);
 
-      const mappedReports = Array.isArray(reportsRes.data) ? reportsRes.data : [];
-      const mappedWorkOrders = Array.isArray(workOrdersRes.data) ? workOrdersRes.data : [];
-
-      const mappedStockItems = (stockItemsRes.data || []).map((row) => ({
-        ...(row.payload || {}),
-        id: row.entityId || row.payload?.id,
-        __entityId: row.entityId || row.payload?.id,
-      }));
+      const mappedReports = normalizeEntityRows<ProductionReport>(reportsRes.data || []);
+      const mappedWorkOrders = normalizeEntityRows<WorkOrder>(workOrdersRes.data || []);
+      const mappedStockItems = normalizeEntityRows<any>(stockItemsRes.data || []);
 
       const mappedAssets = normalizeAssets(assetsRes.data || []);
 
@@ -97,7 +94,7 @@ export default function ProductionReportPage() {
     [serverAssets, assetList]
   );
 
-  const activeWorkOrders = effectiveWorkOrders.filter(wo => wo.status === 'In Progress');
+  const activeWorkOrders = effectiveWorkOrders.filter(wo => wo.status === 'In Progress' || wo.status === 'QC');
 
   const [newReport, setNewReport] = useState<Partial<ProductionReport & { woId?: string, selectedItem?: string }>>({
     tanggal: new Date().toISOString().split('T')[0],
@@ -146,11 +143,68 @@ export default function ProductionReportPage() {
     })
     .sort((a, b) => new Date(b.tanggal).getTime() - new Date(a.tanggal).getTime());
 
+  const selectedWorkOrder = useMemo(
+    () => effectiveWorkOrders.find((wo) => wo.id === newReport.woId),
+    [effectiveWorkOrders, newReport.woId]
+  );
+
   const selectableWarehouseItems = useMemo(() => {
-    return (effectiveStockItems || [])
-      .filter((item) => Number(item?.stok || 0) > 0)
-      .sort((a, b) => String(a?.nama || '').localeCompare(String(b?.nama || '')));
-  }, [effectiveStockItems]);
+    const stockedItems = effectiveStockItems || [];
+    const stockByCode = new Map(
+      stockedItems
+        .map((item) => {
+          const code = String(item?.kode || '').trim();
+          return code ? [code, item] as const : null;
+        })
+        .filter((entry): entry is readonly [string, any] => Boolean(entry))
+    );
+    const stockByName = new Map(
+      stockedItems
+        .map((item) => {
+          const name = String(item?.nama || '').trim().toLowerCase();
+          return name ? [name, item] as const : null;
+        })
+        .filter((entry): entry is readonly [string, any] => Boolean(entry))
+    );
+
+    const bomItems = (selectedWorkOrder?.bom || [])
+      .map((item) => {
+        const code = String(item?.kode || '').trim();
+        const name = String(item?.nama || item?.materialName || '').trim();
+        const stockMatch =
+          (code ? stockByCode.get(code) : undefined) ||
+          (name ? stockByName.get(name.toLowerCase()) : undefined);
+        return {
+          id: code || name,
+          value: code || name,
+          code,
+          name,
+          unit: String(item?.unit || stockMatch?.satuan || 'Unit'),
+          stock: Number(stockMatch?.stok || 0),
+          disabled: Number(stockMatch?.stok || 0) <= 0,
+          source: 'bom' as const,
+        };
+      })
+      .filter((item) => item.id);
+
+    if (bomItems.length > 0) {
+      return bomItems.sort((a, b) => a.name.localeCompare(b.name));
+    }
+
+    return stockedItems
+      .map((item) => ({
+        id: String(item?.id || item?.kode || item?.nama || ''),
+        value: String(item?.kode || item?.nama || ''),
+        code: String(item?.kode || '').trim(),
+        name: String(item?.nama || '').trim(),
+        unit: String(item?.satuan || 'Unit'),
+        stock: Number(item?.stok || 0),
+        disabled: Number(item?.stok || 0) <= 0,
+        source: 'stock' as const,
+      }))
+      .filter((item) => item.id && item.value)
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [effectiveStockItems, selectedWorkOrder]);
 
   const handleWOSelect = (woId: string) => {
     const wo = effectiveWorkOrders.find(w => w.id === woId);
@@ -173,25 +227,35 @@ export default function ProductionReportPage() {
     }
   };
 
-  const handleItemSelect = (itemName: string) => {
+  const handleItemSelect = (itemValue: string) => {
     const wo = effectiveWorkOrders.find(w => w.id === newReport.woId);
-    const stockItem = (effectiveStockItems || []).find((s) => String(s?.nama || '') === itemName);
+    const normalizedValue = String(itemValue || '').trim();
+    const selectedOption = selectableWarehouseItems.find((item) => item.value === normalizedValue);
+    if (selectedOption?.disabled) {
+      toast.error('Item ini belum tersedia di gudang atau stoknya habis');
+      return;
+    }
+    const itemLabel = selectedOption?.name || normalizedValue;
     if (wo) {
-      const bomItem = wo.bom?.find(b => b.nama === itemName);
+      const bomItem = wo.bom?.find((b) => {
+        const bomName = String(b.nama || b.materialName || '').trim();
+        const bomCode = String(b.kode || '').trim();
+        return bomName === itemLabel || bomCode === normalizedValue;
+      });
       setNewReport({
         ...newReport,
-        selectedItem: itemName,
-        unit: bomItem?.unit || stockItem?.satuan || (itemName ? 'Pcs' : 'Unit'),
-        activity: itemName 
-          ? `Pengerjaan ${itemName} untuk ${wo.itemToProduce} (${wo.woNumber})`
+        selectedItem: normalizedValue,
+        unit: bomItem?.unit || selectedOption?.unit || (normalizedValue ? 'Pcs' : 'Unit'),
+        activity: normalizedValue
+          ? `Pengerjaan ${itemLabel} untuk ${wo.itemToProduce} (${wo.woNumber})`
           : `Produksi ${wo.itemToProduce} (${wo.woNumber})`
       });
     } else {
       setNewReport({
         ...newReport,
-        selectedItem: itemName,
-        unit: stockItem?.satuan || (itemName ? 'Pcs' : 'Unit'),
-        activity: itemName ? `Pengerjaan ${itemName}` : ''
+        selectedItem: normalizedValue,
+        unit: selectedOption?.unit || (normalizedValue ? 'Pcs' : 'Unit'),
+        activity: normalizedValue ? `Pengerjaan ${itemLabel}` : ''
       });
     }
   };
@@ -218,6 +282,7 @@ export default function ProductionReportPage() {
       unit: newReport.unit!,
       remarks: newReport.remarks || 'Selesai',
       photoUrl: newReport.photoUrl,
+      photoAssetId: newReport.photoAssetId,
       woNumber: selectedWO?.woNumber
     };
 
@@ -255,19 +320,44 @@ export default function ProductionReportPage() {
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      if (file.size > 5 * 1024 * 1024) {
-        toast.error('File terlalu besar. Maksimal 5MB.');
-        return;
-      }
-
-      const reader = new FileReader();
-      reader.onload = () => {
-        setNewReport({ ...newReport, photoUrl: reader.result as string });
-        toast.success('Foto berhasil diambil dari device');
-      };
-      reader.readAsDataURL(file);
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('File terlalu besar. Maksimal 5MB.');
+      return;
     }
+
+    const selectedWO = effectiveWorkOrders.find((wo) => wo.id === newReport.woId);
+    const projectId = selectedWO?.projectId;
+    if (!projectId) {
+      toast.error('Pilih Work Order dulu sebelum upload foto LHP.');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = async () => {
+      try {
+        setUploadingPhoto(true);
+        const response = await api.post('/media/lhp-photos', {
+          projectId,
+          workOrderId: selectedWO?.id,
+          fileName: file.name,
+          dataUrl: reader.result,
+        });
+        setNewReport((prev) => ({
+          ...prev,
+          photoUrl: response.data?.publicUrl,
+          photoAssetId: response.data?.id,
+        }));
+        toast.success('Foto LHP berhasil diunggah');
+      } catch (error) {
+        console.error('Failed to upload LHP photo', error);
+        toast.error('Gagal upload foto LHP');
+      } finally {
+        setUploadingPhoto(false);
+        if (fileInputRef.current) fileInputRef.current.value = '';
+      }
+    };
+    reader.readAsDataURL(file);
   };
 
   const triggerCamera = () => {
@@ -668,8 +758,8 @@ export default function ProductionReportPage() {
                     <option value="">-- Pilih Item Gudang --</option>
                     <option value="auto">-- Auto-Deduct All BOM (opsional) --</option>
                     {selectableWarehouseItems.map((item) => (
-                      <option key={item.id || item.kode || item.nama} value={item.nama}>
-                        {item.nama} ({item.kode || '-'} • Stok {Number(item.stok || 0)} {item.satuan || 'Unit'})
+                      <option key={item.id} value={item.value} disabled={item.disabled}>
+                        {item.name} ({item.code || '-'} • Stok {item.stock} {item.unit}{item.disabled ? ' • HABIS' : ''})
                       </option>
                     ))}
                   </select>
@@ -782,9 +872,10 @@ export default function ProductionReportPage() {
                 <button 
                   type="button"
                   onClick={triggerCamera}
+                  disabled={uploadingPhoto}
                   className="px-4 py-2 bg-slate-900 text-white rounded-xl text-[10px] font-black uppercase hover:bg-black transition-all"
                 >
-                  {newReport.photoUrl ? 'GANTI FOTO' : 'AMBIL FOTO'}
+                  {uploadingPhoto ? 'UPLOAD...' : newReport.photoUrl ? 'GANTI FOTO' : 'AMBIL FOTO'}
                 </button>
               </div>
             </div>

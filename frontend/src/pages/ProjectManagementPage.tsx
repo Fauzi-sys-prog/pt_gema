@@ -78,6 +78,13 @@ const createInitialVoFormData = (category: VoCategory = "Material") => ({
   category,
 });
 
+const formatApprovalActor = (record: any, kind: "approved" | "spvApproved" | "rejected" = "approved") => {
+  const label = String(record?.[`${kind}By`] || "").trim();
+  const role = String(record?.[`${kind}ByRole`] || "").trim();
+  if (label && role) return `${label} (${role})`;
+  return label || "-";
+};
+
 export default function ProjectManagementPage() {
   const {
     projectList: ctxProjectList,
@@ -256,14 +263,16 @@ export default function ProjectManagementPage() {
     hasNota: true
   });
 
-  const [woFormData, setWoFormData] = useState({
-    woNumber: `SPK/GTP/${new Date().getFullYear()}/000`,
+  const createInitialWorkOrderFormData = () => ({
+    woNumber: `SPK/GTP/${new Date().getFullYear()}/${String(Date.now()).slice(-6)}`,
     itemToProduce: "",
     targetQty: 1,
     leadTechnician: "",
     deadline: "",
     priority: "Normal" as any
   });
+
+  const [woFormData, setWoFormData] = useState(createInitialWorkOrderFormData());
 
   // Sync selected project with global projectList
   useEffect(() => {
@@ -626,7 +635,7 @@ export default function ProjectManagementPage() {
     setShowProjectModal(true);
   };
 
-  const handleSaveProject = () => {
+  const handleSaveProject = async () => {
     const validatedProgress = Math.min(100, Math.max(0, formData.progress || 0));
     const finalFormData = { ...formData, progress: validatedProgress };
 
@@ -635,10 +644,11 @@ export default function ProjectManagementPage() {
         toast.error("Project sudah Approved. Edit field inti dikunci.");
         return;
       }
-      updateProject(selectedProject.id, {
+      const ok = await updateProject(selectedProject.id, {
         ...finalFormData,
         boq: projectFormMaterials,
       });
+      if (!ok) return;
     } else {
       const newProject: Project = {
         id: `prj-${Date.now()}`,
@@ -648,18 +658,19 @@ export default function ProjectManagementPage() {
         quotationId: formData.quotationId || undefined,
         approvalStatus: 'Pending'
       };
-      addProject(newProject);
+      const ok = await addProject(newProject);
+      if (!ok) return;
     }
     setShowProjectModal(false);
   };
 
-  const handleDeleteProject = (projectId: string) => {
+  const handleDeleteProject = async (projectId: string) => {
     if (window.confirm("Are you sure you want to delete this project?")) {
-      deleteProject(projectId);
+      await deleteProject(projectId);
     }
   };
 
-  const handleAddExpense = () => {
+  const handleAddExpense = async () => {
     if (!selectedProject) return;
     const newExpense = {
       id: `EXP-${Date.now()}`,
@@ -668,7 +679,8 @@ export default function ProjectManagementPage() {
     };
     
     const updatedExpenses = [...(selectedProject.workingExpenses || []), newExpense];
-    updateProject(selectedProject.id, { workingExpenses: updatedExpenses });
+    const ok = await updateProject(selectedProject.id, { workingExpenses: updatedExpenses });
+    if (!ok) return;
     setShowAddExpenseModal(false);
     setExpenseFormData({
       date: new Date().toISOString().split('T')[0],
@@ -680,13 +692,18 @@ export default function ProjectManagementPage() {
     toast.success("Biaya berhasil ditambahkan ke ledger project");
   };
 
-  const handleAddWorkOrder = () => {
+  const handleAddWorkOrder = async () => {
     if (!selectedProject) return;
     if (!canGenerateWorkOrder(selectedProject)) {
       toast.error("SPK hanya bisa dibuat jika Project atau Quotation sudah Approved.");
       return;
     }
-    const normalizedWoNumber = String(woFormData.woNumber || "").trim() || `WO-${Date.now()}`;
+    const requestedWoNumber = String(woFormData.woNumber || "").trim();
+    const shouldAutoGenerateWoNumber =
+      requestedWoNumber.length === 0 || /^SPK\/GTP\/\d{4}\/0+$/i.test(requestedWoNumber);
+    const normalizedWoNumber = shouldAutoGenerateWoNumber
+      ? `SPK/GTP/${new Date().getFullYear()}/${String(Date.now()).slice(-6)}`
+      : requestedWoNumber;
     const normalizedSpkNumber = normalizedWoNumber.toUpperCase().startsWith("SPK")
       ? normalizedWoNumber
       : normalizedWoNumber.replace(/^WO/i, "SPK");
@@ -720,15 +737,17 @@ export default function ProjectManagementPage() {
         createdAt: new Date().toISOString(),
         source: "WORK_ORDER",
       };
-      updateProject(selectedProject.id, { spkList: [...existingSpkList, linkedSpk] } as any);
+      const linked = await updateProject(selectedProject.id, { spkList: [...existingSpkList, linkedSpk] } as any);
+      if (!linked) return;
     }
 
     addWorkOrder(newWO);
     toast.success("Work Order (SPK) berhasil dibuat");
     setShowAddWorkOrderModal(false);
+    setWoFormData(createInitialWorkOrderFormData());
   };
 
-  const handleAddBOQItem = () => {
+  const handleAddBOQItem = async () => {
     if (!selectedProject) return;
     if (!guardApprovedProject(selectedProject)) return;
     const isManpower = boqFormData.category === "Manpower";
@@ -747,14 +766,15 @@ export default function ProjectManagementPage() {
       status: 'Pending Approval', // VOs should be approved
       isVariationOrder: true
     };
-    
+
     const updatedBOQ = [...(selectedProject.boq || []), newItem];
     // Don't update nilaiKontrak yet, wait for approval
-    
-    updateProject(selectedProject.id, { 
+
+    const ok = await updateProject(selectedProject.id, {
       boq: updatedBOQ
     });
-    
+    if (!ok) return;
+
     setShowAddBOQItemModal(false);
     setBoqFormData(createInitialVoFormData());
     toast.info("Variation Order (VO) ditambahkan dan menunggu approval eksekutif.");
@@ -779,7 +799,7 @@ export default function ProjectManagementPage() {
     setShowEditBoqItemModal(true);
   };
 
-  const handleSaveEditBoqItem = () => {
+  const handleSaveEditBoqItem = async () => {
     if (!selectedProject || !editingBoqRow) return;
     const index = Number(editingBoqRow.sourceIndex ?? -1);
     if (index < 0) return;
@@ -803,13 +823,14 @@ export default function ProjectManagementPage() {
       unitPrice: Number(editingBoqRow.unitPrice || 0),
     } as any;
 
-    updateProject(selectedProject.id, { boq: nextBoq });
+    const ok = await updateProject(selectedProject.id, { boq: nextBoq });
+    if (!ok) return;
     setShowEditBoqItemModal(false);
     setEditingBoqRow(null);
     toast.success("Item manpower BOQ berhasil diperbarui.");
   };
 
-  const handleDeleteBoqItem = (row: any) => {
+  const handleDeleteBoqItem = async (row: any) => {
     if (!selectedProject) return;
     const index = Number(row?.sourceIndex ?? -1);
     if (index < 0) return;
@@ -817,7 +838,8 @@ export default function ProjectManagementPage() {
     if (!confirmed) return;
 
     const nextBoq = (selectedProject.boq || []).filter((_, i) => i !== index);
-    updateProject(selectedProject.id, { boq: nextBoq });
+    const ok = await updateProject(selectedProject.id, { boq: nextBoq });
+    if (!ok) return;
     toast.success("Item manpower BOQ berhasil dihapus.");
   };
 
@@ -875,9 +897,9 @@ export default function ProjectManagementPage() {
   };
 
   const selectedProjectMaterialUsageReports = selectedProject
-    ? (productionReportList || []).filter(
-        (row: any) => String(row?.projectId || "").trim() === String(selectedProject.id).trim()
-      )
+    ? Array.isArray((selectedProject as any).materialUsageReports)
+      ? (((selectedProject as any).materialUsageReports || []) as any[])
+      : []
     : [];
 
   const selectedProjectEquipmentUsage = selectedProject
@@ -919,15 +941,12 @@ export default function ProjectManagementPage() {
     const existing = selectedProjectMaterialUsageReports || [];
     const idx = existing.findIndex((r: any) => r.id === report.id);
     try {
-      if (idx >= 0) {
-        await api.patch(`/production-reports/${report.id}`, report);
-        setServerProductionReportList((prev) =>
-          (prev || []).map((item: any) => (item.id === report.id ? { ...item, ...report } : item))
-        );
-      } else {
-        await api.post("/production-reports", report);
-        setServerProductionReportList((prev) => [report, ...(prev || [])]);
-      }
+      const nextReports =
+        idx >= 0
+          ? existing.map((item: any) => (item.id === report.id ? { ...item, ...report } : item))
+          : [report, ...existing];
+      const ok = await updateProject(selectedProject.id, { materialUsageReports: nextReports } as any);
+      if (!ok) return;
       setEditingMaterialUsageReport(null);
       setShowMaterialUsageModal(false);
       toast.success(idx >= 0 ? "Laporan material berhasil diperbarui" : "Laporan material berhasil dibuat");
@@ -1460,7 +1479,7 @@ export default function ProjectManagementPage() {
                   <div className="mt-4 flex items-center gap-3">
                     <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Approval Log:</span>
                     <span className="text-[10px] font-bold text-slate-600 uppercase">
-                      {selectedProject.approvedBy ? `By ${selectedProject.approvedBy}` : "By -"}
+                      {`By ${formatApprovalActor(selectedProject, "approved")}`}
                     </span>
                     <span className="text-[10px] font-bold text-slate-500">
                       {formatDateTime(selectedProject.approvedAt)}

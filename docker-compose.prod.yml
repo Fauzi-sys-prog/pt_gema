@@ -50,6 +50,8 @@ services:
     environment:
       NODE_ENV: production
       DATABASE_URL: ${DATABASE_URL:-postgresql://postgres:postgres@postgres:5432/gemadb}
+    volumes:
+      - uploads_prod:/app/uploads
     ports:
       - "3000:3000"
     healthcheck:
@@ -74,3 +76,4 @@ services:
 
 volumes:
   pgdata_prod:
+  uploads_prod:

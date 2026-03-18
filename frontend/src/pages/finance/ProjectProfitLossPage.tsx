@@ -47,6 +47,7 @@ export default function ProjectProfitLossPage() {
   }, []);
 
   const effectiveProjectAnalysis = serverRows;
+  const hasProjectAnalysis = effectiveProjectAnalysis.length > 0;
 
   const filteredAnalysis = effectiveProjectAnalysis.filter(p => 
     (p.namaProject || "").toLowerCase().includes(searchTerm.toLowerCase())
@@ -305,7 +306,11 @@ export default function ProjectProfitLossPage() {
                       </div>
                       <div className="flex justify-between items-center">
                          <span className="text-[10px] font-black text-slate-500 uppercase">Admin & Overhead</span>
-                         <span className="text-sm font-black text-rose-500 italic">Rp {(selectedProject.nilaiKontrak * 0.05).toLocaleString('id-ID')}</span>
+                         <span className="text-sm font-black text-rose-500 italic">Rp {selectedProject.overheadCost.toLocaleString('id-ID')}</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                         <span className="text-[10px] font-black text-slate-500 uppercase">External Cost</span>
+                         <span className="text-sm font-black text-rose-500 italic">Rp {((selectedProject.externalCost || 0)).toLocaleString('id-ID')}</span>
                       </div>
                    </div>
                    <div className="pt-8 border-t-2 border-slate-900 flex justify-between items-center">
@@ -317,10 +322,26 @@ export default function ProjectProfitLossPage() {
                    <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-8 italic">Audit Trail & Verification</h4>
                    <ul className="space-y-6">
                       {[
-                        { label: 'Revenue Verified', desc: 'Matched with 3 Invoices', status: 'Success' },
-                        { label: 'Material Linked', desc: 'Sync with Warehouse Stock-Out', status: 'Success' },
-                        { label: 'Labor Synced', desc: 'Linked to Site Attendance', status: 'Success' },
-                        { label: 'Tax Calculation', desc: 'PPN 11% Adjustment Ready', status: 'Warning' }
+                        {
+                          label: 'Revenue Source',
+                          desc: selectedProject.revenue > 0 ? 'Finance customer invoices terhubung' : 'Belum ada revenue relasional',
+                          status: selectedProject.revenue > 0 ? 'Success' : 'Warning',
+                        },
+                        {
+                          label: 'Material Cost',
+                          desc: selectedProject.materialCost > 0 ? 'Sync dari stock movement proyek' : 'Belum ada pemakaian material terbaca',
+                          status: selectedProject.materialCost > 0 ? 'Success' : 'Warning',
+                        },
+                        {
+                          label: 'Labor Cost',
+                          desc: selectedProject.laborCost > 0 ? 'Linked ke attendance proyek' : 'Belum ada jam kerja tercatat',
+                          status: selectedProject.laborCost > 0 ? 'Success' : 'Warning',
+                        },
+                        {
+                          label: 'Budget Basis',
+                          desc: selectedProject.boqBudget > 0 ? 'Budget memakai total BOQ proyek' : 'Fallback ke nilai kontrak proyek',
+                          status: selectedProject.boqBudget > 0 ? 'Success' : 'Warning',
+                        }
                       ].map((item, i) => (
                         <li key={i} className="flex gap-4">
                            <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${item.status === 'Success' ? 'bg-emerald-100 text-emerald-600' : 'bg-amber-100 text-amber-600'}`}>
@@ -374,6 +395,11 @@ export default function ProjectProfitLossPage() {
             </button>
          </div>
          <div className="overflow-x-auto">
+            {!hasProjectAnalysis ? (
+              <div className="p-10 text-center text-slate-500 text-sm">
+                Belum ada data proyek yang cukup untuk dianalisis. Halaman ini akan terisi setelah proyek dan transaksi finance terkait mulai masuk.
+              </div>
+            ) : (
             <table className="w-full text-left">
                <thead>
                   <tr className="bg-slate-50 text-slate-400 font-black uppercase tracking-widest text-[9px] border-b-2 border-slate-100">
@@ -419,6 +445,7 @@ export default function ProjectProfitLossPage() {
                   ))}
                </tbody>
             </table>
+            )}
          </div>
       </div>
     </div>

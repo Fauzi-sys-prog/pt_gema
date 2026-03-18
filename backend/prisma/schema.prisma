@@ -135,13 +135,16 @@ model ProjectRecord {
   financeBankReconciliationEntries FinanceBankReconciliation[]
   financePettyCashEntries FinancePettyCashTransaction[]
   hrKasbonEntries      HrKasbon[]
+  projectLaborEntries  ProjectLaborEntry[]
   inventoryStockIns    InventoryStockIn[]
   inventoryStockOuts   InventoryStockOut[]
   inventoryMovements   InventoryStockMovement[]
   productionWorkOrders ProductionWorkOrder[]
   productionExecutionReports ProductionExecutionReport[]
+  productionExecutionReportPhotoAssets ProductionExecutionReportPhotoAsset[]
   productionTrackerEntries ProductionTrackerEntry[]
   productionQcInspections ProductionQcInspection[]
+  productionQcDrawingAssets ProductionQcDrawingAsset[]
   productionMaterialRequests ProductionMaterialRequest[]
   logisticsSuratJalan  LogisticsSuratJalan[]
   logisticsProofsOfDelivery LogisticsProofOfDelivery[]
@@ -245,6 +248,7 @@ model EmployeeRecord {
   financePettyCashTransactions FinancePettyCashTransactionRecord[]
   financePettyCashEntries FinancePettyCashTransaction[]
   hrKasbonEntries HrKasbon[]
+  projectLaborEntries ProjectLaborEntry[]
   createdAt   DateTime           @default(now())
   updatedAt   DateTime           @updatedAt
 
@@ -804,8 +808,10 @@ model ProductionWorkOrder {
   machine            AssetRecord?              @relation(fields: [machineId], references: [id], onDelete: SetNull, onUpdate: Cascade)
   bomItems           ProductionWorkOrderBom[]
   productionReports  ProductionExecutionReport[]
+  reportPhotoAssets  ProductionExecutionReportPhotoAsset[]
   productionTrackers ProductionTrackerEntry[]
   qcInspections      ProductionQcInspection[]
+  drawingAssets      ProductionQcDrawingAsset[]
   logisticsProofsOfDelivery LogisticsProofOfDelivery[]
   projectSpkRecords  ProjectSpkRecord[]
   createdAt          DateTime                  @default(now())
@@ -837,6 +843,7 @@ model ProductionExecutionReport {
   id            String              @id
   projectId     String
   workOrderId   String?
+  photoAssetId  String?
   tanggal       DateTime
   shift         String?
   outputQty     Float               @default(0)
@@ -853,12 +860,34 @@ model ProductionExecutionReport {
   workflowStatus String?
   project       ProjectRecord       @relation(fields: [projectId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   workOrder     ProductionWorkOrder? @relation(fields: [workOrderId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  photoAsset    ProductionExecutionReportPhotoAsset? @relation(fields: [photoAssetId], references: [id], onDelete: SetNull, onUpdate: Cascade)
   createdAt     DateTime            @default(now())
   updatedAt     DateTime            @updatedAt
 
   @@index([projectId])
   @@index([workOrderId])
+  @@index([photoAssetId])
   @@index([tanggal])
+}
+
+model ProductionExecutionReportPhotoAsset {
+  id               String                    @id
+  projectId        String
+  workOrderId      String?
+  originalName     String?
+  storedFileName   String
+  mimeType         String
+  sizeBytes        Int
+  publicUrl        String
+  uploadedByUserId String?
+  uploadedByName   String?
+  project          ProjectRecord             @relation(fields: [projectId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  workOrder        ProductionWorkOrder?      @relation(fields: [workOrderId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  reports          ProductionExecutionReport[]
+  createdAt        DateTime                  @default(now())
+
+  @@index([projectId])
+  @@index([workOrderId])
 }
 
 model ProductionTrackerEntry {
@@ -889,6 +918,7 @@ model ProductionQcInspection {
   id               String               @id
   projectId        String
   workOrderId      String?
+  drawingAssetId   String?
   tanggal          DateTime
   batchNo          String?
   itemName         String
@@ -908,14 +938,39 @@ model ProductionQcInspection {
   workflowStatus   String?
   project          ProjectRecord        @relation(fields: [projectId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   workOrder        ProductionWorkOrder? @relation(fields: [workOrderId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  drawingAsset     ProductionQcDrawingAsset? @relation(fields: [drawingAssetId], references: [id], onDelete: SetNull, onUpdate: Cascade)
   dimensions       ProductionQcInspectionDimension[]
   createdAt        DateTime             @default(now())
   updatedAt        DateTime             @updatedAt
 
   @@index([projectId])
   @@index([workOrderId])
+  @@index([drawingAssetId])
   @@index([tanggal])
   @@index([status])
+}
+
+model ProductionQcDrawingAsset {
+  id             String                  @id
+  projectId      String
+  workOrderId    String?
+  originalName   String?
+  storedFileName String
+  mimeType       String
+  sizeBytes      Int
+  publicUrl      String
+  uploadedByUserId String?
+  uploadedByName String?
+  project        ProjectRecord           @relation(fields: [projectId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  workOrder      ProductionWorkOrder?    @relation(fields: [workOrderId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  inspections    ProductionQcInspection[]
+  createdAt      DateTime                @default(now())
+  updatedAt      DateTime                @updatedAt
+
+  @@index([projectId])
+  @@index([workOrderId])
+  @@index([uploadedByUserId])
+  @@index([createdAt])
 }
 
 model ProductionQcInspectionDimension {
@@ -1495,6 +1550,9 @@ model FinanceCustomerInvoice {
   noKontrak         String?
   noPO              String?
   termin            String?
+  buktiTransfer     String?
+  noKwitansi        String?
+  tanggalBayar      DateTime?
   remark            String?
   createdBy         String?
   sentAt            DateTime?
@@ -1719,6 +1777,37 @@ model HrKasbon {
   @@index([employeeId])
   @@index([projectId])
   @@index([date])
+}
+
+model ProjectLaborEntry {
+  id              String          @id
+  projectId       String
+  employeeId      String?
+  date            DateTime
+  workerType      String
+  workerName      String
+  role            String?
+  qtyDays         Float           @default(1)
+  checkIn         String?
+  checkOut        String?
+  hoursWorked     Float           @default(0)
+  overtimeHours   Float           @default(0)
+  rate            Float           @default(0)
+  amount          Float           @default(0)
+  source          String          @default("FIELD_RECORD")
+  notes           String?
+  createdByUserId String?
+  createdByName   String?
+  legacyPayload   Json?
+  project         ProjectRecord   @relation(fields: [projectId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  employee        EmployeeRecord? @relation(fields: [employeeId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  @@index([projectId])
+  @@index([employeeId])
+  @@index([date])
+  @@index([workerType])
 }
 
 model WorkingExpenseSheetRecord {

@@ -291,7 +291,7 @@ export default function AccountsReceivablePage() {
   };
 
   // Submit invoice
-  const handleSubmitInvoice = () => {
+  const handleSubmitInvoice = async () => {
     if (!invoiceForm.customerId || !invoiceForm.perihal || invoiceForm.items.length === 0) {
       toast.error('Lengkapi semua field yang diperlukan!');
       return;
@@ -353,7 +353,8 @@ export default function AccountsReceivablePage() {
       createdAt: new Date().toISOString()
     };
 
-    addCustomerInvoice(newInvoice);
+    const ok = await addCustomerInvoice(newInvoice);
+    if (!ok) return;
     setShowInvoiceModal(false);
     resetInvoiceForm();
   };
@@ -437,10 +438,11 @@ export default function AccountsReceivablePage() {
   };
 
   // Cancel invoice
-  const handleCancelInvoice = (invoiceId: string) => {
-    updateCustomerInvoice(invoiceId, {
+  const handleCancelInvoice = async (invoiceId: string) => {
+    const ok = await updateCustomerInvoice(invoiceId, {
       status: 'Cancelled'
     });
+    if (!ok) return;
     toast.warning('Invoice dibatalkan!');
   };
 

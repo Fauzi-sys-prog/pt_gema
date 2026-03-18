@@ -56,6 +56,7 @@ const BLOCKED_GENERIC_READ_RESOURCES = new Set([
   "app-settings",
   "hr-leaves",
   "hr-online-status",
+  "project-labor-entries",
 ]);
 const BLOCKED_GENERIC_WRITE_RESOURCES = new Set([
   "projects",
@@ -99,6 +100,7 @@ const BLOCKED_GENERIC_WRITE_RESOURCES = new Set([
   "app-settings",
   "hr-leaves",
   "hr-online-status",
+  "project-labor-entries",
 ]);
 
 const DATA_WRITE_ROLES_BY_RESOURCE: Record<string, Role[]> = {
@@ -147,6 +149,7 @@ const DATA_WRITE_ROLES_BY_RESOURCE: Record<string, Role[]> = {
   kasbons: ["OWNER", "ADMIN", "HR", "FINANCE"],
   "fleet-health": ["OWNER", "ADMIN", "SUPPLY_CHAIN", "PRODUKSI"],
   "proof-of-delivery": ["OWNER", "ADMIN", "SUPPLY_CHAIN", "PRODUKSI", "SALES"],
+  "project-labor-entries": ["OWNER", "ADMIN", "HR", "FINANCE", "PRODUKSI", "SUPPLY_CHAIN", "SALES"],
   "app-settings": ["OWNER", "ADMIN", "MANAGER"],
   vendors: ["OWNER", "ADMIN", "FINANCE", "SUPPLY_CHAIN"],
   "vendor-expenses": ["OWNER", "ADMIN", "FINANCE"],
@@ -225,6 +228,7 @@ const DEDICATED_RESOURCE_DELEGATES: Record<string, string> = {
   "finance-petty-cash-transactions": "financePettyCashTransactionRecord",
   kasbons: "kasbonRecord",
   "proof-of-delivery": "proofOfDeliveryRecord",
+  "project-labor-entries": "projectLaborEntry",
   "app-settings": "appSettingRecord",
 };
 
@@ -298,6 +302,7 @@ const RELATIONAL_FINANCE_MISC_RESOURCES = new Set([
   "finance-petty-cash-transactions",
   "finance-bank-reconciliations",
   "kasbons",
+  "project-labor-entries",
 ]);
 
 const RELATIONAL_FLEET_RESOURCES = new Set([
@@ -312,6 +317,7 @@ const RELATIONAL_MASTER_RESOURCES = new Set([
 const DEDICATED_CONTRACT_RESOURCES = new Set([
   "work-orders",
   "material-requests",
+  "project-labor-entries",
   "production-reports",
   "production-trackers",
   "qc-inspections",
@@ -1026,6 +1032,7 @@ function mapProductionExecutionReportToLegacyPayload(row: {
   id: string;
   projectId: string;
   workOrderId: string | null;
+  photoAssetId: string | null;
   tanggal: Date;
   shift: string | null;
   outputQty: number;
@@ -1038,6 +1045,7 @@ function mapProductionExecutionReportToLegacyPayload(row: {
   endTime: string | null;
   unit: string | null;
   photoUrl: string | null;
+  photoAsset?: { id: string; publicUrl: string; originalName: string | null } | null;
   project: { payload: unknown } | null;
   workOrder: { number: string } | null;
 }) {
@@ -1061,8 +1069,89 @@ function mapProductionExecutionReportToLegacyPayload(row: {
     unit: row.unit ?? "",
     remarks: row.notes ?? undefined,
     notes: row.notes ?? undefined,
-    photoUrl: row.photoUrl ?? undefined,
+    photoUrl: row.photoAsset?.publicUrl ?? row.photoUrl ?? undefined,
+    photoAssetId: row.photoAssetId ?? row.photoAsset?.id ?? undefined,
   };
+}
+
+function productionTrackerIdFromWorkOrderId(workOrderId: string): string {
+  return `TRK-${workOrderId}`;
+}
+
+function normalizeTrackerStatusFromWorkOrder(record: Record<string, unknown>): string {
+  const status = asTrimmedString(record.status) || "Draft";
+  const upper = status.toUpperCase().replace(/[\s-]+/g, "_");
+  if (upper === "COMPLETED" || upper === "DONE") return "Completed";
+  if (upper === "IN_PROGRESS" || upper === "QC" || upper === "FOLLOW_UP") return "In Progress";
+  const deadline = asTrimmedString(record.deadline);
+  const today = new Date().toISOString().slice(0, 10);
+  if (deadline && deadline < today) {
+    return "Delayed";
+  }
+  return "Planned";
+}
+
+function buildTrackerPayloadFromWorkOrder(entityId: string, payload: Record<string, unknown>) {
+  const startDate =
+    asTrimmedString(payload.startDate) ||
+    new Date().toISOString().slice(0, 10);
+  const finishDate =
+    asTrimmedString(payload.endDate) ||
+    asTrimmedString(payload.deadline) ||
+    startDate;
+
+  return {
+    id: productionTrackerIdFromWorkOrderId(entityId),
+    projectId: asTrimmedString(payload.projectId) || "",
+    workOrderId: entityId,
+    woId: entityId,
+    customer: asTrimmedString(payload.projectName) || "Unknown Project",
+    itemType: asTrimmedString(payload.itemToProduce) || "",
+    qty: toFiniteNumber(payload.targetQty, 0),
+    startDate,
+    finishDate,
+    status: normalizeTrackerStatusFromWorkOrder(payload),
+    machineId: asTrimmedString(payload.machineId) || undefined,
+    workflowStatus: asTrimmedString(payload.workflowStatus) || undefined,
+  };
+}
+
+async function syncProductionTrackerForWorkOrder(entityId: string, payload: Record<string, unknown>) {
+  const trackerId = productionTrackerIdFromWorkOrderId(entityId);
+  const trackerPayload = buildTrackerPayloadFromWorkOrder(entityId, payload);
+  const resolvedMachineId = await resolveMachineAssetIdOrThrow(
+    "production-trackers",
+    asTrimmedString(trackerPayload.machineId)
+  );
+
+  await prisma.productionTrackerEntry.upsert({
+    where: { id: trackerId },
+    create: {
+      id: trackerId,
+      projectId: trackerPayload.projectId,
+      workOrderId: entityId,
+      customer: trackerPayload.customer,
+      itemType: trackerPayload.itemType,
+      qty: toFiniteNumber(trackerPayload.qty, 0),
+      startDate: trackerPayload.startDate ? new Date(String(trackerPayload.startDate)) : undefined,
+      finishDate: trackerPayload.finishDate ? new Date(String(trackerPayload.finishDate)) : undefined,
+      status: trackerPayload.status,
+      machineId: resolvedMachineId,
+      workflowStatus: asTrimmedString(trackerPayload.workflowStatus) || undefined,
+    },
+    update: {
+      projectId: trackerPayload.projectId,
+      workOrderId: entityId,
+      customer: trackerPayload.customer,
+      itemType: trackerPayload.itemType,
+      qty: toFiniteNumber(trackerPayload.qty, 0),
+      startDate: trackerPayload.startDate ? new Date(String(trackerPayload.startDate)) : null,
+      finishDate: trackerPayload.finishDate ? new Date(String(trackerPayload.finishDate)) : null,
+      status: trackerPayload.status,
+      machineId: resolvedMachineId || null,
+      workflowStatus: asTrimmedString(trackerPayload.workflowStatus) || null,
+    },
+  });
 }
 
 function mapProductionTrackerEntryToLegacyPayload(row: {
@@ -1094,24 +1183,26 @@ function mapProductionTrackerEntryToLegacyPayload(row: {
 function mapProductionQcInspectionToLegacyPayload(row: {
   id: string;
   projectId: string;
-  workOrderId: string | null;
+  workOrderId?: string | null;
+  drawingAssetId?: string | null;
   tanggal: Date;
-  batchNo: string | null;
+  batchNo?: string | null;
   itemName: string;
   qtyInspected: number;
   qtyPassed: number;
   qtyRejected: number;
   inspectorName: string;
   status: string;
-  notes: string | null;
+  notes?: string | null;
   visualCheck: boolean;
   dimensionCheck: boolean;
   materialCheck: boolean;
-  photoUrl: string | null;
-  customerName: string | null;
-  drawingUrl: string | null;
-  remark: string | null;
-  dimensions: Array<{
+  photoUrl?: string | null;
+  customerName?: string | null;
+  drawingUrl?: string | null;
+  remark?: string | null;
+  drawingAsset?: { id: string; publicUrl: string; originalName: string | null } | null;
+  dimensions?: Array<{
     parameter: string;
     specification: string;
     sample1: string;
@@ -1120,7 +1211,7 @@ function mapProductionQcInspectionToLegacyPayload(row: {
     sample4: string;
     result: string;
   }>;
-  workOrder: { number: string } | null;
+  workOrder?: { number: string } | null;
 }) {
   return {
     id: row.id,
@@ -1142,9 +1233,10 @@ function mapProductionQcInspectionToLegacyPayload(row: {
     materialCheck: row.materialCheck,
     photoUrl: row.photoUrl ?? undefined,
     customerName: row.customerName ?? undefined,
-    drawingUrl: row.drawingUrl ?? undefined,
+    drawingUrl: row.drawingAsset?.publicUrl ?? row.drawingUrl ?? undefined,
+    drawingAssetId: row.drawingAssetId ?? row.drawingAsset?.id ?? undefined,
     remark: row.remark ?? undefined,
-    dimensions: row.dimensions.map((item) => ({
+    dimensions: (row.dimensions || []).map((item) => ({
       parameter: item.parameter,
       specification: item.specification,
       sample1: item.sample1,
@@ -2484,7 +2576,11 @@ async function relationalProductionFindMany(resource: string) {
     case "production-reports": {
       const rows = await prisma.productionExecutionReport.findMany({
         orderBy: { updatedAt: "desc" },
-        include: { project: { select: { payload: true } }, workOrder: { select: { number: true } } },
+        include: {
+          project: { select: { payload: true } },
+          workOrder: { select: { number: true } },
+          photoAsset: { select: { id: true, publicUrl: true, originalName: true } },
+        },
       });
       return rows.map((row) => toEntityRow(row.id, mapProductionExecutionReportToLegacyPayload(row), row.createdAt, row.updatedAt));
     }
@@ -2493,11 +2589,15 @@ async function relationalProductionFindMany(resource: string) {
       return rows.map((row) => toEntityRow(row.id, mapProductionTrackerEntryToLegacyPayload(row), row.createdAt, row.updatedAt));
     }
     case "qc-inspections": {
-      const rows = await prisma.productionQcInspection.findMany({
+      const rows = await (prisma as any).productionQcInspection.findMany({
         orderBy: { updatedAt: "desc" },
-        include: { workOrder: { select: { number: true } }, dimensions: { orderBy: { sortOrder: "asc" } } },
+        include: {
+          workOrder: { select: { number: true } },
+          drawingAsset: { select: { id: true, publicUrl: true, originalName: true } },
+          dimensions: { orderBy: { sortOrder: "asc" } },
+        },
       });
-      return rows.map((row) => toEntityRow(row.id, mapProductionQcInspectionToLegacyPayload(row), row.createdAt, row.updatedAt));
+      return rows.map((row: any) => toEntityRow(row.id, mapProductionQcInspectionToLegacyPayload(row), row.createdAt, row.updatedAt));
     }
     case "material-requests": {
       const rows = await prisma.productionMaterialRequest.findMany({ orderBy: { updatedAt: "desc" }, include: { items: true } });
@@ -2517,7 +2617,11 @@ async function relationalProductionFindUnique(resource: string, entityId: string
     case "production-reports": {
       const row = await prisma.productionExecutionReport.findUnique({
         where: { id: entityId },
-        include: { project: { select: { payload: true } }, workOrder: { select: { number: true } } },
+        include: {
+          project: { select: { payload: true } },
+          workOrder: { select: { number: true } },
+          photoAsset: { select: { id: true, publicUrl: true, originalName: true } },
+        },
       });
       return row ? toEntityRow(row.id, mapProductionExecutionReportToLegacyPayload(row), row.createdAt, row.updatedAt) : null;
     }
@@ -2526,9 +2630,13 @@ async function relationalProductionFindUnique(resource: string, entityId: string
       return row ? toEntityRow(row.id, mapProductionTrackerEntryToLegacyPayload(row), row.createdAt, row.updatedAt) : null;
     }
     case "qc-inspections": {
-      const row = await prisma.productionQcInspection.findUnique({
+      const row = await (prisma as any).productionQcInspection.findUnique({
         where: { id: entityId },
-        include: { workOrder: { select: { number: true } }, dimensions: { orderBy: { sortOrder: "asc" } } },
+        include: {
+          workOrder: { select: { number: true } },
+          drawingAsset: { select: { id: true, publicUrl: true, originalName: true } },
+          dimensions: { orderBy: { sortOrder: "asc" } },
+        },
       });
       return row ? toEntityRow(row.id, mapProductionQcInspectionToLegacyPayload(row), row.createdAt, row.updatedAt) : null;
     }
@@ -2580,6 +2688,7 @@ async function relationalProductionCreate(resource: string, entityId: string, pa
           },
         },
       });
+      await syncProductionTrackerForWorkOrder(entityId, record);
       return relationalProductionFindUnique(resource, entityId);
     }
     case "production-reports": {
@@ -2588,6 +2697,7 @@ async function relationalProductionCreate(resource: string, entityId: string, pa
           id: entityId,
           projectId: asTrimmedString(record.projectId) || "",
           workOrderId: asTrimmedString(record.workOrderId || record.woId) || undefined,
+          photoAssetId: asTrimmedString(record.photoAssetId) || undefined,
           tanggal: new Date(inventoryDateString(asTrimmedString(record.tanggal))),
           shift: asTrimmedString(record.shift) || undefined,
           outputQty: toFiniteNumber(record.outputQty, 0),
@@ -2641,11 +2751,12 @@ async function relationalProductionCreate(resource: string, entityId: string, pa
           };
         })
         .filter((item) => item.parameter);
-      await prisma.productionQcInspection.create({
+      await (prisma as any).productionQcInspection.create({
         data: {
           id: entityId,
           projectId: asTrimmedString(record.projectId) || "",
           workOrderId: asTrimmedString(record.workOrderId || record.woId || record.noWorkOrder) || undefined,
+          drawingAssetId: asTrimmedString(record.drawingAssetId) || undefined,
           tanggal: new Date(inventoryDateString(asTrimmedString(record.tanggal))),
           batchNo: asTrimmedString(record.batchNo) || undefined,
           itemName: asTrimmedString(record.itemNama) || "",
@@ -2741,6 +2852,7 @@ async function relationalProductionUpdate(resource: string, entityId: string, pa
           },
         },
       });
+      await syncProductionTrackerForWorkOrder(entityId, record);
       return relationalProductionFindUnique(resource, entityId);
     }
     case "production-reports": {
@@ -2749,6 +2861,7 @@ async function relationalProductionUpdate(resource: string, entityId: string, pa
         data: {
           projectId: asTrimmedString(record.projectId) || "",
           workOrderId: asTrimmedString(record.workOrderId || record.woId) || null,
+          photoAssetId: asTrimmedString(record.photoAssetId) || null,
           tanggal: new Date(inventoryDateString(asTrimmedString(record.tanggal))),
           shift: asTrimmedString(record.shift) || null,
           outputQty: toFiniteNumber(record.outputQty, 0),
@@ -2802,11 +2915,12 @@ async function relationalProductionUpdate(resource: string, entityId: string, pa
           };
         })
         .filter((item) => item.parameter);
-      await prisma.productionQcInspection.update({
+      await (prisma as any).productionQcInspection.update({
         where: { id: entityId },
         data: {
           projectId: asTrimmedString(record.projectId) || "",
           workOrderId: asTrimmedString(record.workOrderId || record.woId || record.noWorkOrder) || null,
+          drawingAssetId: asTrimmedString(record.drawingAssetId) || null,
           tanggal: new Date(inventoryDateString(asTrimmedString(record.tanggal))),
           batchNo: asTrimmedString(record.batchNo) || null,
           itemName: asTrimmedString(record.itemNama) || "",
@@ -2867,6 +2981,11 @@ async function relationalProductionUpdate(resource: string, entityId: string, pa
 async function relationalProductionDelete(resource: string, entityId: string) {
   switch (resource) {
     case "work-orders":
+      await prisma.productionTrackerEntry.deleteMany({
+        where: {
+          OR: [{ id: productionTrackerIdFromWorkOrderId(entityId) }, { workOrderId: entityId }],
+        },
+      });
       await prisma.productionWorkOrder.delete({ where: { id: entityId } });
       return;
     case "production-reports":
@@ -3334,6 +3453,50 @@ function mapHrKasbonToLegacyPayload(row: {
   };
 }
 
+function mapProjectLaborEntryToLegacyPayload(row: {
+  id: string;
+  projectId: string;
+  employeeId: string | null;
+  date: Date;
+  workerType: string;
+  workerName: string;
+  role: string | null;
+  qtyDays: number;
+  checkIn: string | null;
+  checkOut: string | null;
+  hoursWorked: number;
+  overtimeHours: number;
+  rate: number;
+  amount: number;
+  source: string;
+  notes: string | null;
+  createdByUserId: string | null;
+  createdByName: string | null;
+  createdAt: Date;
+}) {
+  return {
+    id: row.id,
+    projectId: row.projectId,
+    employeeId: row.employeeId ?? undefined,
+    date: row.date.toISOString().slice(0, 10),
+    workerType: row.workerType,
+    workerName: row.workerName,
+    role: row.role ?? undefined,
+    qtyDays: row.qtyDays,
+    checkIn: row.checkIn ?? undefined,
+    checkOut: row.checkOut ?? undefined,
+    hoursWorked: row.hoursWorked,
+    overtimeHours: row.overtimeHours,
+    rate: row.rate,
+    amount: row.amount,
+    source: row.source,
+    notes: row.notes ?? undefined,
+    createdByUserId: row.createdByUserId ?? undefined,
+    createdByName: row.createdByName ?? undefined,
+    createdAt: row.createdAt.toISOString(),
+  };
+}
+
 async function relationalFinanceMiscFindMany(resource: string) {
   switch (resource) {
     case "working-expense-sheets": {
@@ -3351,6 +3514,10 @@ async function relationalFinanceMiscFindMany(resource: string) {
     case "kasbons": {
       const rows = await prisma.hrKasbon.findMany({ orderBy: { updatedAt: "desc" } });
       return rows.map((row) => toEntityRow(row.id, mapHrKasbonToLegacyPayload(row), row.createdAt, row.updatedAt));
+    }
+    case "project-labor-entries": {
+      const rows = await prisma.projectLaborEntry.findMany({ orderBy: [{ date: "desc" }, { updatedAt: "desc" }] });
+      return rows.map((row) => toEntityRow(row.id, mapProjectLaborEntryToLegacyPayload(row), row.createdAt, row.updatedAt));
     }
     default:
       return [];
@@ -3374,6 +3541,10 @@ async function relationalFinanceMiscFindUnique(resource: string, entityId: strin
     case "kasbons": {
       const row = await prisma.hrKasbon.findUnique({ where: { id: entityId } });
       return row ? toEntityRow(row.id, mapHrKasbonToLegacyPayload(row), row.createdAt, row.updatedAt) : null;
+    }
+    case "project-labor-entries": {
+      const row = await prisma.projectLaborEntry.findUnique({ where: { id: entityId } });
+      return row ? toEntityRow(row.id, mapProjectLaborEntryToLegacyPayload(row), row.createdAt, row.updatedAt) : null;
     }
     default:
       return null;
@@ -3471,6 +3642,32 @@ async function relationalFinanceMiscCreate(resource: string, entityId: string, p
           status: asTrimmedString(record.status) || "Pending",
           approved: Boolean(record.approved),
           createdBy: asTrimmedString(record.createdBy) || undefined,
+          legacyPayload: payload,
+        },
+      });
+      return relationalFinanceMiscFindUnique(resource, entityId);
+    }
+    case "project-labor-entries": {
+      await prisma.projectLaborEntry.create({
+        data: {
+          id: entityId,
+          projectId: asTrimmedString(record.projectId) || "",
+          employeeId: asTrimmedString(record.employeeId) || undefined,
+          date: new Date(inventoryDateString(asTrimmedString(record.date))),
+          workerType: asTrimmedString(record.workerType) || "thl",
+          workerName: asTrimmedString(record.workerName) || "Unknown Worker",
+          role: asTrimmedString(record.role) || undefined,
+          qtyDays: toFiniteNumber(record.qtyDays, 1),
+          checkIn: asTrimmedString(record.checkIn) || undefined,
+          checkOut: asTrimmedString(record.checkOut) || undefined,
+          hoursWorked: toFiniteNumber(record.hoursWorked, 0),
+          overtimeHours: toFiniteNumber(record.overtimeHours, 0),
+          rate: toFiniteNumber(record.rate, 0),
+          amount: toFiniteNumber(record.amount, 0),
+          source: asTrimmedString(record.source) || "FIELD_RECORD",
+          notes: asTrimmedString(record.notes) || undefined,
+          createdByUserId: asTrimmedString(record.createdByUserId) || undefined,
+          createdByName: asTrimmedString(record.createdByName) || undefined,
           legacyPayload: payload,
         },
       });
@@ -3578,6 +3775,32 @@ async function relationalFinanceMiscUpdate(resource: string, entityId: string, p
       });
       return relationalFinanceMiscFindUnique(resource, entityId);
     }
+    case "project-labor-entries": {
+      await prisma.projectLaborEntry.update({
+        where: { id: entityId },
+        data: {
+          projectId: asTrimmedString(record.projectId) || "",
+          employeeId: asTrimmedString(record.employeeId) || null,
+          date: new Date(inventoryDateString(asTrimmedString(record.date))),
+          workerType: asTrimmedString(record.workerType) || "thl",
+          workerName: asTrimmedString(record.workerName) || "Unknown Worker",
+          role: asTrimmedString(record.role) || null,
+          qtyDays: toFiniteNumber(record.qtyDays, 1),
+          checkIn: asTrimmedString(record.checkIn) || null,
+          checkOut: asTrimmedString(record.checkOut) || null,
+          hoursWorked: toFiniteNumber(record.hoursWorked, 0),
+          overtimeHours: toFiniteNumber(record.overtimeHours, 0),
+          rate: toFiniteNumber(record.rate, 0),
+          amount: toFiniteNumber(record.amount, 0),
+          source: asTrimmedString(record.source) || "FIELD_RECORD",
+          notes: asTrimmedString(record.notes) || null,
+          createdByUserId: asTrimmedString(record.createdByUserId) || null,
+          createdByName: asTrimmedString(record.createdByName) || null,
+          legacyPayload: payload,
+        },
+      });
+      return relationalFinanceMiscFindUnique(resource, entityId);
+    }
     default:
       return null;
   }
@@ -3596,6 +3819,9 @@ async function relationalFinanceMiscDelete(resource: string, entityId: string) {
       return;
     case "kasbons":
       await prisma.hrKasbon.delete({ where: { id: entityId } });
+      return;
+    case "project-labor-entries":
+      await prisma.projectLaborEntry.delete({ where: { id: entityId } });
       return;
     default:
       return;
@@ -4425,6 +4651,11 @@ function extractDedicatedRelationRefs(
       return {
         employeeId: extractStringFromPayload(payload, "employeeId") ?? null,
       };
+    case "project-labor-entries":
+      return {
+        projectId: projectId ?? null,
+        employeeId: extractStringFromPayload(payload, "employeeId") ?? null,
+      };
     case "stock-movements":
       return { projectId: projectId ?? null };
     case "stock-ins":
@@ -4550,7 +4781,7 @@ async function assertDedicatedRelationsExist(
   resource: string,
   refs: DedicatedRelationRefs
 ): Promise<void> {
-  if (["work-orders", "production-reports", "production-trackers", "qc-inspections", "material-requests"].includes(resource) && !refs.projectId) {
+  if (["work-orders", "production-reports", "production-trackers", "qc-inspections", "material-requests", "project-labor-entries"].includes(resource) && !refs.projectId) {
     throw new PayloadValidationError(`${resource}: projectId wajib diisi`);
   }
   if (resource === "fleet-health") {
@@ -7047,7 +7278,7 @@ function registerDedicatedContractRoutes(basePath: string, resource: string) {
     try {
       const rows = await dedicatedFindMany(resource);
       return res.json(
-        rows.map((row) => toDedicatedContractPayload(row as { entityId: string; payload: unknown }))
+        rows.map((row: any) => toDedicatedContractPayload(row as { entityId: string; payload: unknown }))
       );
     } catch (err) {
       if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2025") {

@@ -115,6 +115,7 @@ export default function THLPage() {
       notes: String(form.notes || '').trim()
     };
 
+    const previousThlList = thlList;
     try {
       const next = [newItem, ...thlList];
       setThlList(next);
@@ -126,6 +127,7 @@ export default function THLPage() {
         upahHarian: 0, jumlahHari: 0, status: 'Pending', notes: ''
       });
     } catch (err: any) {
+      setThlList(previousThlList);
       toast.error(getApiErrorMessage(err, `Gagal simpan ${THL_RESOURCE}`));
     }
   };

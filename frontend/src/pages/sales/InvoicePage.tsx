@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useApp } from '../../contexts/AppContext';
 import type { Invoice } from '../../contexts/AppContext';
 import { 
@@ -93,7 +93,7 @@ const normalizeRow = (row: any, resource: InvoiceResource): NormalizedInvoice | 
 };
 
 export default function InvoicePage() {
-  const { invoiceList, updateInvoice, addAuditLog, addArchiveEntry, currentUser } = useApp();
+  const { invoiceList, addAuditLog, addArchiveEntry, currentUser } = useApp();
   const [serverInvoiceList, setServerInvoiceList] = useState<NormalizedInvoice[] | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState<NormalizedInvoice | null>(null);
@@ -102,10 +102,25 @@ export default function InvoicePage() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL');
   const [poQuickFilter, setPoQuickFilter] = useState<POQuickFilter>('ALL');
+  const proofInputRef = useRef<HTMLInputElement | null>(null);
   const effectiveInvoiceList = (serverInvoiceList ??
     ((invoiceList || []).map((inv) => normalizeRow(inv, 'invoices')).filter(Boolean) as NormalizedInvoice[]));
   const safeInvoiceList = (effectiveInvoiceList || []).filter(Boolean);
   const fmt = (v: unknown) => toNum(v).toLocaleString('id-ID');
+
+  const patchInvoiceResource = async (invoice: NormalizedInvoice, updates: Record<string, unknown>) => {
+    const path =
+      invoice.resource === 'customer-invoices'
+        ? `/finance/customer-invoices/${invoice.id}`
+        : `/invoices/${invoice.id}`;
+    const { data } = await api.patch(path, { ...invoice, ...updates });
+    const normalized = normalizeRow(data, invoice.resource);
+    if (!normalized) throw new Error('Invoice response invalid');
+    setServerInvoiceList((prev) =>
+      prev ? prev.map((row) => (row.id === invoice.id && row.resource === invoice.resource ? normalized : row)) : prev
+    );
+    return normalized;
+  };
 
   const fetchInvoices = async () => {
     try {
@@ -175,42 +190,44 @@ export default function InvoicePage() {
     };
   };
 
-  const handleUploadProof = async () => {
-    if (!selectedInvoice) return;
+  const handleProofFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!selectedInvoice || !file) return;
+
+    const readAsDataUrl = () =>
+      new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result || ''));
+        reader.onerror = () => reject(new Error('Gagal membaca file'));
+        reader.readAsDataURL(file);
+      });
+
     setUploading(true);
-
-    // Local placeholder proof image to keep UI stable in dev
-    const proofDataUri =
-      "data:image/svg+xml;utf8," +
-      encodeURIComponent(
-        `<svg xmlns='http://www.w3.org/2000/svg' width='600' height='800'><rect width='100%' height='100%' fill='#0f172a'/><text x='50%' y='50%' dominant-baseline='middle' text-anchor='middle' fill='#e2e8f0' font-family='Arial' font-size='24'>Bukti Transfer Uploaded</text></svg>`,
-      );
-
-    const updatedInvoice = {
-      ...selectedInvoice,
-      buktiTransfer: proofDataUri,
-    };
-
-      try {
-        await updateInvoice(selectedInvoice.id, { buktiTransfer: proofDataUri });
-      setServerInvoiceList((prev) =>
-        prev ? prev.map((inv) => (inv.id === selectedInvoice.id ? { ...inv, buktiTransfer: proofDataUri } : inv)) : prev
-      );
-    } catch {
+    try {
+      const dataUrl = await readAsDataUrl();
+      const uploadRes = await api.post('/media/invoice-transfer-proofs', {
+        resource: selectedInvoice.resource,
+        invoiceId: selectedInvoice.id,
+        fileName: file.name,
+        dataUrl,
+      });
+      const publicUrl = String(uploadRes?.data?.publicUrl || '').trim();
+      if (!publicUrl) throw new Error('URL bukti transfer tidak valid');
+      const updated = await patchInvoiceResource(selectedInvoice, { buktiTransfer: publicUrl });
+      setSelectedInvoice(updated);
+      addAuditLog({
+        action: "INVOICE_PROOF_UPLOADED",
+        module: "Sales",
+        details: `Bukti transfer diunggah untuk ${selectedInvoice.noInvoice}`,
+        status: "Success",
+      });
+      toast.success("Bukti transfer berhasil diunggah. Menunggu verifikasi Finance.");
+    } catch (err: any) {
+      toast.error(err?.response?.data?.error || err?.message || 'Gagal upload bukti transfer');
+    } finally {
       setUploading(false);
-      return;
+      event.target.value = '';
     }
-    setSelectedInvoice(updatedInvoice);
-    setUploading(false);
-
-    addAuditLog({
-      action: "INVOICE_PROOF_UPLOADED",
-      module: "Sales",
-      details: `Bukti transfer diunggah untuk ${selectedInvoice.noInvoice}`,
-      status: "Success",
-    });
-
-    toast.success("Bukti transfer berhasil diunggah. Menunggu verifikasi Finance.");
   };
 
   const handleToggleReminder = () => {
@@ -239,33 +256,24 @@ export default function InvoicePage() {
       };
 
       try {
-        await updateInvoice(selectedInvoice.id, { 
+        await patchInvoiceResource(selectedInvoice, {
           status: 'Paid',
           paidAmount: totalBayar,
           outstandingAmount: 0,
           noKwitansi: kwitansiNo,
           tanggalBayar: paidDate
         });
-        setServerInvoiceList((prev) =>
-          prev
-            ? prev.map((inv) =>
-                inv.id === selectedInvoice.id
-                  ? {
-                      ...inv,
-                      status: 'Paid',
-                      paidAmount: totalBayar,
-                      outstandingAmount: 0,
-                      noKwitansi: kwitansiNo,
-                      tanggalBayar: paidDate,
-                    }
-                  : inv
-              )
-            : prev
-        );
       } catch {
         return;
       }
-      setSelectedInvoice(updatedInvoice);
+      setSelectedInvoice({
+        ...updatedInvoice,
+        status: 'Paid',
+        paidAmount: totalBayar,
+        outstandingAmount: 0,
+        noKwitansi: kwitansiNo,
+        tanggalBayar: paidDate,
+      });
 
       addArchiveEntry({
         date: paidDate,
@@ -297,6 +305,13 @@ export default function InvoicePage() {
   if (selectedInvoice) {
     return (
       <div className="bg-slate-50 min-h-screen p-4 md:p-8">
+        <input
+          ref={proofInputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={(e) => void handleProofFileChange(e)}
+        />
         <div className="max-w-6xl mx-auto mb-6 flex flex-wrap justify-between items-center gap-4 print:hidden">
           <button 
             onClick={() => setSelectedInvoice(null)}
@@ -439,7 +454,7 @@ export default function InvoicePage() {
                     </p>
                   </div>
                   <button 
-                    onClick={() => { void handleUploadProof(); }}
+                    onClick={() => proofInputRef.current?.click()}
                     disabled={uploading}
                     className="w-full flex items-center justify-center gap-2 py-4 bg-blue-600 text-white rounded-2xl text-sm font-black hover:bg-blue-700 shadow-lg shadow-blue-200 transition-all disabled:opacity-50"
                   >

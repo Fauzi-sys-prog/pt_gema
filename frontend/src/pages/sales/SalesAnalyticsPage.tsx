@@ -166,7 +166,7 @@ export default function SalesAnalyticsPage() {
 
     const avgMonthly = base.reduce((acc, row) => acc + row.omzet, 0) / 12;
     for (const row of base) {
-      row.target = avgMonthly > 0 ? avgMonthly : 3500000000;
+      row.target = avgMonthly > 0 ? avgMonthly : 0;
     }
 
     return base;
@@ -181,11 +181,19 @@ export default function SalesAnalyticsPage() {
   const quotationPipeline = effectiveQuotationList
     .filter((q) => {
       const status = String(q.status || '').toLowerCase();
-      return status === 'sent' || status === 'approved' || status === 'draft';
+      return status === 'sent' || status === 'approved' || status === 'review';
     })
     .reduce((acc, q) => acc + toNum((q as any).grandTotal), 0);
-  const annualTarget = Math.max(totalSalesCurrentYear / Math.max(yearProgress, 0.01), totalSalesCurrentYear * 1.2, 1);
-  const progressPct = Math.min(100, (totalSalesCurrentYear / annualTarget) * 100);
+  const annualTarget = totalSalesCurrentYear > 0
+    ? Math.max(totalSalesCurrentYear / Math.max(yearProgress, 0.01), totalSalesCurrentYear * 1.2)
+    : 0;
+  const progressPct = annualTarget > 0 ? Math.min(100, (totalSalesCurrentYear / annualTarget) * 100) : 0;
+  const hasAnalyticsData =
+    effectiveInvoiceList.length > 0 ||
+    effectiveQuotationList.length > 0 ||
+    totalSalesCurrentYear > 0 ||
+    totalSalesPrevYear > 0 ||
+    quotationPipeline > 0;
   const weightedMargin = (() => {
     const entries = effectiveQuotationList
       .map((q) => {
@@ -261,11 +269,11 @@ export default function SalesAnalyticsPage() {
 
   const chartConfig = {
     omzet: {
-      label: "Omzet 2025",
+      label: `Omzet ${yearNow}`,
       color: "#2563eb",
     },
     prevYear: {
-      label: "Omzet 2024",
+      label: `Omzet ${yearPrev}`,
       color: "#cbd5e1",
     },
   };
@@ -301,6 +309,16 @@ export default function SalesAnalyticsPage() {
            </button>
         </div>
       </div>
+
+      {!hasAnalyticsData && (
+        <div className="bg-white rounded-[2.5rem] border-2 border-slate-100 shadow-sm p-10 text-center">
+          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mb-3">Sales Analytics</p>
+          <h3 className="text-2xl font-black italic text-slate-900">No Data</h3>
+          <p className="text-sm font-bold text-slate-500 uppercase italic mt-2">
+            Belum ada invoice atau quotation aktif yang cukup untuk analisis penjualan.
+          </p>
+        </div>
+      )}
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -392,8 +410,8 @@ export default function SalesAnalyticsPage() {
                   <thead>
                      <tr className="bg-slate-50/50 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b-2 border-slate-100">
                         <th className="px-6 py-4">Bulan</th>
-                        <th className="px-6 py-4 text-right">Omzet 2025</th>
-                        <th className="px-6 py-4 text-right">Omzet 2024</th>
+                        <th className="px-6 py-4 text-right">Omzet {yearNow}</th>
+                        <th className="px-6 py-4 text-right">Omzet {yearPrev}</th>
                         <th className="px-6 py-4 text-right">Selisih</th>
                      </tr>
                   </thead>

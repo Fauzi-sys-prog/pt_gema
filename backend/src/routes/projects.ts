@@ -165,6 +165,32 @@ function buildAuditMetadata(req: AuthRequest, extra?: Record<string, unknown>): 
   } as Prisma.InputJsonValue;
 }
 
+async function resolveActorSnapshot(userId?: string | null, role?: Role | null) {
+  if (!userId) {
+    return {
+      actorName: role || "SYSTEM",
+      actorRole: role || null,
+      actorUserId: null,
+    };
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      id: true,
+      username: true,
+      name: true,
+      role: true,
+    },
+  });
+
+  return {
+    actorName: user?.name || user?.username || userId,
+    actorRole: user?.role || role || null,
+    actorUserId: user?.id || userId,
+  };
+}
+
 function hasOwnerApprovalState(payload: Record<string, unknown>): boolean {
   const state = String(payload.approvalStatus || "").toUpperCase();
   return state === "APPROVED" || state === "REJECTED";
@@ -484,6 +510,64 @@ async function loadFinancialStockItems(): Promise<Record<string, unknown>[]> {
       unitPrice: row.unitPrice ?? undefined,
       supplier: row.supplierName ?? undefined,
       supplierName: row.supplierName ?? undefined,
+    };
+    const existing = byId.get(row.id);
+    if (!existing || row.updatedAt > existing.updatedAt) byId.set(row.id, { payload, updatedAt: row.updatedAt });
+  }
+  return Array.from(byId.values()).map((row) => row.payload);
+}
+
+async function loadFinancialMaterialRequests(): Promise<Record<string, unknown>[]> {
+  const [appRows, mrRows] = await Promise.all([
+    prisma.appEntity.findMany({
+      where: { resource: "material-requests" },
+      select: { entityId: true, payload: true, updatedAt: true },
+    }),
+    prisma.productionMaterialRequest.findMany({
+      select: {
+        id: true,
+        number: true,
+        projectId: true,
+        projectName: true,
+        requestedBy: true,
+        requestedAt: true,
+        status: true,
+        priority: true,
+        updatedAt: true,
+        items: {
+          select: {
+            itemCode: true,
+            itemName: true,
+            qty: true,
+            unit: true,
+          },
+          orderBy: { id: "asc" },
+        },
+      },
+    }),
+  ]);
+  const byId = new Map<string, { payload: Record<string, unknown>; updatedAt: Date }>();
+  for (const row of appRows) byId.set(row.entityId, { payload: asRecord(row.payload), updatedAt: row.updatedAt });
+  for (const row of mrRows) {
+    const payload = {
+      id: row.id,
+      noRequest: row.number,
+      number: row.number,
+      projectId: row.projectId,
+      projectName: row.projectName,
+      requestedBy: row.requestedBy,
+      requestedAt: row.requestedAt.toISOString(),
+      status: row.status,
+      priority: row.priority ?? undefined,
+      items: row.items.map((item) => ({
+        itemCode: item.itemCode ?? undefined,
+        kode: item.itemCode ?? undefined,
+        itemName: item.itemName,
+        nama: item.itemName,
+        qty: item.qty,
+        unit: item.unit,
+        satuan: item.unit,
+      })),
     };
     const existing = byId.get(row.id);
     if (!existing || row.updatedAt > existing.updatedAt) byId.set(row.id, { payload, updatedAt: row.updatedAt });
@@ -1035,6 +1119,7 @@ projectsRouter.patch("/projects/:id", authenticate, async (req: AuthRequest, res
   }
 
   try {
+    const actor = await resolveActorSnapshot(req.user?.id, req.user?.role);
     const existing = await prisma.projectRecord.findUnique({
       where: { id },
       select: {
@@ -1234,6 +1319,7 @@ projectsRouter.patch(
   }
 
   try {
+    const actor = await resolveActorSnapshot(req.user?.id, req.user?.role);
     const existing = await prisma.projectRecord.findUnique({
       where: { id },
       select: {
@@ -1305,11 +1391,17 @@ projectsRouter.patch(
       ...payload,
       id,
       approvalStatus: transition.toStatus,
-      approvedBy: transition.toStatus === "Approved" ? req.user?.id || "OWNER" : payload.approvedBy ?? null,
+      approvedBy: transition.toStatus === "Approved" ? actor.actorName : payload.approvedBy ?? null,
+      approvedByUserId: transition.toStatus === "Approved" ? actor.actorUserId : payload.approvedByUserId ?? null,
+      approvedByRole: transition.toStatus === "Approved" ? actor.actorRole : payload.approvedByRole ?? null,
       approvedAt: transition.toStatus === "Approved" ? now : payload.approvedAt ?? null,
-      rejectedBy: transition.toStatus === "Rejected" ? req.user?.id || req.user?.role || "MANAGEMENT" : payload.rejectedBy ?? null,
+      rejectedBy: transition.toStatus === "Rejected" ? actor.actorName : payload.rejectedBy ?? null,
+      rejectedByUserId: transition.toStatus === "Rejected" ? actor.actorUserId : payload.rejectedByUserId ?? null,
+      rejectedByRole: transition.toStatus === "Rejected" ? actor.actorRole : payload.rejectedByRole ?? null,
       rejectedAt: transition.toStatus === "Rejected" ? now : payload.rejectedAt ?? null,
-      spvApprovedBy: transition.toStatus === "Review SPV" ? req.user?.id || "SPV" : payload.spvApprovedBy ?? null,
+      spvApprovedBy: transition.toStatus === "Review SPV" ? actor.actorName : payload.spvApprovedBy ?? null,
+      spvApprovedByUserId: transition.toStatus === "Review SPV" ? actor.actorUserId : payload.spvApprovedByUserId ?? null,
+      spvApprovedByRole: transition.toStatus === "Review SPV" ? actor.actorRole : payload.spvApprovedByRole ?? null,
       spvApprovedAt: transition.toStatus === "Review SPV" ? now : payload.spvApprovedAt ?? null,
       ...(transition.toStatus === "Rejected"
         ? {
@@ -1329,7 +1421,9 @@ projectsRouter.patch(
         ? {
             quotationSnapshot,
             quotationSnapshotAt: now,
-            quotationSnapshotBy: req.user?.id || "OWNER",
+            quotationSnapshotBy: actor.actorName,
+            quotationSnapshotByUserId: actor.actorUserId,
+            quotationSnapshotByRole: actor.actorRole,
           }
         : {}),
     };
@@ -1378,6 +1472,7 @@ projectsRouter.patch(
             quotationId: readString(payload, "quotationId"),
             quotationSnapshotAt: transition.toStatus === "Approved" ? now : null,
             approvalStage: transition.stage,
+            actorName: actor.actorName,
           }),
         },
       });
@@ -1405,6 +1500,7 @@ projectsRouter.post(
   const reason = String((req.body as Record<string, unknown>)?.reason || "").trim();
 
   try {
+    const actor = await resolveActorSnapshot(req.user?.id, req.user?.role);
     const existing = await prisma.projectRecord.findUnique({
       where: { id },
       select: {
@@ -1456,12 +1552,20 @@ projectsRouter.post(
       id,
       approvalStatus: "Pending",
       approvedBy: null,
+      approvedByUserId: null,
+      approvedByRole: null,
       approvedAt: null,
       spvApprovedBy: null,
+      spvApprovedByUserId: null,
+      spvApprovedByRole: null,
       spvApprovedAt: null,
       rejectedBy: null,
+      rejectedByUserId: null,
+      rejectedByRole: null,
       rejectedAt: null,
-      unlockBy: req.user?.id || "OWNER",
+      unlockBy: actor.actorName,
+      unlockByUserId: actor.actorUserId,
+      unlockByRole: actor.actorRole,
       unlockAt: now,
       unlockReason: reason || null,
       lastApprovedSnapshotAt: payload.quotationSnapshotAt || null,
@@ -1506,6 +1610,7 @@ projectsRouter.post(
           metadata: buildAuditMetadata(req, {
             lastApprovedSnapshotAt: payload.quotationSnapshotAt || null,
             lastApprovedSnapshotBy: payload.quotationSnapshotBy || null,
+            actorName: actor.actorName,
           }),
         },
       });
@@ -1531,6 +1636,7 @@ projectsRouter.post(
 
   const { id } = req.params;
   try {
+    const actor = await resolveActorSnapshot(req.user?.id, req.user?.role);
     const existing = await prisma.projectRecord.findUnique({
       where: { id },
       select: {
@@ -1607,16 +1713,26 @@ projectsRouter.post(
       ...payload,
       id,
       approvalStatus: "Approved",
-      approvedBy: req.user?.id || "OWNER",
+      approvedBy: actor.actorName,
+      approvedByUserId: actor.actorUserId,
+      approvedByRole: actor.actorRole,
       approvedAt: now,
       spvApprovedBy: payload.spvApprovedBy ?? null,
+      spvApprovedByUserId: payload.spvApprovedByUserId ?? null,
+      spvApprovedByRole: payload.spvApprovedByRole ?? null,
       spvApprovedAt: payload.spvApprovedAt ?? null,
       rejectedBy: null,
+      rejectedByUserId: null,
+      rejectedByRole: null,
       rejectedAt: null,
       quotationSnapshot,
       quotationSnapshotAt: now,
-      quotationSnapshotBy: req.user?.id || "OWNER",
-      relockBy: req.user?.id || "OWNER",
+      quotationSnapshotBy: actor.actorName,
+      quotationSnapshotByUserId: actor.actorUserId,
+      quotationSnapshotByRole: actor.actorRole,
+      relockBy: actor.actorName,
+      relockByUserId: actor.actorUserId,
+      relockByRole: actor.actorRole,
       relockAt: now,
     };
 
@@ -1658,6 +1774,7 @@ projectsRouter.post(
           metadata: buildAuditMetadata(req, {
             quotationId: readString(payload, "quotationId"),
             quotationSnapshotAt: now,
+            actorName: actor.actorName,
           }),
         },
       });
@@ -1802,7 +1919,7 @@ projectsRouter.get("/projects/:id/financials", authenticate, async (req: AuthReq
   const { id } = req.params;
 
   try {
-    const [projectRow, poRows, stockOutRows, stockItemRows, attendanceRows, employeeRows] = await Promise.all([
+    const [projectRow, poRows, stockOutRows, stockItemRows, projectLaborRows, attendanceRows, employeeRows, materialRequestRows] = await Promise.all([
       prisma.projectRecord.findUnique({
         where: { id },
         select: {
@@ -1823,6 +1940,11 @@ projectsRouter.get("/projects/:id/financials", authenticate, async (req: AuthReq
       loadFinancialPurchaseOrders(),
       loadFinancialStockOuts(),
       loadFinancialStockItems(),
+      prisma.projectLaborEntry.findMany({
+        where: { projectId: id },
+        select: { amount: true, updatedAt: true },
+        orderBy: { updatedAt: "desc" },
+      }),
       prisma.attendanceRecord.findMany({
         select: { employeeId: true, projectId: true, workHours: true, overtime: true, updatedAt: true },
         orderBy: { updatedAt: "desc" },
@@ -1831,6 +1953,7 @@ projectsRouter.get("/projects/:id/financials", authenticate, async (req: AuthReq
         select: { id: true, salary: true, updatedAt: true },
         orderBy: { updatedAt: "desc" },
       }),
+      loadFinancialMaterialRequests(),
     ]);
 
     let project: Record<string, unknown>;
@@ -1900,7 +2023,7 @@ projectsRouter.get("/projects/:id/financials", authenticate, async (req: AuthReq
       salaryByEmployeeId.set(employeeId, toNumber(row.salary, 0));
     }
 
-    const laborCost = attendanceRows
+    const internalLaborCost = attendanceRows
       .filter((att) => att.projectId === id)
       .reduce((sum, att) => {
         const employeeId = att.employeeId || "";
@@ -1911,6 +2034,12 @@ projectsRouter.get("/projects/:id/financials", authenticate, async (req: AuthReq
         return sum + (workHours * hourlyRate) + (overtime * hourlyRate * 1.5);
       }, 0);
 
+    const projectLaborCost = projectLaborRows.reduce(
+      (sum, row) => sum + toNumber(row.amount, 0),
+      0,
+    );
+    const laborCost = internalLaborCost + projectLaborCost;
+
     const equipmentUsage = await prisma.fleetHealthEntry.findMany({
       where: { projectId: id },
       select: { hoursUsed: true, costPerHour: true },
@@ -1920,7 +2049,9 @@ projectsRouter.get("/projects/:id/financials", authenticate, async (req: AuthReq
       0,
     );
 
-    const actualSpent = pettyCash + poCommitted + stockUsage + laborCost + equipmentCost;
+    // Actual spent should reflect realized cost only.
+    // Purchase orders remain as committed exposure and are shown separately in the UI.
+    const actualSpent = pettyCash + stockUsage + laborCost + equipmentCost;
     const marginNominal = contractValue - actualSpent;
     const marginPercent = contractValue > 0 ? (marginNominal / contractValue) * 100 : 0;
     const budgetUtilizationPercent = contractValue > 0 ? (actualSpent / contractValue) * 100 : 0;
@@ -1930,11 +2061,19 @@ projectsRouter.get("/projects/:id/financials", authenticate, async (req: AuthReq
       const item = asRecord(raw);
       return sum + (toNumber(item.qtyEstimate, 0) * toNumber(item.unitPrice, 0));
     }, 0);
-    const materialRequests = Array.isArray(project.materialRequests) ? project.materialRequests : [];
-    const materialRequestEstimated = materialRequests.reduce((sum, raw) => {
-      const item = asRecord(raw);
-      return sum + toNumber(item.estimatedCost, 0);
-    }, 0);
+    const materialRequestEstimated = materialRequestRows
+      .filter((row) => readString(row, "projectId") === id && normalizeWorkflowStatus(readString(row, "status")) !== "REJECTED")
+      .reduce((sum, row) => {
+        const items = Array.isArray(row.items) ? row.items : [];
+        const rowEstimated = items.reduce((itemSum, raw) => {
+          const item = asRecord(raw);
+          const kode = readString(item, "kode") || readString(item, "itemCode") || "";
+          const qty = toNumber(item.qty, 0);
+          const unitPrice = stockPriceByKode.get(kode) || 0;
+          return itemSum + qty * unitPrice;
+        }, 0);
+        return sum + rowEstimated;
+      }, 0);
     const materialRequestUsagePercent = boqBudget > 0 ? (materialRequestEstimated / boqBudget) * 100 : 0;
 
     return res.json({

@@ -209,7 +209,8 @@ export default function VendorPaymentPage() {
       if (!ok) return;
       toast.success('Expense berhasil diupdate!');
     } else {
-      addExpense(newExpense);
+      const ok = await addExpense(newExpense);
+      if (!ok) return;
       toast.success('Expense berhasil ditambahkan!');
     }
 
@@ -218,7 +219,7 @@ export default function VendorPaymentPage() {
   };
 
   // Submit vendor
-  const handleSubmitVendor = () => {
+  const handleSubmitVendor = async () => {
     if (!vendorForm.namaVendor) {
       toast.error('Nama vendor harus diisi!');
       return;
@@ -240,7 +241,8 @@ export default function VendorPaymentPage() {
       createdAt: new Date().toISOString()
     };
 
-    addVendor(newVendor);
+    const ok = await addVendor(newVendor);
+    if (!ok) return;
     toast.success('Vendor berhasil ditambahkan!');
     resetVendorForm();
     setShowVendorModal(false);
@@ -748,9 +750,10 @@ export default function VendorPaymentPage() {
                                 <Edit className="w-4 h-4" />
                               </button>
                               <button
-                                onClick={() => {
+                                onClick={async () => {
                                   if (window.confirm('Hapus expense ini?')) {
-                                    deleteExpense(expense.id);
+                                    const ok = await deleteExpense(expense.id);
+                                    if (!ok) return;
                                     toast.success('Expense berhasil dihapus!');
                                   }
                                 }}
@@ -856,8 +859,10 @@ export default function VendorPaymentPage() {
                         <td className="px-6 py-4">
                           <div className="flex items-center justify-center gap-2">
                             <button
-                              onClick={() => {
-                                updateVendor(vendor.id, { status: vendor.status === 'Active' ? 'Inactive' : 'Active' });
+                              onClick={async () => {
+                                const nextStatus = vendor.status === 'Active' ? 'Inactive' : 'Active';
+                                const ok = await updateVendor(vendor.id, { status: nextStatus });
+                                if (!ok) return;
                                 toast.success(`Vendor ${vendor.status === 'Active' ? 'dinonaktifkan' : 'diaktifkan'}!`);
                               }}
                               className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
@@ -866,9 +871,10 @@ export default function VendorPaymentPage() {
                               <Edit className="w-4 h-4" />
                             </button>
                             <button
-                              onClick={() => {
+                              onClick={async () => {
                                 if (window.confirm('Hapus vendor ini?')) {
-                                  deleteVendor(vendor.id);
+                                  const ok = await deleteVendor(vendor.id);
+                                  if (!ok) return;
                                   toast.success('Vendor berhasil dihapus!');
                                 }
                               }}

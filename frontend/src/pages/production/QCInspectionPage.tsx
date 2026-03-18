@@ -14,8 +14,10 @@ export default function QCInspectionPage() {
   const [showPrintPreview, setShowPrintPreview] = useState(false);
   const [selectedInspection, setSelectedInspection] = useState<QCInspection | null>(null);
   const [syncing, setSyncing] = useState(false);
+  const [uploadingDrawing, setUploadingDrawing] = useState(false);
   const [serverWorkOrders, setServerWorkOrders] = useState<WorkOrder[]>([]);
   const [serverInspections, setServerInspections] = useState<QCInspection[]>([]);
+  const drawingInputRef = useRef<HTMLInputElement | null>(null);
 
   const [newInspection, setNewInspection] = useState<Partial<QCInspection>>({
     tanggal: new Date().toISOString().split('T')[0],
@@ -114,6 +116,9 @@ export default function QCInspectionPage() {
 
     setSelectedWO(wo);
     setNewInspection({
+      projectId: wo.projectId,
+      workOrderId: wo.id,
+      woId: wo.id,
       tanggal: new Date().toISOString().split('T')[0],
       visualCheck: true,
       dimensionCheck: true,
@@ -187,6 +192,9 @@ export default function QCInspectionPage() {
 
     const inspection: QCInspection = {
       id: `qc-${Date.now()}`,
+      projectId: newInspection.projectId,
+      workOrderId: newInspection.workOrderId || newInspection.woId,
+      woId: newInspection.woId || newInspection.workOrderId,
       tanggal: newInspection.tanggal!,
       batchNo: newInspection.batchNo!,
       itemNama: newInspection.itemNama!,
@@ -201,6 +209,7 @@ export default function QCInspectionPage() {
       materialCheck: !!newInspection.materialCheck,
       photoUrl: newInspection.photoUrl,
       drawingUrl: newInspection.drawingUrl,
+      drawingAssetId: newInspection.drawingAssetId,
       woNumber: newInspection.woNumber,
       customerName: newInspection.customerName,
       remark: newInspection.remark,
@@ -215,6 +224,45 @@ export default function QCInspectionPage() {
   const handlePrintInspection = (inspection: QCInspection) => {
     setSelectedInspection(inspection);
     setShowPrintPreview(true);
+  };
+
+  const handleUploadDrawing = (file?: File | null) => {
+    if (!file || !selectedWO?.projectId) return;
+    if (!file.type.startsWith('image/')) {
+      toast.error('File drawing harus berupa gambar.');
+      return;
+    }
+
+    const reader = new FileReader();
+    setUploadingDrawing(true);
+    reader.onload = async () => {
+      try {
+        const dataUrl = typeof reader.result === 'string' ? reader.result : '';
+        const res = await api.post('/media/qc-drawings', {
+          projectId: selectedWO.projectId,
+          workOrderId: selectedWO.id,
+          fileName: file.name,
+          dataUrl,
+        });
+        setNewInspection((prev) => ({
+          ...prev,
+          drawingUrl: res.data?.publicUrl || prev.drawingUrl,
+          drawingAssetId: res.data?.id || prev.drawingAssetId,
+        }));
+        toast.success('Drawing berhasil di-upload.');
+      } catch (err: any) {
+        toast.error(err?.response?.data?.error || 'Gagal upload drawing.');
+      } finally {
+        setUploadingDrawing(false);
+        if (drawingInputRef.current) drawingInputRef.current.value = '';
+      }
+    };
+    reader.onerror = () => {
+      setUploadingDrawing(false);
+      toast.error('Gagal membaca file drawing.');
+      if (drawingInputRef.current) drawingInputRef.current.value = '';
+    };
+    reader.readAsDataURL(file);
   };
 
   const handlePrint = () => {
@@ -471,16 +519,50 @@ export default function QCInspectionPage() {
                 </div>
               </div>
 
-              {/* DRAWING URL */}
+              {/* DRAWING IMAGE */}
               <div className="space-y-1.5">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Drawing URL (Optional)</label>
-                <input 
-                  type="text" 
-                  placeholder="https://..."
-                  className="w-full px-4 py-3 bg-white border-2 border-slate-100 rounded-2xl text-sm font-bold focus:border-indigo-500 transition-colors outline-none"
-                  value={newInspection.drawingUrl || ''}
-                  onChange={(e) => setNewInspection({ ...newInspection, drawingUrl: e.target.value })}
-                />
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Drawing Image (Optional)</label>
+                <div className="border-2 border-slate-100 rounded-2xl p-4 bg-white space-y-3">
+                  <div className="flex flex-wrap items-center gap-3">
+                    <input
+                      ref={drawingInputRef}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => handleUploadDrawing(e.target.files?.[0] || null)}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => drawingInputRef.current?.click()}
+                      disabled={uploadingDrawing}
+                      className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase hover:bg-indigo-700 transition-all disabled:opacity-60"
+                    >
+                      {uploadingDrawing ? 'Uploading...' : 'Upload Drawing'}
+                    </button>
+                    {newInspection.drawingUrl ? (
+                      <button
+                        type="button"
+                        onClick={() => setNewInspection({ ...newInspection, drawingUrl: '', drawingAssetId: undefined })}
+                        className="px-4 py-2 bg-slate-100 text-slate-600 rounded-xl text-[10px] font-black uppercase hover:bg-slate-200 transition-all"
+                      >
+                        Hapus Drawing
+                      </button>
+                    ) : null}
+                  </div>
+                  {newInspection.drawingUrl ? (
+                    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-50">
+                      <img
+                        src={newInspection.drawingUrl}
+                        alt="QC drawing"
+                        className="max-h-56 w-full object-contain bg-white"
+                      />
+                    </div>
+                  ) : (
+                    <div className="text-[11px] font-bold text-slate-400 px-1">
+                      Belum ada drawing yang di-upload.
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* DIMENSION TABLE */}

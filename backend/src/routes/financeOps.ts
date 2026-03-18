@@ -85,6 +85,9 @@ function mapCustomerInvoice(row: {
   noKontrak: string | null;
   noPO: string | null;
   termin: string | null;
+  buktiTransfer: string | null;
+  noKwitansi: string | null;
+  tanggalBayar: Date | null;
   remark: string | null;
   createdBy: string | null;
   sentAt: Date | null;
@@ -115,6 +118,9 @@ function mapCustomerInvoice(row: {
     noKontrak: row.noKontrak ?? undefined,
     noPO: row.noPO ?? undefined,
     termin: row.termin ?? undefined,
+    buktiTransfer: row.buktiTransfer ?? undefined,
+    noKwitansi: row.noKwitansi ?? undefined,
+    tanggalBayar: row.tanggalBayar ? row.tanggalBayar.toISOString().slice(0, 10) : undefined,
     remark: row.remark ?? undefined,
     createdBy: row.createdBy ?? undefined,
     sentAt: row.sentAt ? row.sentAt.toISOString() : undefined,
@@ -358,6 +364,9 @@ async function createResource(resource: FinanceOpsResource, payload: Record<stri
           noKontrak: asTrimmedString(payload.noKontrak) || undefined,
           noPO: asTrimmedString(payload.noPO) || undefined,
           termin: asTrimmedString(payload.termin) || undefined,
+          buktiTransfer: asTrimmedString(payload.buktiTransfer) || undefined,
+          noKwitansi: asTrimmedString(payload.noKwitansi) || undefined,
+          tanggalBayar: asTrimmedString(payload.tanggalBayar) ? new Date(String(payload.tanggalBayar)) : undefined,
           remark: asTrimmedString(payload.remark) || undefined,
           createdBy: asTrimmedString(payload.createdBy) || undefined,
           sentAt: asTrimmedString(payload.sentAt) ? new Date(String(payload.sentAt)) : undefined,
@@ -478,6 +487,9 @@ async function updateResource(resource: FinanceOpsResource, id: string, payload:
           noKontrak: asTrimmedString(payload.noKontrak) || null,
           noPO: asTrimmedString(payload.noPO) || null,
           termin: asTrimmedString(payload.termin) || null,
+          buktiTransfer: asTrimmedString(payload.buktiTransfer) || null,
+          noKwitansi: asTrimmedString(payload.noKwitansi) || null,
+          tanggalBayar: asTrimmedString(payload.tanggalBayar) ? new Date(String(payload.tanggalBayar)) : null,
           remark: asTrimmedString(payload.remark) || null,
           createdBy: asTrimmedString(payload.createdBy) || null,
           sentAt: asTrimmedString(payload.sentAt) ? new Date(String(payload.sentAt)) : null,

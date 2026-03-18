@@ -1,4 +1,4 @@
-type RoleKey = "owner" | "sales";
+type RoleKey = "owner" | "spv" | "sales";
 
 type Session = {
   token: string;
@@ -6,10 +6,19 @@ type Session = {
 };
 
 const BASE_URL = process.env.SMOKE_BASE_URL || "http://localhost:3000";
+const tokenOverrides: Partial<Record<RoleKey, string>> = {
+  owner: process.env.SMOKE_OWNER_TOKEN,
+  spv: process.env.SMOKE_SPV_TOKEN,
+  sales: process.env.SMOKE_SALES_TOKEN,
+};
 const credentials: Record<RoleKey, { username: string; password: string }> = {
   owner: {
-    username: process.env.SMOKE_OWNER_USERNAME || "owner",
+    username: process.env.SMOKE_OWNER_USERNAME || "syamsudin",
     password: process.env.SMOKE_OWNER_PASSWORD || "owner",
+  },
+  spv: {
+    username: process.env.SMOKE_SPV_USERNAME || "aji",
+    password: process.env.SMOKE_SPV_PASSWORD || "AjiBaru#2026Aman",
   },
   sales: {
     username: process.env.SMOKE_SALES_USERNAME || "angesti",
@@ -51,6 +60,14 @@ function assertStatus(name: string, actual: number, expected: number) {
 }
 
 async function login(role: RoleKey): Promise<Session> {
+  const overrideToken = tokenOverrides[role];
+  if (typeof overrideToken === "string" && overrideToken.trim()) {
+    return {
+      token: overrideToken.trim(),
+      userId: null,
+    };
+  }
+
   const cred = credentials[role];
   const res = await api("POST", "/auth/login", undefined, cred);
   if (res.status !== 200 || !res.json?.token) {
@@ -67,6 +84,7 @@ async function run() {
   console.log(`Base URL: ${BASE_URL}`);
 
   const owner = await login("owner");
+  const spv = await login("spv");
   const sales = await login("sales");
 
   const now = Date.now();
@@ -205,6 +223,13 @@ async function run() {
       action: "APPROVE",
     });
     assertStatus("sales cannot approve quotation", salesQuoApprove.status, 403);
+
+    const spvQuoApprove = await api("POST", "/dashboard/finance-approval-action", spv.token, {
+      documentType: "QUOTATION",
+      documentId: quoId,
+      action: "APPROVE",
+    });
+    assertStatus("spv approve quotation to review", spvQuoApprove.status, 200);
 
     const ownerQuoApprove = await api("POST", "/dashboard/finance-approval-action", owner.token, {
       documentType: "QUOTATION",

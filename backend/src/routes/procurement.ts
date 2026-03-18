@@ -283,6 +283,264 @@ async function getResource(resource: ProcurementResource, id: string) {
   return row ? mapReceiving(row) : null;
 }
 
+async function syncPurchaseOrderProgress(poId: string) {
+  const purchaseOrder = await prisma.procurementPurchaseOrder.findUnique({
+    where: { id: poId },
+    include: { items: true },
+  });
+  if (!purchaseOrder) return;
+
+  const receivings = await prisma.procurementReceiving.findMany({
+    where: { purchaseOrderId: poId, status: { not: "Rejected" } },
+    include: { items: true },
+  });
+
+  const receivedByCode = new Map<string, number>();
+  const receivedByName = new Map<string, number>();
+
+  for (const receiving of receivings) {
+    for (const item of receiving.items) {
+      const qty = Math.max(0, item.qtyGood || item.qtyReceived || 0);
+      if (qty <= 0) continue;
+      const codeKey = String(item.itemCode || "").trim().toLowerCase();
+      const nameKey = String(item.itemName || "").trim().toLowerCase();
+      if (codeKey) receivedByCode.set(codeKey, (receivedByCode.get(codeKey) || 0) + qty);
+      if (nameKey) receivedByName.set(nameKey, (receivedByName.get(nameKey) || 0) + qty);
+    }
+  }
+
+  const nextItems = purchaseOrder.items.map((item) => {
+    const codeKey = String(item.itemCode || "").trim().toLowerCase();
+    const nameKey = String(item.itemName || "").trim().toLowerCase();
+    const qtyReceived = Math.min(
+      item.qty,
+      Math.max(receivedByCode.get(codeKey) || 0, receivedByName.get(nameKey) || 0)
+    );
+    return { ...item, qtyReceived };
+  });
+
+  const hasItems = nextItems.length > 0;
+  const allReceived = hasItems && nextItems.every((item) => item.qtyReceived >= item.qty);
+  const someReceived = nextItems.some((item) => item.qtyReceived > 0);
+  const nextStatus = allReceived ? "Received" : someReceived ? "Partial" : purchaseOrder.status;
+
+  await prisma.procurementPurchaseOrder.update({
+    where: { id: poId },
+    data: {
+      status: nextStatus,
+      items: {
+        deleteMany: {},
+        create: nextItems.map((item) => ({
+          id: item.id,
+          itemCode: item.itemCode || undefined,
+          itemName: item.itemName,
+          qty: item.qty,
+          unit: item.unit,
+          unitPrice: item.unitPrice,
+          total: item.total,
+          qtyReceived: item.qtyReceived,
+          source: item.source || undefined,
+          sourceRef: item.sourceRef || undefined,
+        })),
+      },
+    },
+  });
+}
+
+async function resolveLegacyPurchaseOrderId(relationalPurchaseOrderId: string): Promise<string | undefined> {
+  if (!relationalPurchaseOrderId) return undefined;
+  const legacy = await prisma.purchaseOrderRecord.findUnique({
+    where: { id: relationalPurchaseOrderId },
+    select: { id: true },
+  });
+  return legacy?.id;
+}
+
+async function syncInventoryFromReceiving(receivingId: string) {
+  const receiving = await prisma.procurementReceiving.findUnique({
+    where: { id: receivingId },
+    include: { items: true },
+  });
+  if (!receiving) return;
+
+  const stockInId = `SI-AUTO-${receiving.id}`;
+  const stockInNumber = `SI-AUTO-${receiving.number}`;
+  const stockInDate = new Date(receiving.tanggal.toISOString().slice(0, 10));
+  const stockItems = receiving.items
+    .map((item) => ({
+      code: asTrimmedString(item.itemCode) || "",
+      name: item.itemName,
+      qty: Math.max(0, item.qtyGood || item.qtyReceived || 0),
+      unit: item.unit,
+      batchNo: item.batchNo || undefined,
+      expiryDate: item.expiryDate || undefined,
+    }))
+    .filter((item) => item.code && item.qty > 0);
+  const legacyPoId = await resolveLegacyPurchaseOrderId(receiving.purchaseOrderId);
+
+  await prisma.inventoryStockMovement.deleteMany({ where: { stockInId } });
+  await prisma.inventoryStockIn.deleteMany({ where: { id: stockInId } });
+
+  await prisma.inventoryStockIn.create({
+    data: {
+      id: stockInId,
+      number: stockInNumber,
+      tanggal: stockInDate,
+      type: "Receiving",
+      status: "Posted",
+      supplierName: receiving.supplierName || undefined,
+      suratJalanNumber: receiving.suratJalanNo || undefined,
+      notes: receiving.notes || undefined,
+      createdByName: "Receiving System",
+      poId: legacyPoId,
+      projectId: receiving.projectId || undefined,
+      legacyPayload: {
+        id: stockInId,
+        noStockIn: stockInNumber,
+        noSuratJalan: receiving.suratJalanNo || undefined,
+        supplier: receiving.supplierName,
+        projectId: receiving.projectId || undefined,
+        projectName: receiving.projectName || undefined,
+        tanggal: receiving.tanggal.toISOString().slice(0, 10),
+        type: "Receiving",
+        status: "Posted",
+        createdBy: "Receiving System",
+        noPO: receiving.purchaseOrderNo || undefined,
+        poId: legacyPoId,
+        items: stockItems.map((item) => ({
+          kode: item.code,
+          nama: item.name,
+          qty: item.qty,
+          satuan: item.unit,
+          batchNo: item.batchNo,
+          expiryDate: item.expiryDate ? item.expiryDate.toISOString().slice(0, 10) : undefined,
+        })),
+      } as Prisma.InputJsonValue,
+      items: {
+        create: stockItems.map((item, index) => ({
+          id: `${stockInId}-ITEM-${String(index + 1).padStart(3, "0")}`,
+          itemCode: item.code,
+          itemName: item.name,
+          qty: item.qty,
+          unit: item.unit,
+          batchNo: item.batchNo,
+          expiryDate: item.expiryDate || undefined,
+        })),
+      },
+    },
+  });
+
+  for (const item of stockItems) {
+    const existing = await prisma.inventoryItem.findFirst({
+      where: { code: item.code },
+    });
+    const stockBefore = existing?.onHandQty || 0;
+    const stockAfter = stockBefore + item.qty;
+
+    if (existing) {
+      await prisma.inventoryItem.update({
+        where: { id: existing.id },
+        data: {
+          name: existing.name || item.name,
+          unit: existing.unit || item.unit,
+          supplierName: existing.supplierName || receiving.supplierName || undefined,
+          onHandQty: stockAfter,
+          lastStockUpdateAt: new Date(),
+          metadata: {
+            ...(asRecord(existing.metadata)),
+            id: existing.id,
+            kode: item.code,
+            nama: existing.name || item.name,
+            stok: stockAfter,
+            satuan: existing.unit || item.unit,
+            kategori: asTrimmedString(asRecord(existing.metadata).kategori) || "General",
+            minStock: toFiniteNumber(asRecord(existing.metadata).minStock, existing.minStock),
+            hargaSatuan: toFiniteNumber(asRecord(existing.metadata).hargaSatuan, existing.unitPrice ?? 0),
+            supplier: existing.supplierName || receiving.supplierName || "",
+            lokasi: existing.location,
+            lastUpdate: new Date().toISOString(),
+            expiryDate: item.expiryDate ? item.expiryDate.toISOString().slice(0, 10) : asTrimmedString(asRecord(existing.metadata).expiryDate) || undefined,
+          } as Prisma.InputJsonValue,
+        },
+      });
+    } else {
+      const itemId = `STK-AUTO-${randomUUID().slice(0, 10).toUpperCase()}`;
+      await prisma.inventoryItem.create({
+        data: {
+          id: itemId,
+          code: item.code,
+          name: item.name,
+          category: "General",
+          unit: item.unit || "pcs",
+          location: receiving.warehouseLocation || "Gudang Utama",
+          minStock: 0,
+          onHandQty: stockAfter,
+          unitPrice: 0,
+          supplierName: receiving.supplierName || undefined,
+          lastStockUpdateAt: new Date(),
+          metadata: {
+            id: itemId,
+            kode: item.code,
+            nama: item.name,
+            stok: stockAfter,
+            satuan: item.unit || "pcs",
+            kategori: "General",
+            minStock: 0,
+            hargaSatuan: 0,
+            supplier: receiving.supplierName || "",
+            lokasi: receiving.warehouseLocation || "Gudang Utama",
+            lastUpdate: new Date().toISOString(),
+            expiryDate: item.expiryDate ? item.expiryDate.toISOString().slice(0, 10) : undefined,
+          } as Prisma.InputJsonValue,
+        },
+      });
+    }
+
+    await prisma.inventoryStockMovement.create({
+      data: {
+        id: `MOV-AUTO-${randomUUID().slice(0, 10).toUpperCase()}`,
+        tanggal: stockInDate,
+        direction: "IN",
+        referenceNo: stockInNumber,
+        referenceType: "Stock In",
+        itemCode: item.code,
+        itemName: item.name,
+        qty: item.qty,
+        unit: item.unit || "pcs",
+        location: receiving.warehouseLocation || "Gudang Utama",
+        stockBefore,
+        stockAfter,
+        batchNo: item.batchNo,
+        expiryDate: item.expiryDate || undefined,
+        supplierName: receiving.supplierName || undefined,
+        poNumber: receiving.purchaseOrderNo || undefined,
+        createdByName: "Receiving System",
+        projectId: receiving.projectId || undefined,
+        stockInId,
+        legacyPayload: {
+          tanggal: receiving.tanggal.toISOString().slice(0, 10),
+          type: "IN",
+          refNo: stockInNumber,
+          refType: "Stock In",
+          itemKode: item.code,
+          itemNama: item.name,
+          qty: item.qty,
+          unit: item.unit || "pcs",
+          lokasi: receiving.warehouseLocation || "Gudang Utama",
+          stockBefore,
+          stockAfter,
+          createdBy: "Receiving System",
+          supplier: receiving.supplierName || undefined,
+          noPO: receiving.purchaseOrderNo || undefined,
+          projectId: receiving.projectId || undefined,
+          batchNo: item.batchNo,
+          expiryDate: item.expiryDate ? item.expiryDate.toISOString().slice(0, 10) : undefined,
+        } as Prisma.InputJsonValue,
+      },
+    });
+  }
+}
+
 async function createResource(resource: ProcurementResource, payload: Record<string, unknown>) {
   const id = String(payload.id);
   if (resource === "purchase-orders") {
@@ -372,6 +630,8 @@ async function createResource(resource: ProcurementResource, payload: Record<str
       },
     },
   });
+  await syncPurchaseOrderProgress(asTrimmedString(payload.poId) || "");
+  await syncInventoryFromReceiving(id);
   return getResource(resource, id);
 }
 
@@ -465,6 +725,8 @@ async function updateResource(resource: ProcurementResource, id: string, payload
       },
     },
   });
+  await syncPurchaseOrderProgress(asTrimmedString(payload.poId) || "");
+  await syncInventoryFromReceiving(id);
   return getResource(resource, id);
 }
 
@@ -473,6 +735,8 @@ async function deleteResource(resource: ProcurementResource, id: string) {
     await prisma.procurementPurchaseOrder.delete({ where: { id } });
     return;
   }
+  await prisma.inventoryStockMovement.deleteMany({ where: { stockInId: `SI-AUTO-${id}` } });
+  await prisma.inventoryStockIn.deleteMany({ where: { id: `SI-AUTO-${id}` } });
   await prisma.procurementReceiving.delete({ where: { id } });
 }
 

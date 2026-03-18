@@ -72,6 +72,19 @@ export default function CashflowPage() {
     ...row,
     dateObj: row.date instanceof Date ? row.date : new Date(row.date),
   }));
+  const hasCashflowData =
+    effectiveStats.inflow > 0 ||
+    effectiveStats.totalOutflow > 0 ||
+    effectiveMonthlyCashflow.length > 0 ||
+    effectiveTransactionLog.length > 0;
+  const cashPositionTone =
+    effectiveStats.netCashflow > 0 ? 'Healthy Balance' : effectiveStats.netCashflow < 0 ? 'Deficit Position' : 'No Data Yet';
+  const cashPositionClass =
+    effectiveStats.netCashflow > 0
+      ? 'text-emerald-400'
+      : effectiveStats.netCashflow < 0
+      ? 'text-rose-400'
+      : 'text-slate-300';
 
   const handleExport = async () => {
     const rows = [
@@ -184,7 +197,7 @@ export default function CashflowPage() {
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Total Inflow (Revenue)</p>
               <p className="text-3xl font-black text-slate-900 italic mt-1">Rp {effectiveStats.inflow.toLocaleString('id-ID')}</p>
               <p className="text-[10px] text-emerald-600 font-black mt-2 flex items-center gap-1 uppercase">
-                <TrendingUp size={12} /> +12% vs last month
+                <TrendingUp size={12} /> {hasCashflowData ? 'Live from finance ledger' : 'Menunggu data ledger'}
               </p>
             </div>
          </div>
@@ -198,7 +211,7 @@ export default function CashflowPage() {
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Total Outflow (Expenses)</p>
               <p className="text-3xl font-black text-slate-900 italic mt-1">Rp {effectiveStats.totalOutflow.toLocaleString('id-ID')}</p>
               <p className="text-[10px] text-rose-600 font-black mt-2 flex items-center gap-1 uppercase">
-                <ArrowRight size={12} /> Material & Payroll
+                <ArrowRight size={12} /> {hasCashflowData ? 'Material, payroll, expense' : 'Belum ada outflow tercatat'}
               </p>
             </div>
          </div>
@@ -210,10 +223,10 @@ export default function CashflowPage() {
                 <Wallet size={24} />
               </div>
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Net Cash Position</p>
-              <p className="text-3xl font-black italic mt-1 text-emerald-400">Rp {effectiveStats.netCashflow.toLocaleString('id-ID')}</p>
+              <p className={`text-3xl font-black italic mt-1 ${cashPositionClass}`}>Rp {effectiveStats.netCashflow.toLocaleString('id-ID')}</p>
               <div className="mt-4 flex items-center gap-2">
                 <div className="px-3 py-1 bg-white/10 rounded-full text-[9px] font-black uppercase tracking-widest border border-white/10">
-                  Healthy Balance
+                  {cashPositionTone}
                 </div>
               </div>
             </div>
@@ -238,6 +251,7 @@ export default function CashflowPage() {
                </div>
             </div>
             <div className="h-80 w-full overflow-hidden min-w-0 min-h-0 flex flex-col relative">
+               {effectiveMonthlyCashflow.length > 0 ? (
                <ResponsiveContainer width="100%" height={320} minWidth={0} minHeight={0}>
                   <AreaChart data={effectiveMonthlyCashflow}>
                     <defs>
@@ -272,6 +286,14 @@ export default function CashflowPage() {
                     <Area type="monotone" dataKey="outflow" stroke="#f43f5e" strokeWidth={3} fillOpacity={1} fill="url(#colorOut)" />
                   </AreaChart>
                </ResponsiveContainer>
+               ) : (
+               <div className="flex h-[320px] items-center justify-center rounded-3xl border border-dashed border-slate-200 bg-slate-50 text-center">
+                 <div>
+                   <p className="text-sm font-black uppercase tracking-widest text-slate-500">Belum ada tren cashflow</p>
+                   <p className="mt-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Tambah transaksi finance supaya grafik terisi.</p>
+                 </div>
+               </div>
+               )}
             </div>
          </div>
 
@@ -280,6 +302,7 @@ export default function CashflowPage() {
               <PieChartIcon size={14} /> Outflow Breakdown
             </h3>
             <div className="flex-1 flex items-center justify-center min-w-0 min-h-0 relative flex-col h-[240px]">
+               {effectivePieData.length > 0 ? (
                <ResponsiveContainer width="100%" height={240} minWidth={0} minHeight={0}>
                   <PieChart>
                     <Pie
@@ -301,8 +324,21 @@ export default function CashflowPage() {
                     />
                   </PieChart>
                </ResponsiveContainer>
+               ) : (
+               <div className="flex h-[240px] w-full items-center justify-center rounded-3xl border border-dashed border-slate-200 bg-slate-50 text-center">
+                 <div>
+                   <p className="text-sm font-black uppercase tracking-widest text-slate-500">Belum ada breakdown outflow</p>
+                   <p className="mt-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Outflow akan muncul otomatis dari expense, payroll, dan payment vendor.</p>
+                 </div>
+               </div>
+               )}
             </div>
             <div className="space-y-4 mt-8">
+               {effectivePieData.length === 0 && (
+                  <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-4 text-xs font-semibold uppercase tracking-wide text-slate-400">
+                    Belum ada kategori outflow untuk diringkas.
+                  </div>
+               )}
                {effectivePieData.map((item, i) => (
                   <div key={i} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100">
                      <div className="flex items-center gap-3">
@@ -343,6 +379,13 @@ export default function CashflowPage() {
                   </tr>
                </thead>
                <tbody className="divide-y divide-slate-50">
+                  {effectiveTransactionLog.length === 0 && (
+                     <tr>
+                        <td colSpan={5} className="px-8 py-10 text-center text-xs font-semibold uppercase tracking-wide text-slate-400">
+                           Belum ada transaksi finance yang tercatat.
+                        </td>
+                     </tr>
+                  )}
                   {effectiveTransactionLog.map((row, i) => (
                      <tr key={`tx-${i}`} className="group hover:bg-slate-50/50 transition-colors">
                         <td className="px-8 py-6">

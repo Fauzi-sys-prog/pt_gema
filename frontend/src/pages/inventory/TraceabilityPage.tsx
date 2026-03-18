@@ -2,6 +2,7 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { Search, History, Package, Truck, ArrowRight, Clock, AlertCircle, QrCode, MapPin, User, ExternalLink, ChevronRight, Filter, Layers, CheckCircle2, Calendar } from 'lucide-react'; import { useApp } from '../../contexts/AppContext';
 import { toast } from 'sonner@2.0.3';
 import api from '../../services/api';
+import { normalizeEntityRows } from '../../utils/normalizeEntityRows';
 
 export default function TraceabilityPage() {
   const { stockMovementList, stockItemList, addAuditLog, currentUser } = useApp();
@@ -13,15 +14,6 @@ export default function TraceabilityPage() {
   const effectiveStockMovementList = serverStockMovementList ?? stockMovementList;
   const effectiveStockItemList = serverStockItemList ?? stockItemList;
 
-  const normalizeEntityRows = <T,>(rows: any[]): T[] =>
-    rows.map((row: any) => {
-      const payload = row?.payload ?? {};
-      if (payload && typeof payload === 'object' && !Array.isArray(payload) && !payload.id) {
-        return { ...payload, id: row.entityId } as T;
-      }
-      return payload as T;
-    });
-
   const fetchTraceabilitySources = async () => {
     try {
       setIsRefreshing(true);
@@ -29,8 +21,8 @@ export default function TraceabilityPage() {
         api.get('/inventory/movements'),
         api.get('/inventory/items'),
       ]);
-      setServerStockMovementList(normalizeEntityRows<any>(Array.isArray(movementRes.data) ? movementRes.data : []));
-      setServerStockItemList(normalizeEntityRows<any>(Array.isArray(itemRes.data) ? itemRes.data : []));
+      setServerStockMovementList(normalizeEntityRows<any>(movementRes.data));
+      setServerStockItemList(normalizeEntityRows<any>(itemRes.data));
     } catch {
       setServerStockMovementList(null);
       setServerStockItemList(null);

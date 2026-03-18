@@ -292,10 +292,14 @@ export default function RABProjectPage() {
                       <Eye size={16} />
                     </button>
                     <button 
-                      onClick={() => {
+                      onClick={async () => {
                         if (!window.confirm("Hapus quotation ini?")) return;
-                        deleteQuotation(q.id);
-                        toast.success("Quotation dihapus");
+                        try {
+                          await deleteQuotation(q.id);
+                          toast.success("Quotation dihapus");
+                        } catch {
+                          // Error toast handled in AppContext
+                        }
                       }}
                       className="p-2 bg-slate-100 text-slate-600 rounded-xl hover:bg-rose-600 hover:text-white transition-all"
                       title="Hapus quotation"

@@ -24,7 +24,7 @@ import { toast } from 'sonner@2.0.3';
 import { motion, AnimatePresence } from 'motion/react';
 
 export default function AccountsPayablePage() {
-  const { vendorInvoiceList = [], addVendorInvoice, updateVendorInvoice, projectList = [], poList = [], addAuditLog, currentUser } = useApp();
+  const { vendorInvoiceList = [], addVendorInvoice, updateVendorInvoice, projectList = [], poList = [], vendorList = [], addAuditLog, currentUser } = useApp();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedInvoice, setSelectedInvoice] = useState<VendorInvoice | null>(null);
   const [showPayModal, setShowPayModal] = useState(false);
@@ -46,7 +46,9 @@ export default function AccountsPayablePage() {
     noPO: '',
     totalAmount: 0,
     jatuhTempo: new Date().toISOString().split('T')[0],
-    projectId: ''
+    projectId: '',
+    purchaseOrderId: '',
+    vendorId: '',
   });
 
   const normalizedInvoices = useMemo(() => {
@@ -108,7 +110,7 @@ export default function AccountsPayablePage() {
 
   const effectiveStats = serverStats || { totalPayable: 0, overdue: 0, paidThisMonth: 0, invoiceCount: 0, overdueCount: 0 };
 
-  const handlePay = () => {
+  const handlePay = async () => {
     if (!selectedInvoice) return;
 
     const totalAmount = Number(selectedInvoice.totalAmount || 0);
@@ -121,17 +123,18 @@ export default function AccountsPayablePage() {
       newStatus = 'Paid';
     }
 
-    updateVendorInvoice(selectedInvoice.id, {
+    const ok = await updateVendorInvoice(selectedInvoice.id, {
       paidAmount: newPaidAmount,
       status: newStatus
     });
+    if (!ok) return;
 
     toast.success(`Berhasil membayar Rp ${safePayment.toLocaleString('id-ID')} ke ${selectedInvoice.supplier}`);
     setShowPayModal(false);
     setSelectedInvoice(null);
   };
 
-  const handleCreateInvoice = (e: React.FormEvent) => {
+  const handleCreateInvoice = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
 
@@ -139,19 +142,23 @@ export default function AccountsPayablePage() {
       id: `VINV-${Math.random().toString(36).substr(2, 9)}`,
       ...newInvoice,
       paidAmount: 0,
-      status: 'Unpaid'
+      status: 'Unpaid',
     };
-    
-    addVendorInvoice(entry);
-    setShowCreateModal(false);
+
+    const ok = await addVendorInvoice(entry);
     setIsSubmitting(false);
+    if (!ok) return;
+
+    setShowCreateModal(false);
     setNewInvoice({
       supplier: '',
       noInvoiceVendor: '',
       noPO: '',
       totalAmount: 0,
       jatuhTempo: new Date().toISOString().split('T')[0],
-      projectId: ''
+      projectId: '',
+      purchaseOrderId: '',
+      vendorId: '',
     });
     toast.success(`Invoice ${entry.noInvoiceVendor} berhasil dicatat`);
   };
@@ -553,20 +560,27 @@ export default function AccountsPayablePage() {
                   <div className="grid grid-cols-2 gap-6">
                     <div className="space-y-2">
                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Referensi Purchase Order (PO)</label>
-                      <select 
-                        required
-                        value={newInvoice.noPO}
-                        onChange={(e) => {
-                          const po = poList.find(p => p.noPO === e.target.value);
-                          setNewInvoice({
-                            ...newInvoice, 
-                            noPO: e.target.value,
-                            projectId: po?.projectId || '',
-                            supplier: po?.supplier || newInvoice.supplier
-                          });
-                        }}
-                        className="w-full px-6 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl text-sm font-bold outline-none focus:border-rose-500 transition-all appearance-none"
-                      >
+                        <select
+                          required
+                          value={newInvoice.noPO}
+                          onChange={(e) => {
+                            const po = poList.find(p => p.noPO === e.target.value);
+                            const linkedVendor = vendorList.find((vendor) => {
+                              const vendorName = String(vendor.namaVendor || '').trim().toLowerCase();
+                              const supplierName = String(po?.supplier || '').trim().toLowerCase();
+                              return vendorName && supplierName && vendorName === supplierName;
+                            });
+                            setNewInvoice({
+                              ...newInvoice,
+                              noPO: e.target.value,
+                              purchaseOrderId: po?.id || '',
+                              projectId: po?.projectId || '',
+                              supplier: po?.supplier || newInvoice.supplier,
+                              vendorId: linkedVendor?.id || '',
+                            });
+                          }}
+                          className="w-full px-6 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl text-sm font-bold outline-none focus:border-rose-500 transition-all appearance-none"
+                        >
                         <option value="">Pilih PO Terkait</option>
                         {poList.map(po => (
                           <option key={po.id} value={po.noPO}>{po.noPO} - {po.supplier}</option>

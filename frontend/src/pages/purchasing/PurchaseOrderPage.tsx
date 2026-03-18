@@ -737,7 +737,10 @@ export default function PurchaseOrderPage() {
   };
 
   const filteredPO = poList.filter((po) => {
-    const matchesSearch = po.noPO.toLowerCase().includes(searchTerm.toLowerCase()) || po.supplier.toLowerCase().includes(searchTerm.toLowerCase());
+    const keyword = String(searchTerm || '').toLowerCase();
+    const matchesSearch =
+      String(po.noPO || '').toLowerCase().includes(keyword) ||
+      String(po.supplier || '').toLowerCase().includes(keyword);
     const matchesStatus = filterStatus === 'all' || po.status === filterStatus;
     const normalizedPoProjectId = normalizeProjectRef(String(po.projectId || ''));
     const matchesProject =

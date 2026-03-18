@@ -3,6 +3,7 @@ import type { StockOut } from '../../contexts/AppContext';
 import { useNavigate } from 'react-router-dom';
 import { toast } from "sonner@2.0.3";
 import api from '../../services/api';
+import { normalizeEntityRows } from '../../utils/normalizeEntityRows';
 // Logo asset from user screenshot 1
 import logoGema from "figma:asset/661f558dc14c79fa090b7039a885f26b843f5c04.png";
 
@@ -15,7 +16,8 @@ export default function StockOutPage() {
     createStockOut,
     updateProject,
     currentUser,
-    projectList: ctxProjectList
+    projectList: ctxProjectList,
+    workOrderList
   } = useApp();
   const [serverStockOutList, setServerStockOutList] = useState<StockOut[] | null>(null);
   const [serverStockItemList, setServerStockItemList] = useState<typeof ctxStockItemList | null>(null);
@@ -33,26 +35,6 @@ export default function StockOutPage() {
   const [selectedStockOut, setSelectedStockOut] = useState<StockOut | null>(null);
   const [showPrintView, setShowPrintView] = useState(false);
 
-  const normalizeEntityRows = <T,>(rows: any[]): T[] =>
-    rows.map((row: any) => {
-      const payload = row?.payload ?? {};
-      if (payload && typeof payload === 'object' && !Array.isArray(payload)) {
-        const entityId = String(row?.entityId || '').trim();
-        const payloadId = String((payload as any)?.id || '').trim();
-        const rowId = String(row?.id || '').trim();
-        return {
-          ...payload,
-          id: entityId || payloadId || rowId,
-          __entityId: entityId || payloadId || rowId,
-        } as T;
-      }
-      return {
-        ...(payload as object),
-        id: String(row?.entityId || row?.id || '').trim(),
-        __entityId: String(row?.entityId || row?.id || '').trim(),
-      } as T;
-    });
-
   const fetchStockOutSources = async () => {
     try {
       setIsRefreshing(true);
@@ -62,9 +44,9 @@ export default function StockOutPage() {
         api.get('/inventory/movements'),
         api.get('/projects'),
       ]);
-      setServerStockOutList(normalizeEntityRows<StockOut>(Array.isArray(stockOutRes.data) ? stockOutRes.data : []));
-      setServerStockItemList(normalizeEntityRows<any>(Array.isArray(stockItemRes.data) ? stockItemRes.data : []));
-      setServerStockMovementList(normalizeEntityRows<any>(Array.isArray(stockMovementRes.data) ? stockMovementRes.data : []));
+      setServerStockOutList(normalizeEntityRows<StockOut>(stockOutRes.data));
+      setServerStockItemList(normalizeEntityRows<any>(stockItemRes.data));
+      setServerStockMovementList(normalizeEntityRows<any>(stockMovementRes.data));
       setServerProjectList(Array.isArray(projectRes.data) ? projectRes.data : []);
     } catch {
       setServerStockOutList(null);
@@ -144,18 +126,35 @@ export default function StockOutPage() {
     return matchSearch && matchType;
   });
 
+  const resolveWorkOrderRef = (ref?: string) => {
+    const key = String(ref || '').trim();
+    if (!key || key === 'GENERAL') return undefined;
+    return workOrderList.find((wo) => {
+      const candidates = [wo.id, (wo as any).woNumber, (wo as any).number]
+        .map((value) => String(value || '').trim())
+        .filter(Boolean);
+      return candidates.includes(key);
+    });
+  };
+
   const resolveProjectByWorkOrderRef = (ref?: string) => {
     const key = String(ref || '').trim();
     if (!key || key === 'GENERAL') return undefined;
+    const linkedWO = resolveWorkOrderRef(key);
+    if (linkedWO?.projectId) {
+      return projectList.find((p) => p.id === linkedWO.projectId);
+    }
     return projectList.find((p) => p.id === key || p.kodeProject === key);
   };
 
   const actorRoleLabel = String(currentUser?.role || 'USER').trim().toUpperCase() || 'USER';
+  const hasExpiredDate = (value?: string) => Boolean(value) && new Date(value as string) < new Date();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     // 1. Validations
+    const linkedWO = resolveWorkOrderRef(formData.noWorkOrder);
     const project = resolveProjectByWorkOrderRef(formData.noWorkOrder);
     
     for (const item of formData.items) {
@@ -188,7 +187,9 @@ export default function StockOutPage() {
       id: `SO-${Date.now()}`,
       noStockOut: `SO-${new Date().getFullYear()}-${String(stockOutList.length + 1).padStart(3, '0')}`,
       noWorkOrder: formData.noWorkOrder,
+      workOrderId: linkedWO?.id,
       projectId: project?.id,
+      projectName: project?.namaProject,
       penerima: formData.penerima,
       tanggal: formData.tanggal,
       type: formData.type,
@@ -257,7 +258,9 @@ export default function StockOutPage() {
     updatedItems[index] = { ...updatedItems[index], [field]: value };
     
     if (field === 'kode') {
-      const stockItem = stockItemList.find(s => s.kode.toLowerCase() === value.toLowerCase());
+      const stockItem = stockItemList.find(
+        (s) => String(s.kode || '').toLowerCase() === String(value || '').toLowerCase()
+      );
       if (stockItem) {
         updatedItems[index].nama = stockItem.nama;
         updatedItems[index].unit = stockItem.satuan;
@@ -435,8 +438,13 @@ export default function StockOutPage() {
                       className="flex-1 px-4 py-3 bg-white border-2 border-slate-100 rounded-xl text-sm font-black italic uppercase tracking-tighter outline-none focus:border-indigo-500 transition-colors" 
                       required
                     >
-                      <option value="">-- Pilih Proyek --</option>
+                      <option value="">-- Pilih Proyek / WO --</option>
                       <option value="GENERAL">PENGELUARAN UMUM (NON-PROYEK)</option>
+                      {workOrderList.map((wo) => (
+                        <option key={wo.id} value={wo.id}>
+                          {String((wo as any).woNumber || wo.id)} - {wo.projectName || '-'}
+                        </option>
+                      ))}
                       {projectList.map(p => (
                         <option key={p.id} value={p.kodeProject || p.id}>
                           {p.kodeProject} - {p.namaProject || p.customer}
@@ -450,7 +458,7 @@ export default function StockOutPage() {
                           const project = resolveProjectByWorkOrderRef(formData.noWorkOrder);
                           if (project && project.boq) {
                             const boqItems = project.boq
-                              .filter(item => (item.status === 'Received' || item.status === 'Ordered' || item.status === 'Not Ordered'))
+                              .filter(item => item.status !== 'Used')
                               .map(item => ({
                                 kode: item.itemKode || '',
                                 nama: item.materialName,
@@ -528,20 +536,20 @@ export default function StockOutPage() {
                           <div className="flex gap-1">
                             {item.kode && (
                               <span className={`text-[8px] px-1.5 py-0.5 rounded-full ${
-                                stockItemList.find(s => s.kode.toLowerCase() === item.kode.toLowerCase())?.stok || 0 > 0 
-                                  ? 'bg-emerald-50 text-emerald-600' 
+                                (stockItemList.find(s => String(s.kode || '').toLowerCase() === String(item.kode || '').toLowerCase())?.stok || 0) > 0
+                                  ? 'bg-emerald-50 text-emerald-600'
                                   : 'bg-rose-50 text-rose-600'
                               }`}>
-                                Stok: {stockItemList.find(s => s.kode.toLowerCase() === item.kode.toLowerCase())?.stok || 0}
+                                Stok: {stockItemList.find(s => String(s.kode || '').toLowerCase() === String(item.kode || '').toLowerCase())?.stok || 0}
                               </span>
                             )}
-                            {item.kode && stockItemList.find(s => s.kode.toLowerCase() === item.kode.toLowerCase())?.expiryDate && (
+                            {item.kode && stockItemList.find(s => String(s.kode || '').toLowerCase() === String(item.kode || '').toLowerCase())?.expiryDate && (
                                <span className={`text-[8px] px-1.5 py-0.5 rounded-full ${
-                                 new Date(stockItemList.find(s => s.kode.toLowerCase() === item.kode.toLowerCase())?.expiryDate!) < new Date()
+                                 hasExpiredDate(stockItemList.find(s => String(s.kode || '').toLowerCase() === String(item.kode || '').toLowerCase())?.expiryDate)
                                    ? 'bg-rose-600 text-white' 
                                    : 'bg-blue-50 text-blue-600'
                                }`}>
-                                 Exp: {stockItemList.find(s => s.kode.toLowerCase() === item.kode.toLowerCase())?.expiryDate}
+                                 Exp: {stockItemList.find(s => String(s.kode || '').toLowerCase() === String(item.kode || '').toLowerCase())?.expiryDate}
                                </span>
                             )}
                           </div>
@@ -552,11 +560,11 @@ export default function StockOutPage() {
                           value={item.kode} 
                           onChange={(e) => updateItem(index, 'kode', e.target.value)} 
                           className={`w-full px-4 py-2.5 bg-white border-2 rounded-xl text-xs font-bold outline-none transition-all ${
-                            item.kode && (stockItemList.find(s => s.kode.toLowerCase() === item.kode.toLowerCase())?.stok || 0) <= 0
+                            item.kode && (stockItemList.find(s => String(s.kode || '').toLowerCase() === String(item.kode || '').toLowerCase())?.stok || 0) <= 0
                               ? 'border-rose-300 focus:border-rose-500 text-rose-700 bg-rose-50/30'
-                              : item.kode && stockItemList.find(s => s.kode.toLowerCase() === item.kode.toLowerCase())?.expiryDate && new Date(stockItemList.find(s => s.kode.toLowerCase() === item.kode.toLowerCase())?.expiryDate!) < new Date()
+                              : item.kode && stockItemList.find(s => String(s.kode || '').toLowerCase() === String(item.kode || '').toLowerCase())?.expiryDate && hasExpiredDate(stockItemList.find(s => String(s.kode || '').toLowerCase() === String(item.kode || '').toLowerCase())?.expiryDate)
                                 ? 'border-rose-600 bg-rose-50'
-                                : stockItemList.some(s => s.kode.toLowerCase() === item.kode.toLowerCase())
+                                : stockItemList.some(s => String(s.kode || '').toLowerCase() === String(item.kode || '').toLowerCase())
                                   ? 'border-emerald-200 focus:border-emerald-500 text-emerald-700'
                                   : 'border-slate-100 focus:border-indigo-500'
                           }`} 
@@ -579,7 +587,7 @@ export default function StockOutPage() {
                           value={item.qty || ''} 
                           onChange={(e) => updateItem(index, 'qty', Number(e.target.value))} 
                           className={`w-full px-4 py-2.5 bg-white border-2 rounded-xl text-xs font-black outline-none transition-all ${
-                            item.kode && item.qty > (stockItemList.find(s => s.kode.toLowerCase() === item.kode.toLowerCase())?.stok || 0)
+                            item.kode && item.qty > (stockItemList.find(s => String(s.kode || '').toLowerCase() === String(item.kode || '').toLowerCase())?.stok || 0)
                               ? 'border-rose-400 text-rose-600 focus:border-rose-600'
                               : (resolveProjectByWorkOrderRef(formData.noWorkOrder)?.boq?.find(b => b.itemKode === item.kode)?.qtyEstimate || 0) > 0 && item.qty > (resolveProjectByWorkOrderRef(formData.noWorkOrder)?.boq?.find(b => b.itemKode === item.kode)?.qtyEstimate || 0)
                                 ? 'border-amber-400 text-amber-600'
@@ -587,7 +595,7 @@ export default function StockOutPage() {
                           }`}
                           required 
                         />
-                        {item.kode && item.qty > (stockItemList.find(s => s.kode.toLowerCase() === item.kode.toLowerCase())?.stok || 0) && (
+                        {item.kode && item.qty > (stockItemList.find(s => String(s.kode || '').toLowerCase() === String(item.kode || '').toLowerCase())?.stok || 0) && (
                           <span className="absolute text-[7px] text-rose-500 font-bold uppercase mt-1">Stok Kurang!</span>
                         )}
                         {(resolveProjectByWorkOrderRef(formData.noWorkOrder)?.boq?.find(b => b.itemKode === item.kode)?.qtyEstimate || 0) > 0 && item.qty > (resolveProjectByWorkOrderRef(formData.noWorkOrder)?.boq?.find(b => b.itemKode === item.kode)?.qtyEstimate || 0) && (

@@ -151,6 +151,7 @@ export default function ShiftPage() {
     if (totalMinutes < 0) totalMinutes += 24 * 60; // Handle overnight shifts
     const workHours = (totalMinutes - shiftFormData.breakDuration!) / 60;
     
+    const previousShifts = shiftList;
     try {
       if (isEditMode && shiftFormData.id) {
         const next = shiftList.map(s => s.id === shiftFormData.id ? { ...shiftFormData, workHours } as Shift : s);
@@ -172,18 +173,21 @@ export default function ShiftPage() {
       }
       setShowModal(false);
     } catch (err: any) {
+      setShiftList(previousShifts);
       toast.error(getApiErrorMessage(err, `Gagal simpan ${SHIFT_RESOURCE}`));
     }
   };
 
   const handleDeleteShift = async (shift: Shift) => {
     if (window.confirm(`Hapus shift ${shift.shiftName}?`)) {
+      const previousShifts = shiftList;
       try {
         const next = shiftList.filter(s => s.id !== shift.id);
         setShiftList(next);
         await saveShiftList(next);
         toast.success('Shift berhasil dihapus');
       } catch (err: any) {
+        setShiftList(previousShifts);
         toast.error(getApiErrorMessage(err, `Gagal hapus dari ${SHIFT_RESOURCE}`));
       }
     }
@@ -213,6 +217,7 @@ export default function ShiftPage() {
       endTime: selectedShift?.endTime || ''
     } as ShiftSchedule;
     
+    const previousSchedules = scheduleList;
     try {
       const next = [...scheduleList, newSchedule];
       setScheduleList(next);
@@ -220,6 +225,7 @@ export default function ShiftPage() {
       toast.success('Jadwal shift berhasil ditambahkan');
       setShowScheduleModal(false);
     } catch (err: any) {
+      setScheduleList(previousSchedules);
       toast.error(getApiErrorMessage(err, `Gagal simpan ${SHIFT_SCHEDULE_RESOURCE}`));
     }
   };

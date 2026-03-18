@@ -306,15 +306,8 @@ export default function QuotationPage() {
 
     if (current === "Approved") return ["Approved"];
     if (current === "Rejected") return isOwner ? ["Rejected", "Draft"] : ["Rejected"];
-    if (current === "Review") {
-      return isOwner ? ["Review", "Approved", "Rejected", "Draft"] : ["Review"];
-    }
-
-    if (current === "Sent") {
-      if (isSpv) return ["Sent", "Draft", "Review", "Rejected"];
-      if (isOwner) return ["Sent", "Draft", "Rejected"];
-      return ["Sent", "Draft"];
-    }
+    if (current === "Review") return ["Review"];
+    if (current === "Sent") return ["Sent", "Draft"];
 
     // Draft
     return ["Draft", "Sent"];
@@ -354,6 +347,12 @@ export default function QuotationPage() {
   const filteredApprovalLogs = approvalActionFilter === 'ALL'
     ? approvalLogs
     : approvalLogs.filter((row: any) => String(row?.action || '').toUpperCase() === approvalActionFilter);
+
+  const getApprovalActorLabel = (row: any) => {
+    const actorName = String(row?.metadata?.actorName || '').trim();
+    if (actorName) return actorName;
+    return row?.actorUserId || '-';
+  };
 
   const mapSurveyToPricingItems = (survey: any, config: any) => ({
     manpower: (survey.manpower || []).map((mp: any) => {
@@ -500,7 +499,7 @@ export default function QuotationPage() {
     }
     const allowed = getAllowedStatuses(quotation);
     if (!allowed.includes(newStatus)) {
-      toast.error(`Status ${quotation?.status || "Draft"} tidak bisa diubah ke ${newStatus}`);
+      toast.error(`Perubahan ke ${newStatus} harus lewat workflow approval yang sesuai.`);
       return;
     }
     const now = new Date().toISOString();
@@ -1337,14 +1336,18 @@ export default function QuotationPage() {
                         <Download className="w-4 h-4" />
                       </button>
                       <button
-                        onClick={() => {
+                        onClick={async () => {
                           if (isQuotationLockedByApprovedProject(quotation.id)) {
                             toast.error("Quotation terkunci karena sudah dipakai project Approved.");
                             return;
                           }
                           if (window.confirm('Delete quotation?')) {
-                            deleteQuotation(quotation.id);
-                            toast.success('Quotation berhasil dihapus');
+                            try {
+                              await deleteQuotation(quotation.id);
+                              toast.success('Quotation berhasil dihapus');
+                            } catch {
+                              // Error toast handled in AppContext
+                            }
                           }
                         }}
                         disabled={isQuotationLockedByApprovedProject(quotation.id)}
@@ -2827,7 +2830,7 @@ export default function QuotationPage() {
                             <td className="p-3 text-gray-700">{row?.fromStatus || '-'}</td>
                             <td className="p-3 text-gray-700">{row?.toStatus || '-'}</td>
                             <td className="p-3 text-gray-700">{getRoleLabel(row?.actorRole) || '-'}</td>
-                            <td className="p-3 text-gray-700">{row?.actorUserId || '-'}</td>
+                            <td className="p-3 text-gray-700">{getApprovalActorLabel(row)}</td>
                           </tr>
                         ))}
                       </tbody>

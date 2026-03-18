@@ -21,17 +21,21 @@ export const SKURegistrationModal: React.FC<SKURegistrationModalProps> = ({ isOp
     hargaSatuan: 0,
     lokasi: 'Gudang Utama'
   });
+  const safeStockItems = useMemo(
+    () => (Array.isArray(stockItemList) ? stockItemList.filter(Boolean) : []),
+    [stockItemList]
+  );
 
   // Conflict Awareness States
   const isSkuConflict = useMemo(() => {
     if (!sku) return false;
-    return stockItemList.some(s => s.kode.toLowerCase().trim() === sku.toLowerCase().trim());
-  }, [sku, stockItemList]);
+    return safeStockItems.some(s => String(s?.kode || '').toLowerCase().trim() === sku.toLowerCase().trim());
+  }, [sku, safeStockItems]);
 
   const isNameConflict = useMemo(() => {
     if (!formData.nama) return false;
-    return stockItemList.some(s => s.nama.toLowerCase().trim() === formData.nama.toLowerCase().trim());
-  }, [formData.nama, stockItemList]);
+    return safeStockItems.some(s => String(s?.nama || '').toLowerCase().trim() === formData.nama.toLowerCase().trim());
+  }, [formData.nama, safeStockItems]);
 
   // Derived list of BOQ items from all projects that aren't registered yet
   const boqSuggestions = useMemo(() => {
@@ -40,11 +44,11 @@ export const SKURegistrationModal: React.FC<SKURegistrationModalProps> = ({ isOp
       prj.boq?.forEach((item: any) => {
         const name = item.materialName || item.nama;
         const kode = item.itemKode || item.kode;
-        
+
         // Check if this item is already in inventory
-        const alreadyExists = stockItemList.some(s => 
-          (kode && s.kode === kode) || 
-          (s.nama.toLowerCase().trim() === name.toLowerCase().trim())
+        const alreadyExists = safeStockItems.some(s =>
+          (kode && s?.kode === kode) ||
+          (String(s?.nama || '').toLowerCase().trim() === String(name || '').toLowerCase().trim())
         );
 
         if (!alreadyExists) {
@@ -57,7 +61,7 @@ export const SKURegistrationModal: React.FC<SKURegistrationModalProps> = ({ isOp
       });
     });
     return suggestions;
-  }, [projectList, stockItemList]);
+  }, [projectList, safeStockItems]);
 
   if (!isOpen) return null;
 

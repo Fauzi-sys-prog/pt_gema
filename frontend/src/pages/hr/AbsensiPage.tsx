@@ -101,18 +101,14 @@ export default function AbsensiPage() {
   });
 
   const handleCheckIn = () => {
-    const now = new Date();
-    const time = now.toTimeString().split(' ')[0].substring(0, 5);
-    toast.success(`Check-in berhasil pada ${time}`);
+    toast.info('Gunakan tombol Input Manual untuk mencatat check-in/check-out ke database.');
   };
 
   const handleCheckOut = () => {
-    const now = new Date();
-    const time = now.toTimeString().split(' ')[0].substring(0, 5);
-    toast.success(`Check-out berhasil pada ${time}`);
+    toast.info('Gunakan tombol Input Manual untuk mencatat check-in/check-out ke database.');
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     // Check Leave Quota validation
@@ -141,7 +137,8 @@ export default function AbsensiPage() {
       newAttendance.overtime = Math.max(0, hours - 9); // Assuming 9 hours standard shift (8 work + 1 break)
     }
     
-    addAttendance(newAttendance);
+    const ok = await addAttendance(newAttendance);
+    if (!ok) return;
     setServerAttendanceList((prev) => (prev ? [newAttendance, ...prev] : prev));
     toast.success('Data absensi berhasil ditambahkan');
     setShowModal(false);

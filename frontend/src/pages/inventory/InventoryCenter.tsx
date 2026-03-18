@@ -24,6 +24,10 @@ export default function InventoryCenter({ isCompactView = false }: { isCompactVi
   const [showOpnameModal, setShowOpnameModal] = useState(false);
   const [selectedItem, setSelectedItem] = useState<any>(null);
   const [opnameQty, setOpnameQty] = useState<number>(0);
+  const safeStockItems = useMemo(
+    () => (Array.isArray(stockItemList) ? stockItemList.filter(Boolean) : []),
+    [stockItemList]
+  );
 
   // --- CONNECTED DATA LOGIC ---
   
@@ -62,7 +66,8 @@ export default function InventoryCenter({ isCompactView = false }: { isCompactVi
     return map;
   }, [poList]);
 
-  const isAutoCreated = (item: any) => item.id.includes('RCV-') || item.kode?.startsWith('SKU-');
+  const isAutoCreated = (item: any) =>
+    String(item?.id || '').includes('RCV-') || String(item?.kode || '').startsWith('SKU-');
 
   const getWarehouseCategory = (item: any) => {
     const rawCategory = String(item?.kategori || '').trim().toUpperCase();
@@ -70,28 +75,28 @@ export default function InventoryCenter({ isCompactView = false }: { isCompactVi
   };
 
   const categories = useMemo(() => {
-    const cats = Array.from(new Set(stockItemList.map((item) => getWarehouseCategory(item))));
+    const cats = Array.from(new Set(safeStockItems.map((item) => getWarehouseCategory(item))));
     return ['ALL CATEGORIES', ...cats.filter(Boolean).sort((a, b) => a.localeCompare(b))];
-  }, [stockItemList]);
+  }, [safeStockItems]);
 
   const filteredItems = useMemo(() => {
-    return stockItemList.filter(item => {
+    return safeStockItems.filter(item => {
       const keyword = String(searchTerm || '').toLowerCase();
       const matchesSearch =
-        String(item.nama || '').toLowerCase().includes(keyword) ||
-        String(item.kode || '').toLowerCase().includes(keyword);
+        String(item?.nama || '').toLowerCase().includes(keyword) ||
+        String(item?.kode || '').toLowerCase().includes(keyword);
       const matchesCategory =
         activeCategory === 'ALL CATEGORIES' || getWarehouseCategory(item) === activeCategory;
       return matchesSearch && matchesCategory;
     });
-  }, [stockItemList, searchTerm, activeCategory]);
+  }, [safeStockItems, searchTerm, activeCategory]);
 
   const groupedInventoryRows = useMemo(() => {
     const sorted = [...filteredItems].sort((a, b) => {
-      const catA = String(a.kategori || 'General').toLowerCase();
-      const catB = String(b.kategori || 'General').toLowerCase();
+      const catA = String(a?.kategori || 'General').toLowerCase();
+      const catB = String(b?.kategori || 'General').toLowerCase();
       if (catA !== catB) return catA.localeCompare(catB);
-      return String(a.nama || '').localeCompare(String(b.nama || ''));
+      return String(a?.nama || '').localeCompare(String(b?.nama || ''));
     });
     const groups = new Map<string, typeof sorted>();
     for (const item of sorted) {
@@ -103,13 +108,13 @@ export default function InventoryCenter({ isCompactView = false }: { isCompactVi
   }, [filteredItems]);
 
   const stats = useMemo(() => {
-    const totalValue = stockItemList.reduce((sum, item) => sum + (item.stok * item.hargaSatuan), 0);
-    const lowStockCount = stockItemList.filter(i => i.stok <= i.minStock).length;
+    const totalValue = safeStockItems.reduce((sum, item) => sum + (Number(item?.stok || 0) * Number(item?.hargaSatuan || 0)), 0);
+    const lowStockCount = safeStockItems.filter(i => Number(i?.stok || 0) <= Number(i?.minStock || 0)).length;
     const incomingCount = Object.values(incomingData).reduce((a, b) => a + b, 0);
     const totalRequired = Object.values(projectRequirements).reduce((a, b) => a + b.qty, 0);
     
     return { totalValue, lowStockCount, incomingCount, totalRequired };
-  }, [stockItemList, incomingData, projectRequirements]);
+  }, [safeStockItems, incomingData, projectRequirements]);
 
   const handleStockOpname = async (e: React.FormEvent) => {
     e.preventDefault();

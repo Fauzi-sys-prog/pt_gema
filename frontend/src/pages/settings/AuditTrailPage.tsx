@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react'; import { History, Search, Filter, Download, Shield, Clock, User, Database, Activity, AlertTriangle, CheckCircle2, Lock, ChevronRight, ArrowUpRight, RefreshCw } from 'lucide-react'; import { useApp } from '../../contexts/AppContext';
+import { useEffect, useState, useMemo } from 'react'; import { History, Search, Download, Shield, Clock, Database, Activity, AlertTriangle, Lock, RefreshCw } from 'lucide-react'; import { useApp } from '../../contexts/AppContext';
 import type { AuditLog } from '../../contexts/AppContext';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner@2.0.3';
@@ -32,6 +32,15 @@ export default function AuditTrailPage() {
             ? row.status
             : 'Success'
         ) as AuditLog['status'],
+        domain: typeof row?.domain === 'string' ? row.domain : undefined,
+        resource: typeof row?.resource === 'string' ? row.resource : undefined,
+        entityId: typeof row?.entityId === 'string' ? row.entityId : undefined,
+        operation: typeof row?.operation === 'string' ? row.operation : undefined,
+        actorUserId: typeof row?.actorUserId === 'string' ? row.actorUserId : undefined,
+        actorRole: typeof row?.actorRole === 'string' ? row.actorRole : undefined,
+        metadata: row?.metadata,
+        createdAt: typeof row?.createdAt === 'string' ? row.createdAt : undefined,
+        updatedAt: typeof row?.updatedAt === 'string' ? row.updatedAt : undefined,
       }) satisfies AuditLog);
       setServerLogs(mapped);
     } catch (err: any) {
@@ -77,7 +86,7 @@ export default function AuditTrailPage() {
       return;
     }
     const dateKey = new Date().toISOString().slice(0, 10);
-    const columns = ['ID', 'Timestamp', 'User', 'Module', 'Action', 'Details', 'Status'];
+    const columns = ['ID', 'Timestamp', 'User', 'Role', 'Module', 'Action', 'Resource', 'Operation', 'Details', 'Status'];
     const payload = {
       filename: `forensic-audit-${dateKey}`,
       title: 'System Audit Trail Report',
@@ -87,8 +96,11 @@ export default function AuditTrailPage() {
         String(log.id || ''),
         String(log.timestamp ? new Date(log.timestamp).toISOString() : ''),
         String(log.userName || ''),
+        String(log.actorRole || ''),
         String(log.module || ''),
         String(log.action || ''),
+        String(log.resource || ''),
+        String(log.operation || ''),
         String(log.details || ''),
         String(log.status || ''),
       ]),
@@ -231,7 +243,7 @@ export default function AuditTrailPage() {
                   <tr className="bg-slate-900 text-white">
                      <th className="px-10 py-6 text-[10px] font-black uppercase tracking-widest italic">Digital Trace ID</th>
                      <th className="px-10 py-6 text-[10px] font-black uppercase tracking-widest italic">Authority (User)</th>
-                     <th className="px-10 py-6 text-[10px] font-black uppercase tracking-widest italic">Command Action</th>
+                     <th className="px-10 py-6 text-[10px] font-black uppercase tracking-widest italic">Command / Scope</th>
                      <th className="px-10 py-6 text-[10px] font-black uppercase tracking-widest italic">System Impact / Details</th>
                      <th className="px-10 py-6 text-[10px] font-black uppercase tracking-widest italic text-center">Status</th>
                   </tr>
@@ -255,17 +267,32 @@ export default function AuditTrailPage() {
                              <div>
                                 <p className="text-sm font-black text-slate-900 uppercase italic tracking-tight">{log.userName}</p>
                                 <p className="text-[9px] text-slate-400 font-bold uppercase">UID: {log.userId}</p>
+                                <p className="text-[9px] text-indigo-500 font-black uppercase tracking-widest mt-1">{log.actorRole || 'NO ROLE'}</p>
                              </div>
                           </div>
                        </td>
                        <td className="px-10 py-8">
-                          <div className="flex items-center gap-2">
+                          <div className="flex flex-col gap-2">
+                            <div className="flex items-center gap-2">
                              <span className="px-3 py-1 bg-slate-100 rounded-lg text-[9px] font-black uppercase italic text-slate-500">{log.module}</span>
                              <span className="text-sm font-black text-slate-700 uppercase italic tracking-tight">{log.action}</span>
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                              <span className="px-3 py-1 bg-indigo-50 rounded-lg text-[9px] font-black uppercase italic text-indigo-600">{log.resource || 'NO RESOURCE'}</span>
+                              <span className="px-3 py-1 bg-slate-100 rounded-lg text-[9px] font-black uppercase italic text-slate-500">{log.operation || 'NO OPERATION'}</span>
+                              <span className="px-3 py-1 bg-emerald-50 rounded-lg text-[9px] font-black uppercase italic text-emerald-600">{log.domain || 'GENERAL'}</span>
+                            </div>
                           </div>
                        </td>
                        <td className="px-10 py-8">
-                          <p className="text-sm font-bold text-slate-500 uppercase italic line-clamp-1 max-w-xs group-hover:line-clamp-none transition-all">{log.details}</p>
+                          <div className="max-w-sm space-y-2">
+                            <p className="text-sm font-bold text-slate-500 uppercase italic line-clamp-2 group-hover:line-clamp-none transition-all">{log.details}</p>
+                            <div className="text-[9px] font-bold uppercase tracking-widest text-slate-400 space-y-1">
+                              <p>Entity: {log.entityId || '-'}</p>
+                              <p>Created: {log.createdAt ? new Date(log.createdAt).toLocaleString('id-ID') : '-'}</p>
+                              <p>Updated: {log.updatedAt ? new Date(log.updatedAt).toLocaleString('id-ID') : '-'}</p>
+                            </div>
+                          </div>
                        </td>
                        <td className="px-10 py-8 text-center">
                           <span className={`inline-flex px-4 py-1.5 rounded-full text-[9px] font-black uppercase italic border-2 ${

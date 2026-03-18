@@ -250,6 +250,7 @@ export default function SuratPerintahKerjaPage() {
           } as any);
         });
 
+      let workOrderCreated = false;
       if (!editingSpk) {
         const newWO: WorkOrder = {
           id: `WO-${Date.now()}`,
@@ -266,7 +267,12 @@ export default function SuratPerintahKerjaPage() {
           spkId: newSPK.id,
           bom: [],
         };
-        addWorkOrder(newWO);
+        try {
+          await addWorkOrder(newWO);
+          workOrderCreated = true;
+        } catch {
+          workOrderCreated = false;
+        }
       }
 
       addAuditLog({
@@ -276,7 +282,13 @@ export default function SuratPerintahKerjaPage() {
         status: 'Success',
       });
 
-      toast.success(isEdit ? `SPK ${newSPK.noSPK} berhasil diupdate` : `✅ SPK ${newSPK.noSPK} diterbitkan & Work Order otomatis dibuat!`);
+      if (isEdit) {
+        toast.success(`SPK ${newSPK.noSPK} berhasil diupdate`);
+      } else if (workOrderCreated) {
+        toast.success(`✅ SPK ${newSPK.noSPK} diterbitkan & Work Order otomatis dibuat!`);
+      } else {
+        toast.success(`SPK ${newSPK.noSPK} diterbitkan, tetapi Work Order otomatis gagal dibuat.`);
+      }
       setShowCreateModal(false);
       resetForm();
     }

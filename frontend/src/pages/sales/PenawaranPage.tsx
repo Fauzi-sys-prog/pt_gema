@@ -351,10 +351,14 @@ export default function PenawaranPage() {
                         <ChevronRight size={18} />
                       </button>
                       <button
-                        onClick={() => {
+                        onClick={async () => {
                           if (!window.confirm("Hapus quotation ini?")) return;
-                          deleteQuotation(item.id);
-                          toast.success("Quotation dihapus");
+                          try {
+                            await deleteQuotation(item.id);
+                            toast.success("Quotation dihapus");
+                          } catch {
+                            // Error toast handled in AppContext
+                          }
                         }}
                         className="p-2.5 bg-white border border-slate-100 rounded-xl text-slate-400 hover:text-rose-600 shadow-sm transition-all cursor-pointer"
                         title="Hapus quotation"

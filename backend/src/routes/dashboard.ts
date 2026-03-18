@@ -114,6 +114,10 @@ type FinanceQueueRow = {
   updatedAt: Date;
 };
 
+function toActionList(...actions: Array<string | false | null | undefined>): string[] {
+  return actions.filter((item): item is string => Boolean(item));
+}
+
 const invoiceDashboardSelect = {
   id: true,
   projectId: true,
@@ -322,6 +326,32 @@ function mapQuotationDashboardPayload(
   };
 }
 
+async function resolveActorSnapshot(userId?: string | null, role?: Role | null) {
+  if (!userId) {
+    return {
+      actorName: role || "SYSTEM",
+      actorRole: role || null,
+      actorUserId: null,
+    };
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      id: true,
+      username: true,
+      name: true,
+      role: true,
+    },
+  });
+
+  return {
+    actorName: user?.name || user?.username || userId,
+    actorRole: user?.role || role || null,
+    actorUserId: user?.id || userId,
+  };
+}
+
 function mapProcurementPurchaseOrderDashboardPayload(row: {
   id: string;
   number: string;
@@ -397,6 +427,43 @@ function mapProcurementPurchaseOrderDashboardPayload(row: {
       qtyReceived: item.qtyReceived,
       source: item.source ?? undefined,
       sourceRef: item.sourceRef ?? undefined,
+    })),
+  };
+}
+
+function mapProductionMaterialRequestDashboardPayload(row: {
+  id: string;
+  number: string;
+  projectId: string;
+  projectName: string;
+  requestedBy: string;
+  requestedAt: Date;
+  status: string;
+  items: Array<{
+    id: string;
+    itemCode: string | null;
+    itemName: string;
+    qty: number;
+    unit: string;
+  }>;
+}) {
+  return {
+    id: row.id,
+    noRequest: row.number,
+    requestNo: row.number,
+    projectId: row.projectId,
+    projectName: row.projectName,
+    requestedBy: row.requestedBy,
+    requestedAt: row.requestedAt.toISOString(),
+    status: row.status,
+    items: row.items.map((item) => ({
+      id: item.id,
+      itemKode: item.itemCode ?? "",
+      itemCode: item.itemCode ?? "",
+      itemNama: item.itemName,
+      itemName: item.itemName,
+      qty: item.qty,
+      unit: item.unit,
     })),
   };
 }
@@ -735,6 +802,125 @@ type DashboardPettyCashDelegate = {
   findMany: (args?: Record<string, unknown>) => Promise<Array<{ id: string; payload: unknown; updatedAt: Date }>>;
 };
 
+function mapDashboardLogisticsSuratJalanPayload(row: {
+  id: string;
+  noSurat: string;
+  tanggal: Date;
+  sjType: string;
+  tujuan: string;
+  alamat: string;
+  upPerson: string | null;
+  noPO: string | null;
+  projectId: string | null;
+  assetId: string | null;
+  sopir: string | null;
+  noPolisi: string | null;
+  pengirim: string | null;
+  deliveryStatus: string;
+  podName: string | null;
+  podTime: Date | null;
+  podPhoto: string | null;
+  podSignature: string | null;
+  expectedReturnDate: Date | null;
+  actualReturnDate: Date | null;
+  returnStatus: string | null;
+  workflowStatus: string;
+  items: Array<{
+    itemKode: string | null;
+    namaItem: string;
+    jumlah: number;
+    satuan: string;
+    batchNo: string | null;
+    keterangan: string | null;
+  }>;
+}) {
+  return {
+    id: row.id,
+    noSurat: row.noSurat,
+    tanggal: row.tanggal.toISOString().slice(0, 10),
+    sjType: row.sjType,
+    tujuan: row.tujuan,
+    alamat: row.alamat,
+    upPerson: row.upPerson ?? undefined,
+    noPO: row.noPO ?? undefined,
+    projectId: row.projectId ?? undefined,
+    assetId: row.assetId ?? undefined,
+    sopir: row.sopir ?? undefined,
+    noPolisi: row.noPolisi ?? undefined,
+    pengirim: row.pengirim ?? undefined,
+    deliveryStatus: row.deliveryStatus,
+    podName: row.podName ?? undefined,
+    podTime: row.podTime ? row.podTime.toISOString() : undefined,
+    podPhoto: row.podPhoto ?? undefined,
+    podSignature: row.podSignature ?? undefined,
+    expectedReturnDate: row.expectedReturnDate ? row.expectedReturnDate.toISOString().slice(0, 10) : undefined,
+    actualReturnDate: row.actualReturnDate ? row.actualReturnDate.toISOString().slice(0, 10) : undefined,
+    returnStatus: row.returnStatus ?? undefined,
+    workflowStatus: row.workflowStatus,
+    status: row.workflowStatus,
+    items: row.items.map((item) => ({
+      itemKode: item.itemKode ?? undefined,
+      namaItem: item.namaItem,
+      jumlah: item.jumlah,
+      satuan: item.satuan,
+      batchNo: item.batchNo ?? undefined,
+      keterangan: item.keterangan ?? undefined,
+    })),
+  };
+}
+
+function mapDashboardProofOfDeliveryPayload(row: {
+  id: string;
+  suratJalanId: string;
+  projectId: string | null;
+  workOrderId: string | null;
+  status: string;
+  receiverName: string;
+  deliveredAt: Date;
+  photo: string | null;
+  signature: string | null;
+  noSurat: string | null;
+  tujuan: string | null;
+  receiver: string | null;
+  driver: string | null;
+  plate: string | null;
+  note: string | null;
+  items: Array<{
+    itemKode: string | null;
+    namaItem: string;
+    jumlah: number;
+    satuan: string;
+    batchNo: string | null;
+    keterangan: string | null;
+  }>;
+}) {
+  return {
+    id: row.id,
+    suratJalanId: row.suratJalanId,
+    projectId: row.projectId ?? undefined,
+    workOrderId: row.workOrderId ?? undefined,
+    status: row.status,
+    receiverName: row.receiverName,
+    deliveredAt: row.deliveredAt.toISOString(),
+    photo: row.photo ?? undefined,
+    signature: row.signature ?? undefined,
+    noSurat: row.noSurat ?? undefined,
+    tujuan: row.tujuan ?? undefined,
+    receiver: row.receiver ?? undefined,
+    driver: row.driver ?? undefined,
+    plate: row.plate ?? undefined,
+    note: row.note ?? undefined,
+    items: row.items.map((item) => ({
+      itemKode: item.itemKode ?? undefined,
+      namaItem: item.namaItem,
+      jumlah: item.jumlah,
+      satuan: item.satuan,
+      batchNo: item.batchNo ?? undefined,
+      keterangan: item.keterangan ?? undefined,
+    })),
+  };
+}
+
 const DASHBOARD_DEDICATED_DELEGATES: Record<string, string> = {
   "purchase-orders": "purchaseOrderRecord",
   invoices: "invoiceRecord",
@@ -907,6 +1093,130 @@ async function loadDashboardWorkflowRows(resource: string): Promise<FinanceQueue
       invoiceRows.map((row) => ({
         id: row.id,
         payload: mapInvoiceDashboardPayload(row),
+        updatedAt: row.updatedAt,
+      }))
+    );
+  }
+
+  if (resource === "material-requests") {
+    const materialRequestRows = await prisma.productionMaterialRequest.findMany({
+      select: {
+        id: true,
+        number: true,
+        projectId: true,
+        projectName: true,
+        requestedBy: true,
+        requestedAt: true,
+        status: true,
+        updatedAt: true,
+        items: {
+          select: {
+            id: true,
+            itemCode: true,
+            itemName: true,
+            qty: true,
+            unit: true,
+          },
+          orderBy: { id: "asc" },
+        },
+      },
+    });
+    return mergeFinanceRows(
+      appRows,
+      materialRequestRows.map((row) => ({
+        id: row.id,
+        payload: mapProductionMaterialRequestDashboardPayload(row),
+        updatedAt: row.updatedAt,
+      }))
+    );
+  }
+
+  if (resource === "surat-jalan") {
+    const rows = await prisma.logisticsSuratJalan.findMany({
+      select: {
+        id: true,
+        noSurat: true,
+        tanggal: true,
+        sjType: true,
+        tujuan: true,
+        alamat: true,
+        upPerson: true,
+        noPO: true,
+        projectId: true,
+        assetId: true,
+        sopir: true,
+        noPolisi: true,
+        pengirim: true,
+        deliveryStatus: true,
+        podName: true,
+        podTime: true,
+        podPhoto: true,
+        podSignature: true,
+        expectedReturnDate: true,
+        actualReturnDate: true,
+        returnStatus: true,
+        workflowStatus: true,
+        updatedAt: true,
+        items: {
+          select: {
+            itemKode: true,
+            namaItem: true,
+            jumlah: true,
+            satuan: true,
+            batchNo: true,
+            keterangan: true,
+          },
+          orderBy: { id: "asc" },
+        },
+      },
+    });
+    return mergeFinanceRows(
+      appRows,
+      rows.map((row) => ({
+        id: row.id,
+        payload: mapDashboardLogisticsSuratJalanPayload(row),
+        updatedAt: row.updatedAt,
+      }))
+    );
+  }
+
+  if (resource === "proof-of-delivery") {
+    const rows = await prisma.logisticsProofOfDelivery.findMany({
+      select: {
+        id: true,
+        suratJalanId: true,
+        projectId: true,
+        workOrderId: true,
+        status: true,
+        receiverName: true,
+        deliveredAt: true,
+        photo: true,
+        signature: true,
+        noSurat: true,
+        tujuan: true,
+        receiver: true,
+        driver: true,
+        plate: true,
+        note: true,
+        updatedAt: true,
+        items: {
+          select: {
+            itemKode: true,
+            namaItem: true,
+            jumlah: true,
+            satuan: true,
+            batchNo: true,
+            keterangan: true,
+          },
+          orderBy: { id: "asc" },
+        },
+      },
+    });
+    return mergeFinanceRows(
+      appRows,
+      rows.map((row) => ({
+        id: row.id,
+        payload: mapDashboardProofOfDeliveryPayload(row),
         updatedAt: row.updatedAt,
       }))
     );
@@ -1135,13 +1445,110 @@ async function loadDashboardPayloadRows(resource: string): Promise<Array<{ entit
 }
 
 async function findFinanceResourceDoc(resource: string, entityId: string): Promise<{ source: "app" | "dedicated"; payload: Record<string, unknown> } | null> {
+  if (resource === "purchase-orders") {
+    const procurementRow = await prisma.procurementPurchaseOrder.findUnique({
+      where: { id: entityId },
+      select: {
+        id: true,
+        number: true,
+        tanggal: true,
+        supplierName: true,
+        projectId: true,
+        vendorId: true,
+        supplierAddress: true,
+        supplierPhone: true,
+        supplierFax: true,
+        supplierContact: true,
+        attention: true,
+        notes: true,
+        ppnRate: true,
+        topDays: true,
+        ref: true,
+        poCode: true,
+        deliveryDate: true,
+        signatoryName: true,
+        totalAmount: true,
+        status: true,
+        updatedAt: true,
+        items: {
+          select: {
+            id: true,
+            itemCode: true,
+            itemName: true,
+            qty: true,
+            unit: true,
+            unitPrice: true,
+            total: true,
+            qtyReceived: true,
+            source: true,
+            sourceRef: true,
+          },
+          orderBy: { id: "asc" },
+        },
+      },
+    });
+    if (procurementRow) {
+      return {
+        source: "dedicated",
+        payload: asRecord(mapProcurementPurchaseOrderDashboardPayload(procurementRow)),
+      };
+    }
+  }
+
   if (resource === "invoices") {
+    const appRow = await prisma.appEntity.findUnique({
+      where: { resource_entityId: { resource, entityId } },
+      select: { payload: true },
+    });
     const dedicatedInvoice = await prisma.invoiceRecord.findUnique({
       where: { id: entityId },
       select: invoiceDashboardDetailSelect,
     });
     if (dedicatedInvoice) {
-      return { source: "dedicated", payload: mapInvoiceDashboardPayload(dedicatedInvoice) };
+      return {
+        source: "dedicated",
+        payload: {
+          ...mapInvoiceDashboardPayload(dedicatedInvoice),
+          ...(appRow ? asRecord(appRow.payload) : {}),
+        },
+      };
+    }
+  }
+
+  if (resource === "material-requests") {
+    const appRow = await prisma.appEntity.findUnique({
+      where: { resource_entityId: { resource, entityId } },
+      select: { payload: true },
+    });
+    const materialRequest = await prisma.productionMaterialRequest.findUnique({
+      where: { id: entityId },
+      select: {
+        id: true,
+        number: true,
+        projectId: true,
+        projectName: true,
+        requestedBy: true,
+        requestedAt: true,
+        status: true,
+        items: {
+          select: {
+            id: true,
+            itemCode: true,
+            itemName: true,
+            qty: true,
+            unit: true,
+          },
+          orderBy: { id: "asc" },
+        },
+      },
+    });
+    if (materialRequest) {
+      const appPayload = appRow ? asRecord(appRow.payload) : {};
+      const dedicatedPayload = asRecord(mapProductionMaterialRequestDashboardPayload(materialRequest));
+      return {
+        source: "dedicated",
+        payload: { ...dedicatedPayload, ...appPayload },
+      };
     }
   }
 
@@ -1166,6 +1573,170 @@ async function updateFinanceResourceDoc(
   source: "app" | "dedicated",
   payload: Record<string, unknown>
 ): Promise<void> {
+  if (resource === "purchase-orders") {
+    const next = asRecord(payload);
+    await prisma.$transaction(async (tx) => {
+      const currentRow = await tx.procurementPurchaseOrder.findUnique({
+        where: { id: entityId },
+        include: { items: true },
+      });
+      if (!currentRow) {
+        throw new Error(`Purchase order ${entityId} not found`);
+      }
+
+      const tanggalRaw = readString(next, "tanggal");
+      const tanggalValue =
+        tanggalRaw && !Number.isNaN(new Date(tanggalRaw).getTime())
+          ? new Date(`${tanggalRaw}T00:00:00.000Z`)
+          : currentRow.tanggal;
+      const deliveryDateRaw = readString(next, "deliveryDate");
+      const deliveryDateValue =
+        deliveryDateRaw && !Number.isNaN(new Date(deliveryDateRaw).getTime())
+          ? new Date(deliveryDateRaw)
+          : null;
+
+      await tx.procurementPurchaseOrder.update({
+        where: { id: entityId },
+        data: {
+          projectId: readString(next, "projectId"),
+          vendorId: readString(next, "vendorId"),
+          number: readString(next, "noPO") || currentRow.number,
+          tanggal: tanggalValue,
+          supplierName:
+            readString(next, "supplier") ||
+            readString(next, "vendor") ||
+            readString(next, "vendorName") ||
+            currentRow.supplierName,
+          supplierAddress: readString(next, "supplierAddress") || "",
+          supplierPhone: readString(next, "supplierPhone") || "",
+          supplierFax: readString(next, "supplierFax") || "",
+          supplierContact: readString(next, "supplierContact") || "",
+          attention: readString(next, "attention") || "",
+          notes: readString(next, "notes") || "",
+          ppnRate: readNumber(next, "ppn") || readNumber(next, "ppnRate"),
+          topDays: readNumber(next, "top"),
+          ref: readString(next, "ref") || "",
+          poCode: readString(next, "po") || "",
+          deliveryDate: deliveryDateValue,
+          signatoryName: readString(next, "signatoryName") || "",
+          totalAmount:
+            readNumber(next, "total") ||
+            readNumber(next, "totalAmount") ||
+            readNumber(next, "grandTotal"),
+          status: readString(next, "status") || currentRow.status,
+          items: {
+            deleteMany: {},
+            create: (Array.isArray(next.items) ? next.items : []).map((itemRaw, index) => {
+              const item = asRecord(itemRaw);
+              return {
+                id: readString(item, "id") || `${entityId}-item-${index + 1}`,
+                itemCode:
+                  readString(item, "kode") ||
+                  readString(item, "itemCode") ||
+                  readString(item, "itemKode"),
+                itemName:
+                  readString(item, "nama") ||
+                  readString(item, "itemName") ||
+                  `Item ${index + 1}`,
+                qty: readNumber(item, "qty"),
+                unit: readString(item, "unit") || "pcs",
+                unitPrice: readNumber(item, "unitPrice") || readNumber(item, "harga"),
+                total: readNumber(item, "total"),
+                qtyReceived: readNumber(item, "qtyReceived"),
+                source: readString(item, "source"),
+                sourceRef: readString(item, "sourceRef"),
+              };
+            }),
+          },
+        },
+      });
+
+      await tx.appEntity.upsert({
+        where: {
+          resource_entityId: {
+            resource,
+            entityId,
+          },
+        },
+        update: {
+          payload: next as Prisma.InputJsonValue,
+        },
+        create: {
+          resource,
+          entityId,
+          payload: next as Prisma.InputJsonValue,
+        },
+      });
+    });
+    return;
+  }
+
+  if (resource === "material-requests") {
+    const next = asRecord(payload);
+    await prisma.$transaction(async (tx) => {
+      const currentRow = await tx.productionMaterialRequest.findUnique({
+        where: { id: entityId },
+        include: { items: true },
+      });
+      if (!currentRow) {
+        throw new Error(`Material request ${entityId} not found`);
+      }
+
+      await tx.productionMaterialRequest.update({
+        where: { id: entityId },
+        data: {
+          number:
+            readString(next, "noRequest") ||
+            readString(next, "requestNo") ||
+            currentRow.number,
+          projectId: readString(next, "projectId") || currentRow.projectId,
+          projectName: readString(next, "projectName") || currentRow.projectName,
+          requestedBy: readString(next, "requestedBy") || currentRow.requestedBy,
+          requestedAt: parseDate(readString(next, "requestedAt")) || currentRow.requestedAt,
+          status: readString(next, "status") || currentRow.status,
+          priority: readString(next, "priority"),
+          items: {
+            deleteMany: {},
+            create: (Array.isArray(next.items) ? next.items : []).map((itemRaw, index) => {
+              const item = asRecord(itemRaw);
+              return {
+                id: readString(item, "id") || `${entityId}-item-${index + 1}`,
+                itemCode:
+                  readString(item, "itemKode") ||
+                  readString(item, "itemCode") ||
+                  undefined,
+                itemName:
+                  readString(item, "itemNama") ||
+                  readString(item, "itemName") ||
+                  `Item ${index + 1}`,
+                qty: readNumber(item, "qty"),
+                unit: readString(item, "unit") || "pcs",
+              };
+            }),
+          },
+        },
+      });
+
+      await tx.appEntity.upsert({
+        where: {
+          resource_entityId: {
+            resource,
+            entityId,
+          },
+        },
+        update: {
+          payload: next as Prisma.InputJsonValue,
+        },
+        create: {
+          resource,
+          entityId,
+          payload: next as Prisma.InputJsonValue,
+        },
+      });
+    });
+    return;
+  }
+
   if (source === "app") {
     await prisma.appEntity.update({
       where: { resource_entityId: { resource, entityId } },
@@ -1225,6 +1796,22 @@ async function updateFinanceResourceDoc(
           });
         }
       }
+      await tx.appEntity.upsert({
+        where: {
+          resource_entityId: {
+            resource,
+            entityId,
+          },
+        },
+        update: {
+          payload: next as Prisma.InputJsonValue,
+        },
+        create: {
+          resource,
+          entityId,
+          payload: next as Prisma.InputJsonValue,
+        },
+      });
     });
     return;
   }
@@ -2343,11 +2930,47 @@ dashboardRouter.get("/dashboard/finance-cashflow-summary", authenticate, async (
     return sendError(res, 403, { code: "FORBIDDEN", message: "Forbidden", legacyError: "Forbidden" });
   }
   try {
-    const [invoices, vendorExpenses, vendors, customers] = await Promise.all([
-      prisma.invoiceRecord.findMany({
-        select: invoiceDashboardSelect,
+    const [customerInvoices, vendorInvoices, vendorExpenses, vendors, customers] = await Promise.all([
+      prisma.financeCustomerInvoice.findMany({
+        orderBy: { updatedAt: "desc" },
+        select: {
+          id: true,
+          customerId: true,
+          tanggal: true,
+          dueDate: true,
+          totalAmount: true,
+          paidAmount: true,
+          outstandingAmount: true,
+          status: true,
+          updatedAt: true,
+        },
       }),
-      loadDashboardPayloadRows("vendor-expenses"),
+      prisma.financeVendorInvoice.findMany({
+        orderBy: { updatedAt: "desc" },
+        select: {
+          id: true,
+          vendorId: true,
+          totalAmount: true,
+          paidAmount: true,
+          outstandingAmount: true,
+          status: true,
+          tanggal: true,
+          dueDate: true,
+          updatedAt: true,
+        },
+      }),
+      prisma.financeVendorExpense.findMany({
+        orderBy: { updatedAt: "desc" },
+        select: {
+          id: true,
+          vendorId: true,
+          totalNominal: true,
+          status: true,
+          paidAt: true,
+          tanggal: true,
+          updatedAt: true,
+        },
+      }),
       prisma.vendorRecord.findMany({
         select: { id: true, kodeVendor: true, namaVendor: true, kategori: true, alamat: true, kota: true, kontak: true, telepon: true, email: true, npwp: true, paymentTerms: true, rating: true, status: true, updatedAt: true },
       }),
@@ -2356,8 +2979,6 @@ dashboardRouter.get("/dashboard/finance-cashflow-summary", authenticate, async (
       }),
     ]);
 
-    const invoiceRows = invoices.map((row) => mapInvoiceDashboardPayload(row));
-    const expenseRows = vendorExpenses.map((row) => asRecord(row.payload));
     const vendorRows = vendors.map((row) => ({
       id: row.id,
       kodeVendor: row.kodeVendor,
@@ -2398,38 +3019,40 @@ dashboardRouter.get("/dashboard/finance-cashflow-summary", authenticate, async (
       return Math.max(0, diffDays);
     };
 
-    const normalizedInvoices = invoiceRows.map((payload, idx) => {
-      const totalNominal =
-        readNumber(payload, "totalBayar") ||
-        readNumber(payload, "subtotal") ||
-        readNumber(payload, "totalNominal") ||
-        readNumber(payload, "totalAmount") ||
-        readNumber(payload, "amount");
-      const paidAmount = readNumber(payload, "paidAmount");
-      const outstandingAmount = Math.max(
-        0,
-        readNumber(payload, "outstandingAmount") || totalNominal - paidAmount
-      );
+    const normalizedInvoices = customerInvoices.map((row, idx) => {
+      const totalNominal = Number(row.totalAmount || 0);
+      const paidAmount = Number(row.paidAmount || 0);
+      const outstandingAmount = Math.max(0, Number(row.outstandingAmount || totalNominal - paidAmount));
       return {
-        id: readString(payload, "id") || `INV-${idx + 1}`,
-        customerId: readString(payload, "customerId") || "",
-        tanggal: readString(payload, "tanggal") || readString(payload, "date") || "",
-        dueDate: readString(payload, "dueDate") || readString(payload, "jatuhTempo") || "",
-        status: readString(payload, "status") || "Unpaid",
+        id: row.id || `INV-${idx + 1}`,
+        customerId: row.customerId || "",
+        tanggal: row.tanggal ? row.tanggal.toISOString().slice(0, 10) : "",
+        dueDate: row.dueDate ? row.dueDate.toISOString().slice(0, 10) : "",
+        status: row.status || "Unpaid",
         totalNominal,
         paidAmount,
         outstandingAmount,
       };
     });
 
-    const normalizedExpenses = expenseRows.map((payload, idx) => ({
-      id: readString(payload, "id") || `EXP-${idx + 1}`,
-      vendorId: readString(payload, "vendorId") || "",
-      status: readString(payload, "status") || "Draft",
-      totalNominal:
-        readNumber(payload, "totalNominal") ||
-        readNumber(payload, "amount") ||
-        readNumber(payload, "nominal"),
+    const normalizedVendorInvoices = vendorInvoices.map((row, idx) => ({
+      id: row.id || `VIN-${idx + 1}`,
+      vendorId: row.vendorId || "",
+      status: row.status || "Unpaid",
+      totalNominal: Number(row.totalAmount || 0),
+      paidAmount: Number(row.paidAmount || 0),
+      outstandingAmount: Math.max(0, Number(row.outstandingAmount || Number(row.totalAmount || 0) - Number(row.paidAmount || 0))),
+      tanggal: row.tanggal ? row.tanggal.toISOString().slice(0, 10) : "",
+      dueDate: row.dueDate ? row.dueDate.toISOString().slice(0, 10) : "",
+    }));
+
+    const normalizedExpenses = vendorExpenses.map((row, idx) => ({
+      id: row.id || `EXP-${idx + 1}`,
+      vendorId: row.vendorId || "",
+      status: row.status || "Draft",
+      totalNominal: Number(row.totalNominal || 0),
+      paidAt: row.paidAt ? row.paidAt.toISOString().slice(0, 10) : "",
+      tanggal: row.tanggal ? row.tanggal.toISOString().slice(0, 10) : "",
     }));
 
     const normalizedVendors = vendorRows.map((payload, idx) => ({
@@ -2447,12 +3070,18 @@ dashboardRouter.get("/dashboard/finance-cashflow-summary", authenticate, async (
     const totalARInvoiced = normalizedInvoices.reduce((sum, inv) => sum + inv.totalNominal, 0);
     const totalARPaid = normalizedInvoices.reduce((sum, inv) => sum + inv.paidAmount, 0);
 
-    const totalAP = normalizedExpenses
-      .filter((exp) => ["APPROVED", "PENDING APPROVAL"].includes(exp.status.toUpperCase()))
-      .reduce((sum, exp) => sum + exp.totalNominal, 0);
-    const totalAPPaid = normalizedExpenses
-      .filter((exp) => exp.status.toUpperCase() === "PAID")
-      .reduce((sum, exp) => sum + exp.totalNominal, 0);
+    const totalAP =
+      normalizedVendorInvoices
+        .filter((inv) => inv.status.toUpperCase() !== "PAID")
+        .reduce((sum, inv) => sum + inv.outstandingAmount, 0) +
+      normalizedExpenses
+        .filter((exp) => ["APPROVED", "PENDING APPROVAL"].includes(exp.status.toUpperCase()))
+        .reduce((sum, exp) => sum + exp.totalNominal, 0);
+    const totalAPPaid =
+      normalizedVendorInvoices.reduce((sum, inv) => sum + inv.paidAmount, 0) +
+      normalizedExpenses
+        .filter((exp) => exp.status.toUpperCase() === "PAID")
+        .reduce((sum, exp) => sum + exp.totalNominal, 0);
 
     const arAging = {
       current: normalizedInvoices
@@ -2486,11 +3115,18 @@ dashboardRouter.get("/dashboard/finance-cashflow-summary", authenticate, async (
 
     const netWorkingCapital = totalAR - totalAP;
     const workingCapitalRatio = totalAP > 0 ? totalAR / totalAP : 0;
-    let healthScore = 50;
-    if (arAging.over90 === 0) healthScore += 20;
-    if (arAging.days61to90 < totalAR * 0.1) healthScore += 10;
-    if (workingCapitalRatio > 1) healthScore += 20;
-    healthScore = Math.min(100, Math.max(0, healthScore));
+    const hasCashflowData =
+      normalizedInvoices.length > 0 ||
+      normalizedVendorInvoices.length > 0 ||
+      normalizedExpenses.length > 0;
+    let healthScore = 0;
+    if (hasCashflowData) {
+      healthScore = 50;
+      if (arAging.over90 === 0) healthScore += 20;
+      if (arAging.days61to90 < totalAR * 0.1) healthScore += 10;
+      if (workingCapitalRatio > 1) healthScore += 20;
+      healthScore = Math.min(100, Math.max(0, healthScore));
+    }
 
     const today = new Date();
     const getExpectedCollections = (days: number) => {
@@ -2515,9 +3151,11 @@ dashboardRouter.get("/dashboard/finance-cashflow-summary", authenticate, async (
 
     const unpaidInvoices = normalizedInvoices.filter((inv) => inv.status.toUpperCase() !== "PAID");
     const unpaidInvoiceCount = unpaidInvoices.length;
-    const pendingExpenseCount = normalizedExpenses.filter((exp) =>
-      ["APPROVED", "PENDING APPROVAL"].includes(exp.status.toUpperCase())
-    ).length;
+    const pendingExpenseCount =
+      normalizedVendorInvoices.filter((inv) => inv.status.toUpperCase() !== "PAID").length +
+      normalizedExpenses.filter((exp) =>
+        ["APPROVED", "PENDING APPROVAL"].includes(exp.status.toUpperCase())
+      ).length;
     const avgDaysOutstanding = unpaidInvoiceCount > 0
       ? Math.round(
         unpaidInvoices.reduce((sum, inv) => {
@@ -2546,16 +3184,19 @@ dashboardRouter.get("/dashboard/finance-cashflow-summary", authenticate, async (
 
     const topVendors = normalizedVendors
       .map((vendor) => {
-        const expenses = normalizedExpenses.filter(
-          (exp) =>
-            exp.vendorId === vendor.id &&
-            ["APPROVED", "PENDING APPROVAL"].includes(exp.status.toUpperCase())
+        const invoices = normalizedVendorInvoices.filter(
+          (inv) => inv.vendorId === vendor.id && inv.status.toUpperCase() !== "PAID"
         );
-        const payable = expenses.reduce((sum, exp) => sum + exp.totalNominal, 0);
+        const expenses = normalizedExpenses.filter(
+          (exp) => exp.vendorId === vendor.id && ["APPROVED", "PENDING APPROVAL"].includes(exp.status.toUpperCase())
+        );
+        const payable =
+          invoices.reduce((sum, inv) => sum + inv.outstandingAmount, 0) +
+          expenses.reduce((sum, exp) => sum + exp.totalNominal, 0);
         return {
           ...vendor,
           payable,
-          expenseCount: expenses.length,
+          expenseCount: invoices.length + expenses.length,
         };
       })
       .filter((row) => row.payable > 0)
@@ -2586,7 +3227,8 @@ dashboardRouter.get("/dashboard/finance-cashflow-summary", authenticate, async (
         topVendors,
       },
       lastUpdatedAt: maxDate([
-        invoices[0]?.updatedAt,
+        customerInvoices[0]?.updatedAt,
+        vendorInvoices[0]?.updatedAt,
         vendorExpenses[0]?.updatedAt,
         vendors[0]?.updatedAt,
         customers[0]?.updatedAt,
@@ -3674,12 +4316,40 @@ dashboardRouter.get("/dashboard/finance-project-pl-summary", authenticate, async
     return sendError(res, 403, { code: "FORBIDDEN", message: "Forbidden", legacyError: "Forbidden" });
   }
   try {
-    const [projects, invoices, stockMovements, stockItems, attendances] = await Promise.all([
+    const [projects, customerInvoices, vendorInvoices, vendorExpenses, stockMovements, stockItems, attendances] = await Promise.all([
       prisma.projectRecord.findMany({
         select: projectDashboardSelect,
       }),
-      prisma.invoiceRecord.findMany({
-        select: invoiceDashboardSelect,
+      prisma.financeCustomerInvoice.findMany({
+        select: {
+          id: true,
+          projectId: true,
+          totalAmount: true,
+          paidAmount: true,
+          outstandingAmount: true,
+          status: true,
+          updatedAt: true,
+        },
+      }),
+      prisma.financeVendorInvoice.findMany({
+        select: {
+          id: true,
+          projectId: true,
+          totalAmount: true,
+          paidAmount: true,
+          outstandingAmount: true,
+          status: true,
+          updatedAt: true,
+        },
+      }),
+      prisma.financeVendorExpense.findMany({
+        select: {
+          id: true,
+          projectId: true,
+          totalNominal: true,
+          status: true,
+          updatedAt: true,
+        },
       }),
       loadDashboardPayloadRows("stock-movements"),
       loadDashboardPayloadRows("stock-items"),
@@ -3690,7 +4360,6 @@ dashboardRouter.get("/dashboard/finance-project-pl-summary", authenticate, async
     ]);
 
     const projectRows = projects.map((row) => mapProjectDashboardPayload(row));
-    const invoiceRows = invoices.map((row) => mapInvoiceDashboardPayload(row));
     const stockMovementRows = stockMovements.map((row) => asRecord(row.payload));
     const stockItemRows = stockItems.map((row) => asRecord(row.payload));
     const stockPriceByKode = new Map<string, number>();
@@ -3724,17 +4393,17 @@ dashboardRouter.get("/dashboard/finance-project-pl-summary", authenticate, async
       const startDate = readString(project, "startDate");
       const endDate = readString(project, "endDate");
 
-      const revenue = invoiceRows
-        .filter((inv) => readString(inv, "projectId") === id)
-        .reduce(
-          (sum, inv) =>
-            sum +
-            (readNumber(inv, "totalBayar") ||
-              readNumber(inv, "subtotal") ||
-              readNumber(inv, "totalAmount") ||
-              readNumber(inv, "amount")),
-          0
-        );
+      const revenue = customerInvoices
+        .filter((inv) => inv.projectId === id)
+        .reduce((sum, inv) => sum + Number(inv.totalAmount || 0), 0);
+
+      const vendorInvoiceCost = vendorInvoices
+        .filter((inv) => inv.projectId === id)
+        .reduce((sum, inv) => sum + Number(inv.totalAmount || 0), 0);
+
+      const vendorExpenseCost = vendorExpenses
+        .filter((exp) => exp.projectId === id)
+        .reduce((sum, exp) => sum + Number(exp.totalNominal || 0), 0);
 
       const materialCost = stockMovementRows
         .filter((m) => {
@@ -3752,12 +4421,28 @@ dashboardRouter.get("/dashboard/finance-project-pl-summary", authenticate, async
           return sum + qty * unitPrice;
         }, 0);
 
+      const boqItems = asArray(project.boq);
+      const boqBudget = boqItems.reduce((sum, raw) => {
+        const boqItem = asRecord(raw);
+        const qtyEstimate =
+          readNumber(boqItem, "qtyEstimate") ||
+          readNumber(boqItem, "qty") ||
+          readNumber(boqItem, "quantity");
+        const unitPrice =
+          readNumber(boqItem, "unitPrice") ||
+          readNumber(boqItem, "hargaSatuan") ||
+          readNumber(boqItem, "price") ||
+          readNumber(boqItem, "totalCost");
+        return sum + qtyEstimate * unitPrice;
+      }, 0);
+
       const laborCost = attendances
         .filter((att) => att.projectId === id)
         .reduce((sum, att) => sum + (att.workHours ?? 0) * 25000, 0);
 
       const overheadCost = nilaiKontrak * 0.05;
-      const totalActualCost = materialCost + laborCost + overheadCost;
+      const externalCost = vendorInvoiceCost + vendorExpenseCost;
+      const totalActualCost = materialCost + laborCost + overheadCost + externalCost;
       const netProfit = revenue - totalActualCost;
       const margin = revenue > 0 ? ((revenue - totalActualCost) / revenue) * 100 : 0;
 
@@ -3774,8 +4459,14 @@ dashboardRouter.get("/dashboard/finance-project-pl-summary", authenticate, async
         : 90;
       const monthsActive = Math.max(1, Math.ceil(elapsedDays / 30));
       const burnPerMonth = totalActualCost / monthsActive;
-      const budget = nilaiKontrak * 0.7;
-      const burnRateStatus = (burnPerMonth * 12) > budget ? "Critical" : "Normal";
+      const budget = boqBudget > 0 ? boqBudget : nilaiKontrak;
+      const projectedFinalSpend = burnPerMonth * Math.max(1, Math.ceil(plannedDays / 30));
+      const burnRateStatus =
+        totalActualCost > budget || projectedFinalSpend > budget
+          ? "Critical"
+          : totalActualCost > budget * 0.85 || projectedFinalSpend > budget * 0.85
+          ? "Warning"
+          : "Normal";
 
       return {
         id,
@@ -3787,10 +4478,14 @@ dashboardRouter.get("/dashboard/finance-project-pl-summary", authenticate, async
         revenue,
         materialCost,
         laborCost,
+        vendorInvoiceCost,
+        vendorExpenseCost,
+        externalCost,
         overheadCost,
         totalActualCost,
         netProfit,
         margin,
+        boqBudget,
         budget,
         burnPerMonth,
         burnRateStatus,
@@ -3815,7 +4510,9 @@ dashboardRouter.get("/dashboard/finance-project-pl-summary", authenticate, async
       totals,
       lastUpdatedAt: maxDate([
         projects[0]?.updatedAt,
-        invoices[0]?.updatedAt,
+        customerInvoices[0]?.updatedAt,
+        vendorInvoices[0]?.updatedAt,
+        vendorExpenses[0]?.updatedAt,
         stockMovements[0]?.updatedAt,
         stockItems[0]?.updatedAt,
         attendances[0]?.updatedAt,
@@ -4547,10 +5244,13 @@ function canReadFinanceApprovalQueue(role?: Role): boolean {
   ]);
 }
 
+function canApproveRejectInFinanceHub(role: Role | undefined): boolean {
+  return hasRoleAccess(role, ["OWNER", "SPV"]);
+}
+
 function canApprovePoByRole(role: Role | undefined, total: number): boolean {
-  const highValue = total > 10_000_000;
-  if (highValue) return hasRoleAccess(role, ["OWNER", "ADMIN"]);
-  return hasRoleAccess(role, ["OWNER", "ADMIN", "MANAGER", "FINANCE", "SUPPLY_CHAIN", "PURCHASING"]);
+  void total;
+  return canApproveRejectInFinanceHub(role);
 }
 
 function canVerifyInvoiceByRole(role: Role | undefined): boolean {
@@ -4558,7 +5258,7 @@ function canVerifyInvoiceByRole(role: Role | undefined): boolean {
 }
 
 function canApproveMaterialRequestByRole(role: Role | undefined): boolean {
-  return hasRoleAccess(role, ["OWNER", "ADMIN", "MANAGER", "SUPPLY_CHAIN", "WAREHOUSE", "PURCHASING"]);
+  return canApproveRejectInFinanceHub(role);
 }
 
 function canIssueMaterialRequestByRole(role: Role | undefined): boolean {
@@ -4877,8 +5577,27 @@ dashboardRouter.get("/dashboard/finance-approval-queue", authenticate, async (re
         where: { resource: "material-requests" },
         select: { entityId: true, payload: true, updatedAt: true },
       }),
-      prisma.materialRequestRecord.findMany({
-        select: { id: true, payload: true, updatedAt: true },
+      prisma.productionMaterialRequest.findMany({
+        select: {
+          id: true,
+          number: true,
+          projectId: true,
+          projectName: true,
+          requestedBy: true,
+          requestedAt: true,
+          status: true,
+          updatedAt: true,
+          items: {
+            select: {
+              id: true,
+              itemCode: true,
+              itemName: true,
+              qty: true,
+              unit: true,
+            },
+            orderBy: { id: "asc" },
+          },
+        },
       }),
     ]);
 
@@ -4898,11 +5617,23 @@ dashboardRouter.get("/dashboard/finance-approval-queue", authenticate, async (re
         updatedAt: row.updatedAt,
       }))
     );
-    const mrQueueRows = mergeFinanceRows(mrRows, mrDedicatedRows);
+    const mrQueueRows = mergeFinanceRows(
+      mrRows,
+      mrDedicatedRows.map((row) => ({
+        id: row.id,
+        payload: mapProductionMaterialRequestDashboardPayload(row),
+        updatedAt: row.updatedAt,
+      }))
+    );
 
     const pendingPOs = poQueueRowsNormalized
       .map((row) => {
         const payload = asRecord(row.payload);
+        const status = String(readString(payload, "status") || "Draft").toUpperCase();
+        const total =
+          readNumber(payload, "total") ||
+          readNumber(payload, "totalAmount") ||
+          readNumber(payload, "grandTotal");
         return {
           id: readString(payload, "id") || row.entityId,
           noPO: readString(payload, "noPO") || "-",
@@ -4911,12 +5642,29 @@ dashboardRouter.get("/dashboard/finance-approval-queue", authenticate, async (re
             readString(payload, "vendor") ||
             readString(payload, "vendorName") ||
             "-",
-          total:
-            readNumber(payload, "total") ||
-            readNumber(payload, "totalAmount") ||
-            readNumber(payload, "grandTotal"),
-          status: readString(payload, "status") || "Draft",
+          total,
+          status,
           projectId: readString(payload, "projectId") || undefined,
+          auditStatus:
+            status === "DRAFT"
+              ? "Ready to Send"
+              : status === "SENT"
+                ? "Owner / SPV Review"
+                : status === "PARTIAL"
+                  ? "Receiving Partial"
+                  : status === "RECEIVED"
+                    ? "Received"
+                    : status.replace(/_/g, " "),
+          auditTrail:
+            status === "SENT"
+              ? "Waiting owner / SPV approval"
+              : status === "DRAFT"
+                ? "PO masih draft dan belum masuk approval"
+                : "PO processed from procurement database",
+          availableActions: toActionList(
+            status === "SENT" && canApprovePoByRole(req.user?.role, total) && "APPROVE",
+            status === "SENT" && canApprovePoByRole(req.user?.role, total) && "REJECT"
+          ),
         };
       })
       .filter((po) => {
@@ -4925,21 +5673,186 @@ dashboardRouter.get("/dashboard/finance-approval-queue", authenticate, async (re
       })
       .sort((a, b) => b.total - a.total);
 
+    const quotationActorIds = Array.from(
+      new Set(
+        quotationRows.flatMap((row) => {
+          const payload = mapQuotationDashboardPayload(row);
+          const candidateValues = [
+            readString(payload, "sentByUserId"),
+            readString(payload, "spvApprovedByUserId"),
+            readString(payload, "approvedByUserId"),
+            readString(payload, "rejectedByUserId"),
+            readString(payload, "sentBy"),
+            readString(payload, "spvApprovedBy"),
+            readString(payload, "approvedBy"),
+            readString(payload, "rejectedBy"),
+          ];
+          return candidateValues.filter((value): value is string => Boolean(value));
+        })
+      )
+    );
+    const quotationActors = quotationActorIds.length
+      ? await prisma.user.findMany({
+          where: { id: { in: quotationActorIds } },
+          select: { id: true, name: true, username: true, role: true },
+        })
+      : [];
+    const quotationActorMap = new Map(
+      quotationActors.map((user) => [
+        user.id,
+        {
+          name: user.name || user.username || user.id,
+          role: user.role || null,
+        },
+      ])
+    );
     const pendingQuotations = quotationRows
       .map((row) => {
         const payload = mapQuotationDashboardPayload(row);
         const effectiveStatus = String(payload.status || "Draft");
+        const rawItems = Array.isArray(payload.items)
+          ? payload.items
+          : [
+              ...Object.values(asRecord(payload.pricingItems)).flatMap((group) =>
+                Array.isArray(group) ? group : []
+              ),
+              ...["materials", "manpower", "equipment", "consumables"].flatMap((key) => {
+                const group = payload[key];
+                return Array.isArray(group) ? group : [];
+              }),
+              ...(
+                Array.isArray(payload.sections)
+                  ? payload.sections.flatMap((section) => {
+                      const sectionRecord = asRecord(section);
+                      const sectionItems = sectionRecord.items;
+                      return Array.isArray(sectionItems) ? sectionItems : [];
+                    })
+                  : []
+              ),
+            ];
+        const items = rawItems
+          .map((item) => {
+            const record = asRecord(item);
+            const qty =
+              readNumber(record, "qty") ||
+              readNumber(record, "volume") ||
+              readNumber(record, "jumlah") ||
+              0;
+            const harga =
+              readNumber(record, "harga") ||
+              readNumber(record, "unitPrice") ||
+              readNumber(record, "hargaSatuan") ||
+              readNumber(record, "sellingPrice") ||
+              readNumber(record, "price") ||
+              0;
+            const total =
+              readNumber(record, "total") ||
+              readNumber(record, "totalPrice") ||
+              readNumber(record, "subtotal") ||
+              qty * harga;
+            return {
+              id: readString(record, "id") || undefined,
+              kode:
+                readString(record, "kode") ||
+                readString(record, "itemCode") ||
+                readString(record, "itemKode") ||
+                readString(record, "code") ||
+                "-",
+              nama:
+                readString(record, "nama") ||
+                readString(record, "itemName") ||
+                readString(record, "deskripsi") ||
+                readString(record, "description") ||
+                readString(record, "uraian") ||
+                "-",
+              qty,
+              unit:
+                readString(record, "unit") ||
+                readString(record, "satuan") ||
+                "-",
+              harga,
+              total,
+            };
+          })
+          .filter((item) => item.nama !== "-");
+        const sentActor =
+          quotationActorMap.get(readString(payload, "sentByUserId") || "") ||
+          quotationActorMap.get(readString(payload, "sentBy") || "");
+        const spvActor =
+          quotationActorMap.get(readString(payload, "spvApprovedByUserId") || "") ||
+          quotationActorMap.get(readString(payload, "spvApprovedBy") || "");
+        const approvedActor =
+          quotationActorMap.get(readString(payload, "approvedByUserId") || "") ||
+          quotationActorMap.get(readString(payload, "approvedBy") || "");
+        const rejectedActor =
+          quotationActorMap.get(readString(payload, "rejectedByUserId") || "") ||
+          quotationActorMap.get(readString(payload, "rejectedBy") || "");
+        const auditStatus =
+          effectiveStatus === "DRAFT"
+            ? "Ready to Send"
+            : effectiveStatus === "SENT"
+              ? "SPV Review"
+              : effectiveStatus === "REVIEW"
+                ? "Owner Final Review"
+                : effectiveStatus === "REJECTED"
+                  ? "Rejected"
+                  : effectiveStatus === "APPROVED"
+                    ? "Approved"
+                    : "Processed";
+        const auditTrail =
+          effectiveStatus === "REVIEW"
+            ? `SPV reviewed by ${spvActor?.name || readString(payload, "spvApprovedBy") || "SPV"}${spvActor?.role || readString(payload, "spvApprovedByRole") ? ` (${spvActor?.role || readString(payload, "spvApprovedByRole")})` : ""}`
+            : effectiveStatus === "APPROVED"
+              ? `Final approved by ${approvedActor?.name || readString(payload, "approvedBy") || "Owner"}${approvedActor?.role || readString(payload, "approvedByRole") ? ` (${approvedActor?.role || readString(payload, "approvedByRole")})` : ""}`
+              : effectiveStatus === "REJECTED"
+                ? `Rejected by ${rejectedActor?.name || readString(payload, "rejectedBy") || "Reviewer"}${rejectedActor?.role || readString(payload, "rejectedByRole") ? ` (${rejectedActor?.role || readString(payload, "rejectedByRole")})` : ""}`
+                : effectiveStatus === "SENT"
+                  ? sentActor?.name || readString(payload, "sentBy")
+                    ? `Sent by ${sentActor?.name || readString(payload, "sentBy")}`
+                    : "Waiting SPV review"
+                  : "Draft quotation";
+        const role = req.user?.role;
+        const owner = isOwnerLike(role);
+        const spv = role === "SPV";
+        const availableActions = toActionList(
+          (effectiveStatus === "DRAFT" || effectiveStatus === "REJECTED") && canSendQuotationByRole(role) && "SEND",
+          (effectiveStatus === "SENT" || effectiveStatus === "REVIEW") && "REVIEW",
+          effectiveStatus === "SENT" && spv && "APPROVE",
+          effectiveStatus === "SENT" && (spv || owner) && "REJECT",
+          effectiveStatus === "REVIEW" && owner && "APPROVE",
+          effectiveStatus === "REVIEW" && owner && "REJECT",
+          "VIEW"
+        );
         return {
           id: row.id,
           noPenawaran: readString(payload, "noPenawaran") || row.id,
           kepada: readString(payload, "kepada") || readString(payload, "perusahaan") || "-",
           grandTotal: readNumber(payload, "grandTotal"),
           status: effectiveStatus,
+          tanggal: readString(payload, "tanggal") || undefined,
+          perihal: readString(payload, "perihal") || undefined,
+          sentAt: readString(payload, "sentAt") || undefined,
+          sentBy: sentActor?.name || readString(payload, "sentBy") || readString(payload, "createdBy") || undefined,
+          sentByRole: sentActor?.role || readString(payload, "sentByRole") || undefined,
+          spvApprovedBy: spvActor?.name || readString(payload, "spvApprovedBy") || undefined,
+          spvApprovedByRole: spvActor?.role || readString(payload, "spvApprovedByRole") || undefined,
+          spvApprovedAt: readString(payload, "spvApprovedAt") || undefined,
+          approvedBy: approvedActor?.name || readString(payload, "approvedBy") || undefined,
+          approvedByRole: approvedActor?.role || readString(payload, "approvedByRole") || undefined,
+          approvedAt: readString(payload, "approvedAt") || undefined,
+          rejectedBy: rejectedActor?.name || readString(payload, "rejectedBy") || undefined,
+          rejectedByRole: rejectedActor?.role || readString(payload, "rejectedByRole") || undefined,
+          rejectedAt: readString(payload, "rejectedAt") || undefined,
+          rejectReason: readString(payload, "rejectReason") || undefined,
+          items,
+          auditStatus,
+          auditTrail,
+          availableActions,
         };
       })
       .filter((q) => {
         const status = String(q.status || "").toUpperCase();
-        return status === "DRAFT" || status === "SENT" || status === "REVIEW";
+        return status === "DRAFT" || status === "SENT" || status === "REVIEW" || status === "REJECTED";
       })
       .sort((a, b) => b.grandTotal - a.grandTotal);
 
@@ -4955,13 +5868,25 @@ dashboardRouter.get("/dashboard/finance-approval-queue", authenticate, async (re
           0,
           readNumber(payload, "outstandingAmount") || totalBayar - paidAmount
         );
+        const status = String(readString(payload, "status") || "Unpaid").toUpperCase();
+        const verifiedBy = readString(payload, "verifiedBy") || readString(payload, "paidVerifiedBy") || undefined;
+        const verifiedByRole = readString(payload, "verifiedByRole") || readString(payload, "paidVerifiedByRole") || undefined;
         return {
           id: readString(payload, "id") || row.entityId,
           noInvoice: readString(payload, "noInvoice") || row.entityId,
           customer: readString(payload, "customer") || readString(payload, "customerName") || "-",
           totalBayar,
           outstandingAmount,
-          status: String(readString(payload, "status") || "Unpaid").toUpperCase(),
+          status,
+          verifiedBy,
+          verifiedByRole,
+          tanggalBayar: readString(payload, "tanggalBayar") || undefined,
+          auditStatus: status === "UNPAID" ? "Awaiting Verification" : status === "PAID" ? "Verified Paid" : status.replace(/_/g, " "),
+          auditTrail:
+            verifiedBy
+              ? `Verified by ${verifiedBy}${verifiedByRole ? ` (${verifiedByRole})` : ""}`
+              : "Waiting finance verification",
+          availableActions: toActionList(status === "UNPAID" && canVerifyInvoiceByRole(req.user?.role) && "VERIFY"),
         };
       })
       .filter((inv) => inv.outstandingAmount > 0);
@@ -4969,13 +5894,53 @@ dashboardRouter.get("/dashboard/finance-approval-queue", authenticate, async (re
     const pendingMaterialRequests = mrQueueRows
       .map((row) => {
         const payload = asRecord(row.payload);
+        const status = String(readString(payload, "status") || "Pending").toUpperCase();
+        const approvedBy = readString(payload, "approvedBy") || undefined;
+        const approvedByRole = readString(payload, "approvedByRole") || undefined;
+        const rejectedBy = readString(payload, "rejectedBy") || undefined;
+        const rejectedByRole = readString(payload, "rejectedByRole") || undefined;
+        const issuedBy = readString(payload, "issuedBy") || undefined;
+        const issuedByRole = readString(payload, "issuedByRole") || undefined;
         return {
           id: readString(payload, "id") || row.entityId,
           noRequest: readString(payload, "noRequest") || row.entityId,
           projectName: readString(payload, "projectName") || "-",
           requestedBy: readString(payload, "requestedBy") || "-",
-          status: String(readString(payload, "status") || "Pending").toUpperCase(),
+          status,
+          approvedBy,
+          approvedByRole,
+          approvedAt: readString(payload, "approvedAt") || undefined,
+          rejectedBy,
+          rejectedByRole,
+          rejectedAt: readString(payload, "rejectedAt") || undefined,
+          issuedBy,
+          issuedByRole,
+          issuedAt: readString(payload, "issuedAt") || undefined,
+          rejectReason: readString(payload, "rejectReason") || undefined,
           items: asArray(payload.items),
+          auditStatus:
+            status === "PENDING"
+              ? "Pending Review"
+              : status === "APPROVED"
+                ? "Ready to Issue"
+                : status === "ISSUED"
+                  ? "Issued"
+                  : status === "REJECTED"
+                    ? "Rejected"
+                    : status.replace(/_/g, " "),
+          auditTrail:
+            status === "APPROVED" && approvedBy
+              ? `Approved by ${approvedBy}${approvedByRole ? ` (${approvedByRole})` : ""}`
+              : status === "ISSUED" && issuedBy
+                ? `Issued by ${issuedBy}${issuedByRole ? ` (${issuedByRole})` : ""}`
+                : status === "REJECTED" && rejectedBy
+                  ? `Rejected by ${rejectedBy}${rejectedByRole ? ` (${rejectedByRole})` : ""}`
+                  : "Waiting approval",
+          availableActions: toActionList(
+            status === "PENDING" && canApproveMaterialRequestByRole(req.user?.role) && "APPROVE",
+            status === "PENDING" && canApproveMaterialRequestByRole(req.user?.role) && "REJECT",
+            status === "APPROVED" && canIssueMaterialRequestByRole(req.user?.role) && "ISSUE"
+          ),
         };
       })
       .filter((mr) => {
@@ -5027,6 +5992,8 @@ dashboardRouter.post("/dashboard/finance-approval-action", authenticate, async (
   }
 
   try {
+    const actor = await resolveActorSnapshot(req.user?.id, req.user?.role);
+
     if (documentType === "PO") {
       if (!(action === "APPROVE" || action === "REJECT")) {
         return sendError(res, 400, { code: "VALIDATION_ERROR", message: "Action PO harus APPROVE/REJECT", legacyError: "Action PO harus APPROVE/REJECT" });
@@ -5048,9 +6015,13 @@ dashboardRouter.post("/dashboard/finance-approval-action", authenticate, async (
         ...payload,
         id: readString(payload, "id") || documentId,
         status: nextStatus,
-        approvedBy: action === "APPROVE" ? (req.user?.id || "System") : payload.approvedBy,
+        approvedBy: action === "APPROVE" ? actor.actorName : payload.approvedBy,
+        approvedByUserId: action === "APPROVE" ? actor.actorUserId : payload.approvedByUserId,
+        approvedByRole: action === "APPROVE" ? actor.actorRole : payload.approvedByRole,
         approvedAt: action === "APPROVE" ? new Date().toISOString() : payload.approvedAt,
-        rejectedBy: action === "REJECT" ? (req.user?.id || "System") : payload.rejectedBy,
+        rejectedBy: action === "REJECT" ? actor.actorName : payload.rejectedBy,
+        rejectedByUserId: action === "REJECT" ? actor.actorUserId : payload.rejectedByUserId,
+        rejectedByRole: action === "REJECT" ? actor.actorRole : payload.rejectedByRole,
         rejectedAt: action === "REJECT" ? new Date().toISOString() : payload.rejectedAt,
         rejectReason: action === "REJECT" ? reason || undefined : payload.rejectReason,
       };
@@ -5082,6 +6053,9 @@ dashboardRouter.post("/dashboard/finance-approval-action", authenticate, async (
         paidAmount: totalBayar,
         outstandingAmount: 0,
         tanggalBayar: new Date().toISOString().slice(0, 10),
+        verifiedBy: actor.actorName,
+        verifiedByUserId: actor.actorUserId,
+        verifiedByRole: actor.actorRole,
       };
       await updateFinanceResourceDoc("invoices", documentId, current.source, updatedPayload);
       await writeFinanceApprovalAuditLog(req, "INVOICE_VERIFY", "INVOICE", documentId);
@@ -5108,15 +6082,31 @@ dashboardRouter.post("/dashboard/finance-approval-action", authenticate, async (
         if (!canSendQuotationByRole(req.user?.role)) {
           return sendError(res, 403, { code: "FORBIDDEN", message: "Role tidak boleh mengirim quotation", legacyError: "Role tidak boleh mengirim quotation" });
         }
-        if (currentStatus !== "DRAFT") {
-          return sendError(res, 400, { code: "STATUS_INVALID", message: "Quotation hanya bisa di-send dari status Draft", legacyError: "Quotation hanya bisa di-send dari status Draft" });
+        if (!(currentStatus === "DRAFT" || currentStatus === "REJECTED")) {
+          return sendError(res, 400, { code: "STATUS_INVALID", message: "Quotation hanya bisa di-send dari status Draft atau Rejected", legacyError: "Quotation hanya bisa di-send dari status Draft atau Rejected" });
         }
 
         const nextPayload = {
           ...payload,
           id: current.id,
           status: "SENT",
-          sentAt: readString(payload, "sentAt") || new Date().toISOString(),
+          sentAt: new Date().toISOString(),
+          sentBy: actor.actorName,
+          sentByUserId: actor.actorUserId,
+          sentByRole: actor.actorRole,
+          spvApprovedBy: undefined,
+          spvApprovedByRole: undefined,
+          spvApprovedByUserId: undefined,
+          spvApprovedAt: undefined,
+          approvedBy: undefined,
+          approvedByRole: undefined,
+          approvedByUserId: undefined,
+          approvedAt: undefined,
+          rejectedBy: undefined,
+          rejectedByRole: undefined,
+          rejectedByUserId: undefined,
+          rejectedAt: undefined,
+          rejectReason: undefined,
         };
 
         await prisma.quotation.update({
@@ -5135,9 +6125,13 @@ dashboardRouter.post("/dashboard/finance-approval-action", authenticate, async (
           action: "SEND",
           actorUserId: req.user?.id ?? null,
           actorRole: req.user?.role ?? null,
-          fromStatus: "DRAFT",
+          fromStatus: currentStatus,
           toStatus: "SENT",
-          metadata: { source: "finance-approval-center" },
+          metadata: {
+            source: "finance-approval-center",
+            actorName: actor.actorName,
+            actorRole: actor.actorRole,
+          },
         });
         await writeFinanceApprovalAuditLog(req, "QUOTATION_SEND", "QUOTATION", documentId);
         return res.json({ ok: true, documentType, documentId, status: "SENT" });
@@ -5147,14 +6141,12 @@ dashboardRouter.post("/dashboard/finance-approval-action", authenticate, async (
       const isOwner = isOwnerLike(role);
       const isSpv = role === "SPV";
       let nextStatus: "REVIEW" | "APPROVED" | "REJECTED";
-      let actorId = req.user?.id || (isOwner ? "OWNER" : "SPV");
 
       if (action === "APPROVE") {
         if (currentStatus === "SENT" && isSpv) {
           nextStatus = "REVIEW";
         } else if (currentStatus === "REVIEW" && isOwner) {
           nextStatus = "APPROVED";
-          actorId = req.user?.id || "OWNER";
         } else if (currentStatus === "SENT" && isOwner) {
           return sendError(res, 400, {
             code: "SPV_REVIEW_REQUIRED",
@@ -5188,11 +6180,17 @@ dashboardRouter.post("/dashboard/finance-approval-action", authenticate, async (
         ...payload,
         id: current.id,
         status: nextStatus,
-        spvApprovedBy: nextStatus === "REVIEW" ? actorId : payload.spvApprovedBy,
+        spvApprovedBy: nextStatus === "REVIEW" ? actor.actorName : payload.spvApprovedBy,
+        spvApprovedByRole: nextStatus === "REVIEW" ? actor.actorRole : payload.spvApprovedByRole,
+        spvApprovedByUserId: nextStatus === "REVIEW" ? actor.actorUserId : payload.spvApprovedByUserId,
         spvApprovedAt: nextStatus === "REVIEW" ? new Date().toISOString() : payload.spvApprovedAt,
-        approvedBy: nextStatus === "APPROVED" ? actorId : payload.approvedBy,
+        approvedBy: nextStatus === "APPROVED" ? actor.actorName : payload.approvedBy,
+        approvedByRole: nextStatus === "APPROVED" ? actor.actorRole : payload.approvedByRole,
+        approvedByUserId: nextStatus === "APPROVED" ? actor.actorUserId : payload.approvedByUserId,
         approvedAt: nextStatus === "APPROVED" ? new Date().toISOString() : payload.approvedAt,
-        rejectedBy: action === "REJECT" ? actorId : payload.rejectedBy,
+        rejectedBy: action === "REJECT" ? actor.actorName : payload.rejectedBy,
+        rejectedByRole: action === "REJECT" ? actor.actorRole : payload.rejectedByRole,
+        rejectedByUserId: action === "REJECT" ? actor.actorUserId : payload.rejectedByUserId,
         rejectedAt: action === "REJECT" ? new Date().toISOString() : payload.rejectedAt,
         rejectReason: action === "REJECT" ? reason || undefined : payload.rejectReason,
       };
@@ -5219,6 +6217,8 @@ dashboardRouter.post("/dashboard/finance-approval-action", authenticate, async (
         metadata: {
           source: "finance-approval-center",
           approvalStage: nextStatus === "REVIEW" ? "SPV_REVIEW" : nextStatus === "APPROVED" ? "OWNER_FINAL" : "REJECT",
+          actorName: actor.actorName,
+          actorRole: actor.actorRole,
         },
       });
       await writeFinanceApprovalAuditLog(req, `QUOTATION_${action}`, "QUOTATION", documentId, { reason: reason || null });
@@ -5242,17 +6242,22 @@ dashboardRouter.post("/dashboard/finance-approval-action", authenticate, async (
 
       const payload = current.payload;
       const nextStatus = action === "APPROVE" ? "APPROVED" : action === "REJECT" ? "REJECTED" : "ISSUED";
-      const actorName = req.user?.id || "System";
       const updatedPayload = {
         ...payload,
         id: readString(payload, "id") || documentId,
         status: nextStatus,
-        approvedBy: action === "APPROVE" ? actorName : payload.approvedBy,
+        approvedBy: action === "APPROVE" ? actor.actorName : payload.approvedBy,
+        approvedByUserId: action === "APPROVE" ? actor.actorUserId : payload.approvedByUserId,
+        approvedByRole: action === "APPROVE" ? actor.actorRole : payload.approvedByRole,
         approvedAt: action === "APPROVE" ? new Date().toISOString() : payload.approvedAt,
-        rejectedBy: action === "REJECT" ? actorName : payload.rejectedBy,
+        rejectedBy: action === "REJECT" ? actor.actorName : payload.rejectedBy,
+        rejectedByUserId: action === "REJECT" ? actor.actorUserId : payload.rejectedByUserId,
+        rejectedByRole: action === "REJECT" ? actor.actorRole : payload.rejectedByRole,
         rejectedAt: action === "REJECT" ? new Date().toISOString() : payload.rejectedAt,
         rejectReason: action === "REJECT" ? reason || undefined : payload.rejectReason,
-        issuedBy: action === "ISSUE" ? actorName : payload.issuedBy,
+        issuedBy: action === "ISSUE" ? actor.actorName : payload.issuedBy,
+        issuedByUserId: action === "ISSUE" ? actor.actorUserId : payload.issuedByUserId,
+        issuedByRole: action === "ISSUE" ? actor.actorRole : payload.issuedByRole,
         issuedAt: action === "ISSUE" ? new Date().toISOString() : payload.issuedAt,
       };
       await updateFinanceResourceDoc("material-requests", documentId, current.source, updatedPayload);

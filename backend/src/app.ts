@@ -20,6 +20,7 @@ import { hrRouter } from "./routes/hr";
 import { dashboardRouter } from "./routes/dashboard";
 import { resourceAliasesRouter } from "./routes/resourceAliases";
 import { financeMiscRouter } from "./routes/financeMisc";
+import { mediaRouter } from "./routes/media";
 import { errorHandler } from "./middlewares/errorHandler";
 import { apiLimiter, quotationPatchLimiter, writeLimiter } from "./middlewares/rateLimit";
 
@@ -84,6 +85,7 @@ app.use(inventoryRouter);
 app.use(operationsRouter);
 app.use(hrRouter);
 app.use(financeMiscRouter);
+app.use(mediaRouter);
 app.use(dashboardRouter);
 app.use(resourceAliasesRouter);
 app.use(dataRouter);

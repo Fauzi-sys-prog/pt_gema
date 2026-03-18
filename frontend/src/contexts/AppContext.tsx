@@ -12,6 +12,9 @@ import { toast } from "sonner@2.0.3";
 import api from "../services/api";
 import { subscribeDataSync } from "../services/dataSyncBus";
 import { isOwnerLike } from "../utils/roles";
+import { normalizeEntityRows } from "../utils/normalizeEntityRows";
+
+const AUTH_STATE_CHANGE_EVENT = "app-auth-state-changed";
 
 const safeGetLocalStorageItem = (key: string): string | null => {
   try {
@@ -173,6 +176,10 @@ export interface DimensionMeasurement {
 
 export interface QCInspection {
   id: string;
+  projectId?: string;
+  workOrderId?: string;
+  woId?: string;
+  drawingAssetId?: string;
   tanggal: string;
   batchNo: string;
   itemNama: string;
@@ -474,6 +481,7 @@ export interface StockOut {
   id: string;
   noStockOut: string;
   noWorkOrder?: string;
+  workOrderId?: string;
   productionReportId?: string;
   projectId?: string;
   projectName?: string;
@@ -678,6 +686,7 @@ export interface ProductionReport {
   unit: string;
   remarks?: string;
   photoUrl?: string;
+  photoAssetId?: string;
   woNumber?: string;
   woId?: string;
   selectedItem?: string;
@@ -773,6 +782,8 @@ export interface VendorInvoice {
   status: "Unpaid" | "Partial" | "Paid" | "Overdue";
   jatuhTempo: string;
   projectId?: string;
+  purchaseOrderId?: string;
+  vendorId?: string;
   ppn?: number;
 }
 
@@ -1032,6 +1043,15 @@ export interface AuditLog {
   module: string;
   details: string;
   status: "Success" | "Failed" | "Warning";
+  domain?: string;
+  resource?: string;
+  entityId?: string;
+  operation?: string;
+  actorUserId?: string;
+  actorRole?: string;
+  metadata?: unknown;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface AppContextType {
@@ -1081,14 +1101,14 @@ export interface AppContextType {
   addAuditLog: (log: Omit<AuditLog, "id" | "timestamp" | "userId" | "userName">) => void;
 
   updateUser: (id: string, updates: Partial<User>) => void;
-  updateProject: (id: string, updates: Partial<Project>) => void;
+  updateProject: (id: string, updates: Partial<Project>) => Promise<boolean>;
 
   addEmployee: (e: Employee) => void;
   updateEmployee: (id: string, updates: Partial<Employee>) => void;
   deleteEmployee: (id: string) => void;
 
-  addAttendance: (a: Attendance) => void;
-  addAttendanceBulk: (a: Attendance[]) => void;
+  addAttendance: (a: Attendance) => Promise<boolean>;
+  addAttendanceBulk: (a: Attendance[]) => Promise<boolean>;
   updateAttendance: (id: string, updates: Partial<Attendance>) => void;
   deleteAttendance: (id: string) => void;
 
@@ -1133,33 +1153,33 @@ export interface AppContextType {
   updateDataCollection: (id: string, updates: Partial<DataCollection>) => void;
   deleteDataCollection: (id: string) => void;
 
-  addProject: (p: Project) => void;
-  deleteProject: (id: string) => void;
+  addProject: (p: Project) => Promise<boolean>;
+  deleteProject: (id: string) => Promise<boolean>;
 
   addQuotation: (q: Quotation) => Promise<void>;
   updateQuotation: (id: string, updates: Partial<Quotation>) => Promise<void>;
   deleteQuotation: (id: string) => void;
 
-  addVendorInvoice: (inv: VendorInvoice) => void;
-  updateVendorInvoice: (id: string, updates: Partial<VendorInvoice>) => void;
+  addVendorInvoice: (inv: VendorInvoice) => Promise<boolean>;
+  updateVendorInvoice: (id: string, updates: Partial<VendorInvoice>) => Promise<boolean>;
 
   generatePayroll: (month: string, year: string) => void;
 
-  addSuratMasuk: (s: SuratMasuk) => void;
-  updateSuratMasuk: (id: string, updates: Partial<SuratMasuk>) => void;
-  deleteSuratMasuk: (id: string) => void;
+  addSuratMasuk: (s: SuratMasuk) => Promise<boolean>;
+  updateSuratMasuk: (id: string, updates: Partial<SuratMasuk>) => Promise<boolean>;
+  deleteSuratMasuk: (id: string) => Promise<boolean>;
 
-  addSuratKeluar: (s: SuratKeluar) => void;
-  updateSuratKeluar: (id: string, updates: Partial<SuratKeluar>) => void;
-  deleteSuratKeluar: (id: string) => void;
+  addSuratKeluar: (s: SuratKeluar) => Promise<boolean>;
+  updateSuratKeluar: (id: string, updates: Partial<SuratKeluar>) => Promise<boolean>;
+  deleteSuratKeluar: (id: string) => Promise<boolean>;
 
-  addBeritaAcara: (ba: BeritaAcara) => void;
-  updateBeritaAcara: (id: string, updates: Partial<BeritaAcara>) => void;
-  deleteBeritaAcara: (id: string) => void;
+  addBeritaAcara: (ba: BeritaAcara) => Promise<boolean>;
+  updateBeritaAcara: (id: string, updates: Partial<BeritaAcara>) => Promise<boolean>;
+  deleteBeritaAcara: (id: string) => Promise<boolean>;
 
-  addSuratJalan: (sj: SuratJalan) => void;
-  updateSuratJalan: (id: string, updates: Partial<SuratJalan>) => void;
-  deleteSuratJalan: (id: string) => void;
+  addSuratJalan: (sj: SuratJalan) => Promise<boolean>;
+  updateSuratJalan: (id: string, updates: Partial<SuratJalan>) => Promise<boolean>;
+  deleteSuratJalan: (id: string) => Promise<boolean>;
 
   addAsset: (a: Asset) => Promise<void>;
   addMaintenance: (m: MaintenanceRecord) => Promise<void>;
@@ -1187,23 +1207,23 @@ export interface AppContextType {
   convertDataCollectionToQuotation: (dcId: string) => void;
   convertQuotationToProject: (quoId: string) => void;
 
-  addVendor: (vendor: Vendor) => void;
-  updateVendor: (id: string, updates: Partial<Vendor>) => void;
-  deleteVendor: (id: string) => void;
+  addVendor: (vendor: Vendor) => Promise<boolean>;
+  updateVendor: (id: string, updates: Partial<Vendor>) => Promise<boolean>;
+  deleteVendor: (id: string) => Promise<boolean>;
 
-  addExpense: (expense: VendorExpense) => void;
+  addExpense: (expense: VendorExpense) => Promise<boolean>;
   updateExpense: (id: string, updates: Partial<VendorExpense>) => Promise<boolean>;
-  deleteExpense: (id: string) => void;
+  deleteExpense: (id: string) => Promise<boolean>;
   approveExpense: (id: string, approver: string) => Promise<boolean>;
   rejectExpense: (id: string, reason: string) => Promise<boolean>;
 
-  addCustomer: (customer: Customer) => void;
-  updateCustomer: (id: string, updates: Partial<Customer>) => void;
-  deleteCustomer: (id: string) => void;
+  addCustomer: (customer: Customer) => Promise<boolean>;
+  updateCustomer: (id: string, updates: Partial<Customer>) => Promise<boolean>;
+  deleteCustomer: (id: string) => Promise<boolean>;
 
-  addCustomerInvoice: (invoice: CustomerInvoice) => void;
+  addCustomerInvoice: (invoice: CustomerInvoice) => Promise<boolean>;
   updateCustomerInvoice: (id: string, updates: Partial<CustomerInvoice>) => Promise<boolean>;
-  deleteCustomerInvoice: (id: string) => void;
+  deleteCustomerInvoice: (id: string) => Promise<boolean>;
   addInvoicePayment: (invoiceId: string, payment: InvoicePayment) => Promise<boolean>;
 }
 
@@ -1509,21 +1529,25 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
    * =========================
    */
   useEffect(() => {
-    const token = safeGetLocalStorageItem("token");
-    if (!token) return;
+    syncCurrentUserFromAuthState();
+  }, []);
 
-    api
-      .get("/auth/me")
-      .then((res) => {
-        const u = normalizeAuthUser(res.data);
-        setCurrentUser(u);
-        persistAuthUser(u);
-      })
-      .catch(() => {
-        safeRemoveLocalStorageItem("token");
-        persistAuthUser(null);
-        setCurrentUser(null);
-      });
+  useEffect(() => {
+    const handleAuthStateChange = () => {
+      syncCurrentUserFromAuthState();
+    };
+
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key !== "token" && event.key !== "user") return;
+      syncCurrentUserFromAuthState();
+    };
+
+    window.addEventListener(AUTH_STATE_CHANGE_EVENT, handleAuthStateChange);
+    window.addEventListener("storage", handleStorage);
+    return () => {
+      window.removeEventListener(AUTH_STATE_CHANGE_EVENT, handleAuthStateChange);
+      window.removeEventListener("storage", handleStorage);
+    };
   }, []);
 
   const loadResource = async <T,>(
@@ -1704,59 +1728,20 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     resource: string,
     list: T[]
   ) => {
-    const resourceEndpoints: Record<string, string> = {
-      "stock-items": "/inventory/items",
-      "stock-ins": "/inventory/stock-ins",
-      "stock-outs": "/inventory/stock-outs",
-      "stock-movements": "/inventory/movements",
-      "stock-opnames": "/inventory/stock-opnames",
-      "work-orders": "/work-orders",
-      "material-requests": "/material-requests",
-      "production-reports": "/production-reports",
-      "production-trackers": "/production-trackers",
-      "qc-inspections": "/qc-inspections",
-      "surat-jalan": "/surat-jalan",
-      "proof-of-delivery": "/proof-of-delivery",
-      "berita-acara": "/berita-acara",
-      "spk-records": "/spk-records",
-      "purchase-orders": "/purchase-orders",
-      receivings: "/receivings",
-      "working-expense-sheets": "/finance/working-expense-sheets",
-      "customer-invoices": "/finance/customer-invoices",
-      "vendor-expenses": "/finance/vendor-expenses",
-      "vendor-invoices": "/finance/vendor-invoices",
+    const directBulkEndpoints: Record<string, string> = {
       invoices: "/invoices",
       "surat-masuk": "/surat-masuk",
-      "surat-keluar": "/surat-keluar",
       "template-surat": "/template-surat",
+      "surat-keluar": "/surat-keluar",
       "app-settings": "/app-settings",
       "hr-leaves": "/hr-leaves",
       "hr-online-status": "/hr-online-status",
-      "audit-logs": "/audit-logs",
-      "archive-registry": "/archive-registry",
-      vendors: "/vendors",
-      customers: "/customers",
-      employees: "/employees",
-      attendances: "/attendances",
-      "hr-shifts": "/hr-shifts",
-      "hr-shift-schedules": "/hr-shift-schedules",
-      "hr-attendance-summaries": "/hr-attendance-summaries",
-      "hr-performance-reviews": "/hr-performance-reviews",
-      "hr-thl-contracts": "/hr-thl-contracts",
-      "hr-resignations": "/hr-resignations",
       assets: "/assets",
       maintenances: "/maintenances",
       payrolls: "/payrolls",
-      "finance-bpjs-payments": "/finance-bpjs-payments",
-      "finance-pph21-filings": "/finance-pph21-filings",
-      "finance-thr-disbursements": "/finance-thr-disbursements",
-      "finance-employee-allowances": "/finance-employee-allowances",
-      "finance-po-payments": "/finance-po-payments",
-      kasbons: "/hr/kasbons",
-      "fleet-health": "/fleet-health",
     };
-    if (resourceEndpoints[resource]) {
-      await api.put(`${resourceEndpoints[resource]}/bulk`, list.map((item) => ({
+    if (directBulkEndpoints[resource]) {
+      await api.put(`${directBulkEndpoints[resource]}/bulk`, list.map((item) => ({
         ...item,
         id:
           typeof item?.id === "string" && item.id.trim()
@@ -1908,41 +1893,55 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       let loadSucceeded = false;
 
       try {
-        await Promise.all([
-          loadProjects(),
-          loadResource<Invoice>("invoices", setInvoiceList),
-          loadQuotations(),
-          loadPurchaseOrders(),
-          loadReceivings(),
-          loadResource<StockItem>("stock-items", setStockItemList),
-          loadStockMovements(),
-          loadStockIns(),
-          loadStockOuts(),
-          loadResource<StockOpname>("stock-opnames", setStockOpnameList),
-          loadWorkOrders(),
-          loadResource<ProductionReport>("production-reports", setProductionReportList),
-          loadResource<ProductionTracker>("production-trackers", setProductionTrackerList),
-          loadResource<QCInspection>("qc-inspections", setQcInspectionList),
-          loadEmployees(),
-          loadAttendances(),
-          loadSuratJalan(),
-          loadResource<BeritaAcara>("berita-acara", setBeritaAcaraList),
-          loadResource<SuratMasuk>("surat-masuk", setSuratMasukList),
-          loadResource<SuratKeluar>("surat-keluar", setSuratKeluarList),
-          loadResource<TemplateSurat>("template-surat", setTemplateSuratList),
-          loadResource<Asset>("assets", setAssetList),
-          loadResource<MaintenanceRecord>("maintenances", setMaintenanceList),
-          loadMaterialRequests(),
-          loadDataCollections(),
-          loadResource<Payroll>("payrolls", setPayrollList),
-          loadResource<ArchiveEntry>("archive-registry", setArchiveRegistry),
-          loadResource<AuditLog>("audit-logs", setAuditLogs).catch(() => setAuditLogs([])),
-          loadResource<Vendor>("vendors", setVendorList),
-          loadResource<VendorExpense>("vendor-expenses", setExpenseList),
-          loadResource<VendorInvoice>("vendor-invoices", setVendorInvoiceList),
-          loadResource<Customer>("customers", setCustomerList),
-          loadResource<CustomerInvoice>("customer-invoices", setCustomerInvoiceList),
-        ]);
+        const bootstrapTasks = [
+          { key: "projects", critical: true, run: () => loadProjects() },
+          { key: "invoices", critical: false, run: () => loadResource<Invoice>("invoices", setInvoiceList) },
+          { key: "quotations", critical: true, run: () => loadQuotations() },
+          { key: "purchase-orders", critical: true, run: () => loadPurchaseOrders() },
+          { key: "receivings", critical: false, run: () => loadReceivings() },
+          { key: "stock-items", critical: false, run: () => loadResource<StockItem>("stock-items", setStockItemList) },
+          { key: "stock-movements", critical: false, run: () => loadStockMovements() },
+          { key: "stock-ins", critical: false, run: () => loadStockIns() },
+          { key: "stock-outs", critical: false, run: () => loadStockOuts() },
+          { key: "stock-opnames", critical: false, run: () => loadResource<StockOpname>("stock-opnames", setStockOpnameList) },
+          { key: "work-orders", critical: true, run: () => loadWorkOrders() },
+          { key: "production-reports", critical: false, run: () => loadResource<ProductionReport>("production-reports", setProductionReportList) },
+          { key: "production-trackers", critical: false, run: () => loadResource<ProductionTracker>("production-trackers", setProductionTrackerList) },
+          { key: "qc-inspections", critical: false, run: () => loadResource<QCInspection>("qc-inspections", setQcInspectionList) },
+          { key: "employees", critical: true, run: () => loadEmployees() },
+          { key: "attendances", critical: false, run: () => loadAttendances() },
+          { key: "surat-jalan", critical: false, run: () => loadSuratJalan() },
+          { key: "berita-acara", critical: false, run: () => loadResource<BeritaAcara>("berita-acara", setBeritaAcaraList) },
+          { key: "surat-masuk", critical: false, run: () => loadResource<SuratMasuk>("surat-masuk", setSuratMasukList) },
+          { key: "surat-keluar", critical: false, run: () => loadResource<SuratKeluar>("surat-keluar", setSuratKeluarList) },
+          { key: "template-surat", critical: false, run: () => loadResource<TemplateSurat>("template-surat", setTemplateSuratList) },
+          { key: "assets", critical: false, run: () => loadResource<Asset>("assets", setAssetList) },
+          { key: "maintenances", critical: false, run: () => loadResource<MaintenanceRecord>("maintenances", setMaintenanceList) },
+          { key: "material-requests", critical: false, run: () => loadMaterialRequests() },
+          { key: "data-collections", critical: false, run: () => loadDataCollections() },
+          { key: "payrolls", critical: false, run: () => loadResource<Payroll>("payrolls", setPayrollList) },
+          { key: "archive-registry", critical: false, run: () => loadResource<ArchiveEntry>("archive-registry", setArchiveRegistry) },
+          { key: "audit-logs", critical: false, run: () => loadResource<AuditLog>("audit-logs", setAuditLogs).catch(() => setAuditLogs([])) },
+          { key: "vendors", critical: false, run: () => loadResource<Vendor>("vendors", setVendorList) },
+          { key: "vendor-expenses", critical: false, run: () => loadResource<VendorExpense>("vendor-expenses", setExpenseList) },
+          { key: "vendor-invoices", critical: false, run: () => loadResource<VendorInvoice>("vendor-invoices", setVendorInvoiceList) },
+          { key: "customers", critical: false, run: () => loadResource<Customer>("customers", setCustomerList) },
+          { key: "customer-invoices", critical: false, run: () => loadResource<CustomerInvoice>("customer-invoices", setCustomerInvoiceList) },
+        ] as const;
+
+        const settled = await Promise.allSettled(
+          bootstrapTasks.map(async (task) => {
+            await task.run();
+            return task.key;
+          })
+        );
+
+        const failedKeys = settled.flatMap((result, index) =>
+          result.status === "rejected" ? [bootstrapTasks[index].key] : []
+        );
+        const failedCriticalKeys = failedKeys.filter((key) =>
+          bootstrapTasks.some((task) => task.key === key && task.critical)
+        );
 
         try {
           const userRes = await api.get("/users");
@@ -1956,10 +1955,17 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           }
         }
 
-        loadSucceeded = true;
+        if (failedKeys.length > 0) {
+          console.warn("Bootstrap resource load failures:", failedKeys);
+        }
+
+        loadSucceeded = failedCriticalKeys.length === 0;
+        if (!loadSucceeded && !cancelled) {
+          toast.error("Gagal load data backend inti. Data lokal tidak akan auto-sync sampai koneksi backend normal.");
+        }
       } catch (err) {
         if (!cancelled) {
-          toast.error("Gagal load data backend. Data lokal tidak akan auto-sync sampai koneksi backend normal.");
+          toast.error("Gagal load data backend inti. Data lokal tidak akan auto-sync sampai koneksi backend normal.");
         }
       } finally {
         if (!cancelled) {
@@ -1981,27 +1987,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     const syncTasks = [
       { key: "invoices", run: () => saveResource("invoices", invoiceList) },
-      { key: "stock-movements", run: () => saveStockMovements(stockMovementList) },
-      { key: "stock-outs", run: () => saveStockOuts(stockOutList) },
-      { key: "stock-opnames", run: () => saveResource("stock-opnames", stockOpnameList) },
-      { key: "work-orders", run: () => saveWorkOrders(workOrderList) },
-      { key: "production-reports", run: () => saveResource("production-reports", productionReportList) },
-      { key: "production-trackers", run: () => saveResource("production-trackers", productionTrackerList) },
-      { key: "qc-inspections", run: () => saveResource("qc-inspections", qcInspectionList) },
-      { key: "employees", run: () => saveEmployees(employeeList) },
-      { key: "attendances", run: () => saveAttendances(attendanceList) },
-      { key: "surat-jalan", run: () => saveSuratJalan(suratJalanList) },
-      { key: "berita-acara", run: () => saveResource("berita-acara", beritaAcaraList) },
       { key: "surat-masuk", run: () => saveResource("surat-masuk", suratMasukList) },
       { key: "surat-keluar", run: () => saveResource("surat-keluar", suratKeluarList) },
       { key: "template-surat", run: () => saveResource("template-surat", templateSuratList) },
       { key: "assets", run: () => saveResource("assets", assetList) },
       { key: "maintenances", run: () => saveResource("maintenances", maintenanceList) },
-      { key: "material-requests", run: () => saveMaterialRequests(materialRequestList) },
       { key: "payrolls", run: () => saveResource("payrolls", payrollList) },
-      { key: "vendor-expenses", run: () => saveResource("vendor-expenses", expenseList) },
-      { key: "vendor-invoices", run: () => saveResource("vendor-invoices", vendorInvoiceList) },
-      { key: "customer-invoices", run: () => saveResource("customer-invoices", customerInvoiceList) },
     ] as const;
 
     const signatures = Object.fromEntries(
@@ -2009,8 +2000,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         switch (task.key) {
           case "invoices":
             return [task.key, listSignature(invoiceList)];
-          case "stock-movements":
-            return [task.key, listSignature(stockMovementList)];
           case "stock-outs":
             return [task.key, listSignature(stockOutList)];
           case "stock-opnames":
@@ -2206,7 +2195,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       });
     };
 
-  const updateProject: AppContextType["updateProject"] = (id, updates) => {
+  const updateProject: AppContextType["updateProject"] = async (id, updates) => {
     const safeUpdates = { ...(updates as any) };
     delete safeUpdates.approvedBy;
     delete safeUpdates.approvedAt;
@@ -2222,20 +2211,20 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       return prev.map((p) => (p.id === id ? { ...p, ...safeUpdates } : p));
     });
 
-    api
-      .patch(`/projects/${id}`, safeUpdates)
-      .then((res) => {
-        if (res?.data) {
-          setProjectList((prev) => prev.map((p) => (p.id === id ? (res.data as Project) : p)));
-        }
-        toast.success("Project berhasil diperbarui");
-      })
-      .catch((err) => {
-        if (previousProject) {
-          setProjectList((prev) => prev.map((p) => (p.id === id ? previousProject! : p)));
-        }
-        toast.error(getProjectApiErrorMessage(err, "Gagal update project di server"));
-      });
+    try {
+      const res = await api.patch(`/projects/${id}`, safeUpdates);
+      if (res?.data) {
+        setProjectList((prev) => prev.map((p) => (p.id === id ? (res.data as Project) : p)));
+      }
+      toast.success("Project berhasil diperbarui");
+      return true;
+    } catch (err) {
+      if (previousProject) {
+        setProjectList((prev) => prev.map((p) => (p.id === id ? previousProject! : p)));
+      }
+      toast.error(getProjectApiErrorMessage(err, "Gagal update project di server"));
+      return false;
+    }
   };
 
   const addEmployee: AppContextType["addEmployee"] = (e) => {
@@ -2305,32 +2294,36 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     });
   };
 
-  const addAttendance: AppContextType["addAttendance"] = (a) => {
+  const addAttendance: AppContextType["addAttendance"] = async (a) => {
     setAttendanceList((prev) => [...prev, a]);
-    api
-      .post("/attendances", a)
-      .then((res) => {
-        const saved = (res?.data || a) as Attendance;
-        setAttendanceList((prev) => {
-          const exists = prev.some((item) => item.id === saved.id);
-          if (exists) return prev.map((item) => (item.id === saved.id ? saved : item));
-          return [...prev, saved];
-        });
-      })
-      .catch((err) => {
-        console.error("Failed to sync create attendance:", err);
-        setAttendanceList((prev) => prev.filter((item) => item.id !== a.id));
-        toast.error(err?.response?.data?.error || "Gagal simpan attendance ke server");
+    try {
+      const res = await api.post("/attendances", a);
+      const saved = (res?.data || a) as Attendance;
+      setAttendanceList((prev) => {
+        const exists = prev.some((item) => item.id === saved.id);
+        if (exists) return prev.map((item) => (item.id === saved.id ? saved : item));
+        return [...prev, saved];
       });
+      return true;
+    } catch (err: any) {
+      console.error("Failed to sync create attendance:", err);
+      setAttendanceList((prev) => prev.filter((item) => item.id !== a.id));
+      toast.error(err?.response?.data?.error || "Gagal simpan attendance ke server");
+      return false;
+    }
   };
 
-  const addAttendanceBulk: AppContextType["addAttendanceBulk"] = (a) => {
+  const addAttendanceBulk: AppContextType["addAttendanceBulk"] = async (a) => {
     setAttendanceList((prev) => [...prev, ...a]);
-    api.put("/attendances/bulk", a).catch((err) => {
+    try {
+      await api.put("/attendances/bulk", a);
+      return true;
+    } catch (err: any) {
       console.error("Failed to sync create attendance bulk:", err);
       setAttendanceList((prev) => prev.filter((x) => !a.some((item) => item.id === x.id)));
       toast.error(err?.response?.data?.error || "Gagal sinkron bulk attendance ke server");
-    });
+      return false;
+    }
   };
 
   const updateAttendance: AppContextType["updateAttendance"] = (id, updates) => {
@@ -2420,6 +2413,34 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         return [...prev, saved];
       });
     } catch (err: any) {
+      if (err?.response?.status === 409) {
+        try {
+          const existingRes = await api.get("/work-orders");
+          const rows = Array.isArray(existingRes?.data) ? existingRes.data : [];
+          const existing = rows
+            .map((row: any) => {
+              const payload = row?.payload ?? row ?? {};
+              if (payload && typeof payload === "object" && !Array.isArray(payload)) {
+                const payloadId = typeof payload.id === "string" && payload.id.trim() ? payload.id : null;
+                const entityId = typeof row?.entityId === "string" && row.entityId.trim() ? row.entityId : null;
+                const rowId = typeof row?.id === "string" && row.id.trim() ? row.id : null;
+                return { ...(payload as Record<string, unknown>), id: payloadId || entityId || rowId } as WorkOrder;
+              }
+              return payload as WorkOrder;
+            })
+            .find((item: WorkOrder) => item?.id === wo.id || item?.woNumber === wo.woNumber);
+
+          if (existing) {
+            setWorkOrderList((prev) => {
+              const withoutTemp = prev.filter((item) => item.id !== wo.id && item.woNumber !== wo.woNumber);
+              return [...withoutTemp, existing];
+            });
+            return;
+          }
+        } catch (lookupErr) {
+          console.error("Failed to reconcile duplicate work order after conflict:", lookupErr);
+        }
+      }
       console.error("Failed to sync create work order:", err);
       setWorkOrderList((prev) => prev.filter((item) => item.id !== wo.id));
       toast.error(err?.response?.data?.error || "Gagal simpan work order ke server");
@@ -2796,19 +2817,44 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
    * =========================
    */
   const createStockOut: AppContextType["createStockOut"] = async (so) => {
-    const linkedWO = so.noWorkOrder
-      ? workOrderList.find((wo) => String(wo.noWorkOrder || "").trim() === String(so.noWorkOrder || "").trim())
+    const stockOutRef = String(so.workOrderId || so.noWorkOrder || "").trim();
+    const linkedWO = stockOutRef
+      ? workOrderList.find((wo) => {
+          const candidates = [
+            wo.id,
+            (wo as any).woNumber,
+            (wo as any).number,
+            (wo as any).noWorkOrder,
+          ]
+            .map((value) => String(value || "").trim())
+            .filter(Boolean);
+          return candidates.includes(stockOutRef);
+        })
       : undefined;
-    const resolvedProjectId = String(so.projectId || linkedWO?.projectId || "").trim() || undefined;
+    const linkedProject =
+      projectList.find((p) => {
+        const candidates = [p.id, (p as any).kodeProject]
+          .map((value) => String(value || "").trim())
+          .filter(Boolean);
+        return candidates.includes(stockOutRef);
+      }) || projectList.find((p) => String(p.id || "").trim() === String(so.projectId || "").trim());
+    const resolvedProjectId = String(so.projectId || linkedWO?.projectId || linkedProject?.id || "").trim() || undefined;
     const resolvedProjectName =
       String(
         so.projectName ||
           linkedWO?.projectName ||
+          linkedProject?.namaProject ||
           projectList.find((p) => String(p.id || "").trim() === String(resolvedProjectId || "").trim())?.namaProject ||
           ""
       ).trim() || undefined;
+    const payload: StockOut = {
+      ...so,
+      workOrderId: linkedWO?.id || so.workOrderId,
+      projectId: resolvedProjectId,
+      projectName: resolvedProjectName,
+    };
 
-    const insufficient = so.items
+    const insufficient = payload.items
       .map((item) => {
         const stock = stockItemList.find((s) => s.kode === item.kode);
         if (!stock) return `Item ${item.kode} tidak ditemukan di master stok`;
@@ -2825,13 +2871,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     const previousStockItems = stockItemList;
     const previousStockMovements = stockMovementList;
-    setStockOutList((prev) => [...prev, so]);
+    setStockOutList((prev) => [...prev, payload]);
 
     setStockItemList((prevInventory) => {
       const updated = [...prevInventory];
       const movements: StockMovement[] = [];
 
-      for (const item of so.items) {
+      for (const item of payload.items) {
         const idx = updated.findIndex((i) => i.kode === item.kode);
         if (idx === -1) continue;
 
@@ -2845,9 +2891,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
         movements.push({
           id: uid("MOV"),
-          tanggal: so.tanggal,
+          tanggal: payload.tanggal,
           type: "OUT",
-          refNo: so.noStockOut,
+          refNo: payload.noStockOut,
           refType: "Stock Out",
           itemKode: updated[idx].kode,
           itemNama: updated[idx].nama,
@@ -2856,8 +2902,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           lokasi: updated[idx].lokasi,
           stockBefore,
           stockAfter,
-          createdBy: so.createdBy,
-          productionReportId: so.productionReportId,
+          createdBy: payload.createdBy,
+          productionReportId: payload.productionReportId,
           projectId: resolvedProjectId,
           projectName: resolvedProjectName,
           batchNo: item.batchNo,
@@ -2876,17 +2922,17 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       addAuditLog({
         action: "STOCK_OUT",
         module: "Warehouse",
-        details: `Stock out ${so.noStockOut} processed`,
+        details: `Stock out ${payload.noStockOut} processed`,
         status: "Success",
       });
 
       return updated;
     });
     try {
-      await api.post("/inventory/stock-outs", so);
+      await api.post("/inventory/stock-outs", payload);
     } catch (err: any) {
       console.error("Failed to sync create stock out:", err);
-      setStockOutList((prev) => prev.filter((item) => item.id !== so.id));
+      setStockOutList((prev) => prev.filter((item) => item.id !== payload.id));
       setStockItemList(previousStockItems);
       setStockMovementList(previousStockMovements);
       toast.error(err?.response?.data?.error || "Gagal simpan stock out ke server");
@@ -2898,6 +2944,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const previousStockItems = stockItemList;
     const previousStockMovements = stockMovementList;
     setStockInList((prev) => [...prev, si]);
+    let optimisticStockItems = previousStockItems;
+    let optimisticMovements = previousStockMovements;
 
     setStockItemList((prevInventory) => {
       const updated = [...prevInventory];
@@ -2932,9 +2980,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           supplier: updated[idx].supplier || si.supplier || undefined,
           lastUpdate: new Date().toISOString(),
         };
-        api.patch(`/inventory/items/${updated[idx].id}`, updated[idx]).catch((err) => {
-          console.error("Failed to sync stock item after stock in:", err);
-        });
 
         movements.push({
           id: uid("MOV"),
@@ -2961,12 +3006,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
       if (movements.length) {
         setStockMovementList((prev) => [...movements, ...prev]);
-        for (const mv of movements) {
-          api.post("/inventory/movements", mv).catch((err) => {
-            console.error("Failed to sync stock movement (IN):", err);
-          });
-        }
       }
+
+      optimisticStockItems = updated;
+      optimisticMovements = movements;
 
       addAuditLog({
         action: "STOCK_IN",
@@ -2979,6 +3022,18 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     });
     try {
       await api.post("/inventory/stock-ins", si);
+      try {
+        const [stockInRes, stockItemRes, stockMovementRes] = await Promise.all([
+          api.get("/inventory/stock-ins"),
+          api.get("/inventory/items"),
+          api.get("/inventory/movements"),
+        ]);
+        setStockInList(Array.isArray(stockInRes.data) ? (stockInRes.data as StockIn[]) : []);
+        setStockItemList(Array.isArray(stockItemRes.data) ? (stockItemRes.data as StockItem[]) : optimisticStockItems);
+        setStockMovementList(Array.isArray(stockMovementRes.data) ? (stockMovementRes.data as StockMovement[]) : optimisticMovements);
+      } catch (refreshErr) {
+        console.error("Failed to refresh stock sources after stock in:", refreshErr);
+      }
     } catch (err: any) {
       console.error("Failed to sync create stock in:", err);
       setStockInList((prev) => prev.filter((item) => item.id !== si.id));
@@ -3106,42 +3161,20 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         if (exists) return prev.map((item) => (item.id === savedReceiving.id ? savedReceiving : item));
         return [savedReceiving, ...prev];
       });
-
-      const actorRoleLabel = String(currentUser?.role || "SUPPLY_CHAIN").trim().toUpperCase() || "SUPPLY_CHAIN";
-      await createStockIn({
-        id: uid("SI"),
-        noStockIn: `SI-AUTO-${rcv.noReceiving}`,
-        noSuratJalan: rcv.noSuratJalan,
-        supplier: rcv.supplier,
-        projectId: rcv.projectId,
-        projectName: rcv.project,
-        tanggal: rcv.tanggal,
-        type: "Receiving",
-        status: "Posted",
-        createdBy: actorRoleLabel,
-        items: rcv.items.map((i) => ({
-          kode: i.itemKode,
-          nama: i.itemName,
-          qty: i.qtyGood ?? i.qtyReceived ?? i.qty ?? 0,
-          satuan: i.unit,
-        })),
-        noPO: rcv.noPO,
-        poId: rcv.poId,
-      });
-
       try {
-        const poRes = await api.get("/purchase-orders");
-        const poRows = Array.isArray(poRes.data) ? poRes.data : [];
-        const nextPOs = poRows.map((row: any) => {
-          const payload = row?.payload ?? {};
-          if (payload && typeof payload === "object" && !Array.isArray(payload) && !payload.id) {
-            return { ...payload, id: row.entityId } as PurchaseOrder;
-          }
-          return payload as PurchaseOrder;
-        });
+        const [poRes, stockInRes, stockItemRes, stockMovementRes] = await Promise.all([
+          api.get("/purchase-orders"),
+          api.get("/inventory/stock-ins"),
+          api.get("/inventory/items"),
+          api.get("/inventory/movements"),
+        ]);
+        const nextPOs = normalizeEntityRows<PurchaseOrder>(poRes.data);
         setPoList(nextPOs);
+        setStockInList(Array.isArray(stockInRes.data) ? (stockInRes.data as StockIn[]) : []);
+        setStockItemList(Array.isArray(stockItemRes.data) ? (stockItemRes.data as StockItem[]) : []);
+        setStockMovementList(Array.isArray(stockMovementRes.data) ? (stockMovementRes.data as StockMovement[]) : []);
       } catch (err) {
-        console.error("Failed to refresh purchase-orders after receiving create:", err);
+        console.error("Failed to refresh inventory/PO after receiving create:", err);
       }
 
       addAuditLog({
@@ -3384,43 +3417,43 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       });
     };
 
-  const addProject: AppContextType["addProject"] = (p) => {
+  const addProject: AppContextType["addProject"] = async (p) => {
     setProjectList((prev) => [...prev, p]);
-    api
-      .post("/projects", p)
-      .then((res) => {
-        if (res?.data) {
-          const saved = res.data as Project;
-          setProjectList((prev) => {
-            const exists = prev.some((item) => item.id === saved.id);
-            if (exists) return prev.map((item) => (item.id === saved.id ? saved : item));
-            return [...prev, saved];
-          });
-        }
-        toast.success("Project baru berhasil dibuat");
-      })
-      .catch((err) => {
-        setProjectList((prev) => prev.filter((item) => item.id !== p.id));
-        toast.error(getProjectApiErrorMessage(err, "Gagal simpan project ke server"));
-      });
+    try {
+      const res = await api.post("/projects", p);
+      if (res?.data) {
+        const saved = res.data as Project;
+        setProjectList((prev) => {
+          const exists = prev.some((item) => item.id === saved.id);
+          if (exists) return prev.map((item) => (item.id === saved.id ? saved : item));
+          return [...prev, saved];
+        });
+      }
+      toast.success("Project baru berhasil dibuat");
+      return true;
+    } catch (err) {
+      setProjectList((prev) => prev.filter((item) => item.id !== p.id));
+      toast.error(getProjectApiErrorMessage(err, "Gagal simpan project ke server"));
+      return false;
+    }
   };
-  const deleteProject: AppContextType["deleteProject"] = (id) => {
+  const deleteProject: AppContextType["deleteProject"] = async (id) => {
     let deletedProject: Project | undefined;
     setProjectList((prev) => {
       deletedProject = prev.find((p) => p.id === id);
       return prev.filter((p) => p.id !== id);
     });
-    api
-      .delete(`/projects/${id}`)
-      .then(() => {
-        toast.success("Project berhasil dihapus");
-      })
-      .catch((err) => {
-        if (deletedProject) {
-          setProjectList((prev) => [deletedProject!, ...prev]);
-        }
-        toast.error(err?.response?.data?.error || "Gagal hapus project di server");
-      });
+    try {
+      await api.delete(`/projects/${id}`);
+      toast.success("Project berhasil dihapus");
+      return true;
+    } catch (err: any) {
+      if (deletedProject) {
+        setProjectList((prev) => [deletedProject!, ...prev]);
+      }
+      toast.error(err?.response?.data?.error || "Gagal hapus project di server");
+      return false;
+    }
   };
 
   const addQuotation: AppContextType["addQuotation"] = async (q) => {
@@ -3479,20 +3512,27 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         throw err;
       }
     };
-  const deleteQuotation: AppContextType["deleteQuotation"] = (id) =>
+  const deleteQuotation: AppContextType["deleteQuotation"] = async (id) =>
     {
       let deletedQuotation: Quotation | undefined;
       setQuotationList((prev) => {
         deletedQuotation = prev.find((q) => q.id === id);
         return prev.filter((q) => q.id !== id);
       });
-      api.delete(`/quotations/${id}`).catch((err) => {
+      try {
+        await api.delete(`/quotations/${id}`);
+      } catch (err: any) {
         console.error("Failed to sync delete quotation:", err);
         if (deletedQuotation) {
-          setQuotationList((prev) => [deletedQuotation!, ...prev]);
+          setQuotationList((prev) => {
+            const exists = prev.some((q) => q.id === deletedQuotation!.id);
+            if (exists) return prev;
+            return [deletedQuotation!, ...prev];
+          });
         }
         toast.error(err?.response?.data?.error || "Gagal hapus quotation di server");
-      });
+        throw err;
+      }
     };
 
   const convertDataCollectionToQuotation: AppContextType["convertDataCollectionToQuotation"] = (dcId) => {
@@ -3561,25 +3601,25 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
    *  LETTERS / BA / SJ
    * =========================
    */
-  const addSuratMasuk: AppContextType["addSuratMasuk"] = (s) => {
+  const addSuratMasuk: AppContextType["addSuratMasuk"] = async (s) => {
     setSuratMasukList((prev) => [...prev, s]);
-    api
-      .post("/surat-masuk", s)
-      .then((res) => {
-        const saved = (res?.data || s) as SuratMasuk;
-        setSuratMasukList((prev) => {
-          const exists = prev.some((item) => item.id === saved.id);
-          if (exists) return prev.map((item) => (item.id === saved.id ? saved : item));
-          return [...prev, saved];
-        });
-      })
-      .catch((err) => {
-        console.error("Failed to sync create surat masuk:", err);
-        setSuratMasukList((prev) => prev.filter((item) => item.id !== s.id));
-        toast.error(err?.response?.data?.error || "Gagal simpan surat masuk ke server");
+    try {
+      const res = await api.post("/surat-masuk", s);
+      const saved = (res?.data || s) as SuratMasuk;
+      setSuratMasukList((prev) => {
+        const exists = prev.some((item) => item.id === saved.id);
+        if (exists) return prev.map((item) => (item.id === saved.id ? saved : item));
+        return [...prev, saved];
       });
+      return true;
+    } catch (err: any) {
+      console.error("Failed to sync create surat masuk:", err);
+      setSuratMasukList((prev) => prev.filter((item) => item.id !== s.id));
+      toast.error(err?.response?.data?.error || "Gagal simpan surat masuk ke server");
+      return false;
+    }
   };
-  const updateSuratMasuk: AppContextType["updateSuratMasuk"] = (id, updates) => {
+  const updateSuratMasuk: AppContextType["updateSuratMasuk"] = async (id, updates) => {
     let prevSnapshot: SuratMasuk | undefined;
     let mergedPayload: SuratMasuk | undefined;
     setSuratMasukList((prev) =>
@@ -3592,28 +3632,31 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         return item;
       })
     );
-    if (!mergedPayload) return;
-    api
-      .patch(`/surat-masuk/${id}`, mergedPayload)
-      .then((res) => {
-        const saved = (res?.data || mergedPayload) as SuratMasuk;
-        setSuratMasukList((prev) => prev.map((item) => (item.id === id ? saved : item)));
-      })
-      .catch((err) => {
-        console.error("Failed to sync update surat masuk:", err);
-        if (prevSnapshot) {
-          setSuratMasukList((prev) => prev.map((item) => (item.id === id ? prevSnapshot! : item)));
-        }
-        toast.error(err?.response?.data?.error || "Gagal update surat masuk di server");
-      });
+    if (!mergedPayload) return false;
+    try {
+      const res = await api.patch(`/surat-masuk/${id}`, mergedPayload);
+      const saved = (res?.data || mergedPayload) as SuratMasuk;
+      setSuratMasukList((prev) => prev.map((item) => (item.id === id ? saved : item)));
+      return true;
+    } catch (err: any) {
+      console.error("Failed to sync update surat masuk:", err);
+      if (prevSnapshot) {
+        setSuratMasukList((prev) => prev.map((item) => (item.id === id ? prevSnapshot! : item)));
+      }
+      toast.error(err?.response?.data?.error || "Gagal update surat masuk di server");
+      return false;
+    }
   };
-  const deleteSuratMasuk: AppContextType["deleteSuratMasuk"] = (id) => {
+  const deleteSuratMasuk: AppContextType["deleteSuratMasuk"] = async (id) => {
     let deletedSnapshot: SuratMasuk | undefined;
     setSuratMasukList((prev) => {
       deletedSnapshot = prev.find((item) => item.id === id);
       return prev.filter((item) => item.id !== id);
     });
-    api.delete(`/surat-masuk/${id}`).catch((err) => {
+    try {
+      await api.delete(`/surat-masuk/${id}`);
+      return true;
+    } catch (err: any) {
       console.error("Failed to sync delete surat masuk:", err);
       if (deletedSnapshot) {
         setSuratMasukList((prev) => {
@@ -3623,28 +3666,29 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         });
       }
       toast.error(err?.response?.data?.error || "Gagal hapus surat masuk di server");
-    });
+      return false;
+    }
   };
 
-  const addSuratKeluar: AppContextType["addSuratKeluar"] = (s) => {
+  const addSuratKeluar: AppContextType["addSuratKeluar"] = async (s) => {
     setSuratKeluarList((prev) => [...prev, s]);
-    api
-      .post("/surat-keluar", s)
-      .then((res) => {
-        const saved = (res?.data || s) as SuratKeluar;
-        setSuratKeluarList((prev) => {
-          const exists = prev.some((item) => item.id === saved.id);
-          if (exists) return prev.map((item) => (item.id === saved.id ? saved : item));
-          return [...prev, saved];
-        });
-      })
-      .catch((err) => {
-        console.error("Failed to sync create surat keluar:", err);
-        setSuratKeluarList((prev) => prev.filter((item) => item.id !== s.id));
-        toast.error(err?.response?.data?.error || "Gagal simpan surat keluar ke server");
+    try {
+      const res = await api.post("/surat-keluar", s);
+      const saved = (res?.data || s) as SuratKeluar;
+      setSuratKeluarList((prev) => {
+        const exists = prev.some((item) => item.id === saved.id);
+        if (exists) return prev.map((item) => (item.id === saved.id ? saved : item));
+        return [...prev, saved];
       });
+      return true;
+    } catch (err: any) {
+      console.error("Failed to sync create surat keluar:", err);
+      setSuratKeluarList((prev) => prev.filter((item) => item.id !== s.id));
+      toast.error(err?.response?.data?.error || "Gagal simpan surat keluar ke server");
+      return false;
+    }
   };
-  const updateSuratKeluar: AppContextType["updateSuratKeluar"] = (id, updates) => {
+  const updateSuratKeluar: AppContextType["updateSuratKeluar"] = async (id, updates) => {
     let prevSnapshot: SuratKeluar | undefined;
     let mergedPayload: SuratKeluar | undefined;
     setSuratKeluarList((prev) =>
@@ -3657,28 +3701,31 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         return item;
       })
     );
-    if (!mergedPayload) return;
-    api
-      .patch(`/surat-keluar/${id}`, mergedPayload)
-      .then((res) => {
-        const saved = (res?.data || mergedPayload) as SuratKeluar;
-        setSuratKeluarList((prev) => prev.map((item) => (item.id === id ? saved : item)));
-      })
-      .catch((err) => {
-        console.error("Failed to sync update surat keluar:", err);
-        if (prevSnapshot) {
-          setSuratKeluarList((prev) => prev.map((item) => (item.id === id ? prevSnapshot! : item)));
-        }
-        toast.error(err?.response?.data?.error || "Gagal update surat keluar di server");
-      });
+    if (!mergedPayload) return false;
+    try {
+      const res = await api.patch(`/surat-keluar/${id}`, mergedPayload);
+      const saved = (res?.data || mergedPayload) as SuratKeluar;
+      setSuratKeluarList((prev) => prev.map((item) => (item.id === id ? saved : item)));
+      return true;
+    } catch (err: any) {
+      console.error("Failed to sync update surat keluar:", err);
+      if (prevSnapshot) {
+        setSuratKeluarList((prev) => prev.map((item) => (item.id === id ? prevSnapshot! : item)));
+      }
+      toast.error(err?.response?.data?.error || "Gagal update surat keluar di server");
+      return false;
+    }
   };
-  const deleteSuratKeluar: AppContextType["deleteSuratKeluar"] = (id) => {
+  const deleteSuratKeluar: AppContextType["deleteSuratKeluar"] = async (id) => {
     let deletedSnapshot: SuratKeluar | undefined;
     setSuratKeluarList((prev) => {
       deletedSnapshot = prev.find((item) => item.id === id);
       return prev.filter((item) => item.id !== id);
     });
-    api.delete(`/surat-keluar/${id}`).catch((err) => {
+    try {
+      await api.delete(`/surat-keluar/${id}`);
+      return true;
+    } catch (err: any) {
       console.error("Failed to sync delete surat keluar:", err);
       if (deletedSnapshot) {
         setSuratKeluarList((prev) => {
@@ -3688,28 +3735,29 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         });
       }
       toast.error(err?.response?.data?.error || "Gagal hapus surat keluar di server");
-    });
+      return false;
+    }
   };
 
-  const addBeritaAcara: AppContextType["addBeritaAcara"] = (ba) => {
+  const addBeritaAcara: AppContextType["addBeritaAcara"] = async (ba) => {
     setBeritaAcaraList((prev) => [...prev, ba]);
-    api
-      .post("/berita-acara", ba)
-      .then((res) => {
-        const saved = (res?.data || ba) as BeritaAcara;
-        setBeritaAcaraList((prev) => {
-          const exists = prev.some((item) => item.id === saved.id);
-          if (exists) return prev.map((item) => (item.id === saved.id ? saved : item));
-          return [...prev, saved];
-        });
-      })
-      .catch((err) => {
-        console.error("Failed to sync create berita acara:", err);
-        setBeritaAcaraList((prev) => prev.filter((item) => item.id !== ba.id));
-        toast.error(err?.response?.data?.error || "Gagal simpan berita acara ke server");
+    try {
+      const res = await api.post("/berita-acara", ba);
+      const saved = (res?.data || ba) as BeritaAcara;
+      setBeritaAcaraList((prev) => {
+        const exists = prev.some((item) => item.id === saved.id);
+        if (exists) return prev.map((item) => (item.id === saved.id ? saved : item));
+        return [...prev, saved];
       });
+      return true;
+    } catch (err: any) {
+      console.error("Failed to sync create berita acara:", err);
+      setBeritaAcaraList((prev) => prev.filter((item) => item.id !== ba.id));
+      toast.error(err?.response?.data?.error || "Gagal simpan berita acara ke server");
+      return false;
+    }
   };
-  const updateBeritaAcara: AppContextType["updateBeritaAcara"] = (id, updates) => {
+  const updateBeritaAcara: AppContextType["updateBeritaAcara"] = async (id, updates) => {
     let prevSnapshot: BeritaAcara | undefined;
     let mergedPayload: BeritaAcara | undefined;
     setBeritaAcaraList((prev) =>
@@ -3722,28 +3770,31 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         return item;
       })
     );
-    if (!mergedPayload) return;
-    api
-      .patch(`/berita-acara/${id}`, mergedPayload)
-      .then((res) => {
-        const saved = (res?.data || mergedPayload) as BeritaAcara;
-        setBeritaAcaraList((prev) => prev.map((item) => (item.id === id ? saved : item)));
-      })
-      .catch((err) => {
-        console.error("Failed to sync update berita acara:", err);
-        if (prevSnapshot) {
-          setBeritaAcaraList((prev) => prev.map((item) => (item.id === id ? prevSnapshot! : item)));
-        }
-        toast.error(err?.response?.data?.error || "Gagal update berita acara di server");
-      });
+    if (!mergedPayload) return false;
+    try {
+      const res = await api.patch(`/berita-acara/${id}`, mergedPayload);
+      const saved = (res?.data || mergedPayload) as BeritaAcara;
+      setBeritaAcaraList((prev) => prev.map((item) => (item.id === id ? saved : item)));
+      return true;
+    } catch (err: any) {
+      console.error("Failed to sync update berita acara:", err);
+      if (prevSnapshot) {
+        setBeritaAcaraList((prev) => prev.map((item) => (item.id === id ? prevSnapshot! : item)));
+      }
+      toast.error(err?.response?.data?.error || "Gagal update berita acara di server");
+      return false;
+    }
   };
-  const deleteBeritaAcara: AppContextType["deleteBeritaAcara"] = (id) => {
+  const deleteBeritaAcara: AppContextType["deleteBeritaAcara"] = async (id) => {
     let deletedSnapshot: BeritaAcara | undefined;
     setBeritaAcaraList((prev) => {
       deletedSnapshot = prev.find((item) => item.id === id);
       return prev.filter((item) => item.id !== id);
     });
-    api.delete(`/berita-acara/${id}`).catch((err) => {
+    try {
+      await api.delete(`/berita-acara/${id}`);
+      return true;
+    } catch (err: any) {
       console.error("Failed to sync delete berita acara:", err);
       if (deletedSnapshot) {
         setBeritaAcaraList((prev) => {
@@ -3753,10 +3804,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         });
       }
       toast.error(err?.response?.data?.error || "Gagal hapus berita acara di server");
-    });
+      return false;
+    }
   };
 
-  const addSuratJalan: AppContextType["addSuratJalan"] = (sj) => {
+  const addSuratJalan: AppContextType["addSuratJalan"] = async (sj) => {
     const normalizedPayload = normalizeSuratJalanForSync(sj);
     setSuratJalanList((prev) => [...prev, normalizedPayload]);
     if (isActiveDeliveryStatus(normalizedPayload.deliveryStatus ?? "Pending")) {
@@ -3765,20 +3817,23 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         syncAssetLinkedUpdate(linkedAsset.id, { status: "In Use" });
       }
     }
-    api.post("/surat-jalan", normalizedPayload).then((res) => {
+    try {
+      const res = await api.post("/surat-jalan", normalizedPayload);
       const saved = (res?.data || normalizedPayload) as SuratJalan;
       setSuratJalanList((prev) => {
         const exists = prev.some((item) => item.id === saved.id);
         if (exists) return prev.map((item) => (item.id === saved.id ? saved : item));
         return [...prev, saved];
       });
-    }).catch((err) => {
+      return true;
+    } catch (err: any) {
       console.error("Failed to sync create surat jalan:", err);
       setSuratJalanList((prev) => prev.filter((item) => item.id !== normalizedPayload.id));
       toast.error(err?.response?.data?.error || "Gagal simpan surat jalan ke server");
-    });
+      return false;
+    }
   };
-  const updateSuratJalan: AppContextType["updateSuratJalan"] = (id, updates) => {
+  const updateSuratJalan: AppContextType["updateSuratJalan"] = async (id, updates) => {
     let prevSnapshot: SuratJalan | undefined;
     let mergedPayload: SuratJalan | undefined;
     let nextSuratJalanList: SuratJalan[] | undefined;
@@ -3795,7 +3850,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       return next;
     });
 
-    if (!mergedPayload) return;
+    if (!mergedPayload) return false;
 
     const simulatedSuratJalan = nextSuratJalanList || suratJalanList;
     const prevAsset = findAssetBySuratJalanRef(prevSnapshot);
@@ -3822,18 +3877,21 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       });
     }
 
-    api.patch(`/surat-jalan/${id}`, mergedPayload).then((res) => {
+    try {
+      const res = await api.patch(`/surat-jalan/${id}`, mergedPayload);
       const saved = (res?.data || mergedPayload) as SuratJalan;
       setSuratJalanList((prev) => prev.map((item) => (item.id === id ? saved : item)));
-    }).catch((err) => {
+      return true;
+    } catch (err: any) {
       console.error("Failed to sync update surat jalan:", err);
       if (prevSnapshot) {
         setSuratJalanList((prev) => prev.map((item) => (item.id === id ? prevSnapshot! : item)));
       }
       toast.error(err?.response?.data?.error || "Gagal update surat jalan di server");
-    });
+      return false;
+    }
   };
-  const deleteSuratJalan: AppContextType["deleteSuratJalan"] = (id) => {
+  const deleteSuratJalan: AppContextType["deleteSuratJalan"] = async (id) => {
     let deletedSnapshot: SuratJalan | undefined;
     let nextSuratJalanList: SuratJalan[] | undefined;
     setSuratJalanList((prev) => {
@@ -3850,7 +3908,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         projectName: idleStatus === "In Use" ? linkedAsset.projectName : undefined,
       });
     }
-    api.delete(`/surat-jalan/${id}`).catch((err) => {
+    try {
+      await api.delete(`/surat-jalan/${id}`);
+      return true;
+    } catch (err: any) {
       console.error("Failed to sync delete surat jalan:", err);
       if (deletedSnapshot) {
         setSuratJalanList((prev) => {
@@ -3860,7 +3921,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         });
       }
       toast.error(err?.response?.data?.error || "Gagal hapus surat jalan di server");
-    });
+      return false;
+    }
   };
 
   /**
@@ -4166,33 +4228,33 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
    *  VENDOR & EXPENSE
    * =========================
    */
-  const addVendor: AppContextType["addVendor"] = (vendor) => {
+  const addVendor: AppContextType["addVendor"] = async (vendor) => {
     setVendorList((prev) => [...prev, vendor]);
-    api
-      .post("/vendors", vendor)
-      .then((res) => {
-        const saved = (res?.data || vendor) as Vendor;
-        setVendorList((prev) => {
-          const exists = prev.some((item) => item.id === saved.id);
-          if (exists) return prev.map((item) => (item.id === saved.id ? saved : item));
-          return [...prev, saved];
-        });
-      })
-      .catch((err) => {
-        console.error("Failed to sync create vendor:", err);
-        setVendorList((prev) => prev.filter((item) => item.id !== vendor.id));
-        toast.error(err?.response?.data?.error || "Gagal simpan vendor ke server");
+    try {
+      const res = await api.post("/vendors", vendor);
+      const saved = (res?.data || vendor) as Vendor;
+      setVendorList((prev) => {
+        const exists = prev.some((item) => item.id === saved.id);
+        if (exists) return prev.map((item) => (item.id === saved.id ? saved : item));
+        return [...prev, saved];
       });
-    toast.success(`Vendor ${vendor.namaVendor} berhasil ditambahkan!`);
-    addAuditLog({
-      action: "VENDOR_ADDED",
-      module: "Finance",
-      details: `Menambahkan vendor baru: ${vendor.namaVendor}`,
-      status: "Success",
-    });
+      toast.success(`Vendor ${saved.namaVendor || vendor.namaVendor} berhasil ditambahkan!`);
+      addAuditLog({
+        action: "VENDOR_ADDED",
+        module: "Finance",
+        details: `Menambahkan vendor baru: ${saved.namaVendor || vendor.namaVendor}`,
+        status: "Success",
+      });
+      return true;
+    } catch (err: any) {
+      console.error("Failed to sync create vendor:", err);
+      setVendorList((prev) => prev.filter((item) => item.id !== vendor.id));
+      toast.error(err?.response?.data?.error || "Gagal simpan vendor ke server");
+      return false;
+    }
   };
 
-  const updateVendor: AppContextType["updateVendor"] = (id, updates) => {
+  const updateVendor: AppContextType["updateVendor"] = async (id, updates) => {
     let prevSnapshot: Vendor | undefined;
     let mergedPayload: Vendor | undefined;
     setVendorList((prev) =>
@@ -4205,37 +4267,45 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         return v;
       })
     );
-    if (mergedPayload) {
-      api
-        .patch(`/vendors/${id}`, mergedPayload)
-        .then((res) => {
-          const saved = (res?.data || mergedPayload) as Vendor;
-          setVendorList((prev) => prev.map((item) => (item.id === id ? saved : item)));
-        })
-        .catch((err) => {
-          console.error("Failed to sync update vendor:", err);
-          if (prevSnapshot) {
-            setVendorList((prev) => prev.map((item) => (item.id === id ? prevSnapshot! : item)));
-          }
-          toast.error(err?.response?.data?.error || "Gagal update vendor di server");
-        });
+    if (!mergedPayload) return false;
+    try {
+      const res = await api.patch(`/vendors/${id}`, mergedPayload);
+      const saved = (res?.data || mergedPayload) as Vendor;
+      setVendorList((prev) => prev.map((item) => (item.id === id ? saved : item)));
+      addAuditLog({
+        action: "VENDOR_UPDATED",
+        module: "Finance",
+        details: `Update vendor: ${saved.namaVendor || updates.namaVendor || id}`,
+        status: "Success",
+      });
+      return true;
+    } catch (err: any) {
+      console.error("Failed to sync update vendor:", err);
+      if (prevSnapshot) {
+        setVendorList((prev) => prev.map((item) => (item.id === id ? prevSnapshot! : item)));
+      }
+      toast.error(err?.response?.data?.error || "Gagal update vendor di server");
+      return false;
     }
-    addAuditLog({
-      action: "VENDOR_UPDATED",
-      module: "Finance",
-      details: `Update vendor: ${updates.namaVendor || id}`,
-      status: "Success",
-    });
   };
 
-  const deleteVendor: AppContextType["deleteVendor"] = (id) => {
+  const deleteVendor: AppContextType["deleteVendor"] = async (id) => {
     const vendor = vendorList.find((v) => v.id === id);
     let deletedSnapshot: Vendor | undefined;
     setVendorList((prev) => {
       deletedSnapshot = prev.find((v) => v.id === id);
       return prev.filter((v) => v.id !== id);
     });
-    api.delete(`/vendors/${id}`).catch((err) => {
+    try {
+      await api.delete(`/vendors/${id}`);
+      addAuditLog({
+        action: "VENDOR_DELETED",
+        module: "Finance",
+        details: `Menghapus vendor: ${vendor?.namaVendor || id}`,
+        status: "Success",
+      });
+      return true;
+    } catch (err: any) {
       console.error("Failed to sync delete vendor:", err);
       if (deletedSnapshot) {
         setVendorList((prev) => {
@@ -4245,38 +4315,33 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         });
       }
       toast.error(err?.response?.data?.error || "Gagal hapus vendor di server");
-    });
-    addAuditLog({
-      action: "VENDOR_DELETED",
-      module: "Finance",
-      details: `Menghapus vendor: ${vendor?.namaVendor || id}`,
-      status: "Success",
-    });
+      return false;
+    }
   };
 
-  const addExpense: AppContextType["addExpense"] = (expense) => {
+  const addExpense: AppContextType["addExpense"] = async (expense) => {
     setExpenseList((prev) => [...prev, expense]);
-    api
-      .post("/finance/vendor-expenses", expense)
-      .then((res) => {
-        const saved = (res?.data || expense) as VendorExpense;
-        setExpenseList((prev) => {
-          const exists = prev.some((item) => item.id === saved.id);
-          if (exists) return prev.map((item) => (item.id === saved.id ? saved : item));
-          return [...prev, saved];
-        });
-      })
-      .catch((err) => {
-        console.error("Failed to sync create expense:", err);
-        setExpenseList((prev) => prev.filter((item) => item.id !== expense.id));
-        toast.error(err?.response?.data?.error || "Gagal simpan expense ke server");
+    try {
+      const res = await api.post("/finance/vendor-expenses", expense);
+      const saved = (res?.data || expense) as VendorExpense;
+      setExpenseList((prev) => {
+        const exists = prev.some((item) => item.id === saved.id);
+        if (exists) return prev.map((item) => (item.id === saved.id ? saved : item));
+        return [...prev, saved];
       });
-    addAuditLog({
-      action: "EXPENSE_ADDED",
-      module: "Finance",
-      details: `Expense baru: ${expense.noExpense} - ${expense.keterangan} (Rp ${expense.totalNominal.toLocaleString("id-ID")})`,
-      status: "Success",
-    });
+      addAuditLog({
+        action: "EXPENSE_ADDED",
+        module: "Finance",
+        details: `Expense baru: ${saved.noExpense || expense.noExpense} - ${saved.keterangan || expense.keterangan} (Rp ${Number(saved.totalNominal || expense.totalNominal || 0).toLocaleString("id-ID")})`,
+        status: "Success",
+      });
+      return true;
+    } catch (err: any) {
+      console.error("Failed to sync create expense:", err);
+      setExpenseList((prev) => prev.filter((item) => item.id !== expense.id));
+      toast.error(err?.response?.data?.error || "Gagal simpan expense ke server");
+      return false;
+    }
   };
 
   const updateExpense: AppContextType["updateExpense"] = async (id, updates) => {
@@ -4308,14 +4373,23 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
   };
 
-  const deleteExpense: AppContextType["deleteExpense"] = (id) => {
+  const deleteExpense: AppContextType["deleteExpense"] = async (id) => {
     const expense = expenseList.find((e) => e.id === id);
     let deletedSnapshot: VendorExpense | undefined;
     setExpenseList((prev) => {
       deletedSnapshot = prev.find((e) => e.id === id);
       return prev.filter((e) => e.id !== id);
     });
-    api.delete(`/finance/vendor-expenses/${id}`).catch((err) => {
+    try {
+      await api.delete(`/finance/vendor-expenses/${id}`);
+      addAuditLog({
+        action: "EXPENSE_DELETED",
+        module: "Finance",
+        details: `Menghapus expense: ${expense?.noExpense || id}`,
+        status: "Success",
+      });
+      return true;
+    } catch (err: any) {
       console.error("Failed to sync delete expense:", err);
       if (deletedSnapshot) {
         setExpenseList((prev) => {
@@ -4325,13 +4399,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         });
       }
       toast.error(err?.response?.data?.error || "Gagal hapus expense di server");
-    });
-    addAuditLog({
-      action: "EXPENSE_DELETED",
-      module: "Finance",
-      details: `Menghapus expense: ${expense?.noExpense || id}`,
-      status: "Success",
-    });
+      return false;
+    }
   };
 
   const approveExpense: AppContextType["approveExpense"] = async (id, approver) => {
@@ -4380,33 +4449,33 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
    *  CUSTOMER & AR
    * =========================
    */
-  const addCustomer: AppContextType["addCustomer"] = (customer) => {
+  const addCustomer: AppContextType["addCustomer"] = async (customer) => {
     setCustomerList((prev) => [...prev, customer]);
-    api
-      .post("/customers", customer)
-      .then((res) => {
-        const saved = (res?.data || customer) as Customer;
-        setCustomerList((prev) => {
-          const exists = prev.some((item) => item.id === saved.id);
-          if (exists) return prev.map((item) => (item.id === saved.id ? saved : item));
-          return [...prev, saved];
-        });
-      })
-      .catch((err) => {
-        console.error("Failed to sync create customer:", err);
-        setCustomerList((prev) => prev.filter((item) => item.id !== customer.id));
-        toast.error(err?.response?.data?.error || "Gagal simpan customer ke server");
+    try {
+      const res = await api.post("/customers", customer);
+      const saved = (res?.data || customer) as Customer;
+      setCustomerList((prev) => {
+        const exists = prev.some((item) => item.id === saved.id);
+        if (exists) return prev.map((item) => (item.id === saved.id ? saved : item));
+        return [...prev, saved];
       });
-    toast.success(`Customer ${customer.namaCustomer} berhasil ditambahkan!`);
-    addAuditLog({
-      action: "CUSTOMER_ADDED",
-      module: "Finance",
-      details: `Menambahkan customer baru: ${customer.namaCustomer}`,
-      status: "Success",
-    });
+      toast.success(`Customer ${saved.namaCustomer || customer.namaCustomer} berhasil ditambahkan!`);
+      addAuditLog({
+        action: "CUSTOMER_ADDED",
+        module: "Finance",
+        details: `Menambahkan customer baru: ${saved.namaCustomer || customer.namaCustomer}`,
+        status: "Success",
+      });
+      return true;
+    } catch (err: any) {
+      console.error("Failed to sync create customer:", err);
+      setCustomerList((prev) => prev.filter((item) => item.id !== customer.id));
+      toast.error(err?.response?.data?.error || "Gagal simpan customer ke server");
+      return false;
+    }
   };
 
-  const updateCustomer: AppContextType["updateCustomer"] = (id, updates) => {
+  const updateCustomer: AppContextType["updateCustomer"] = async (id, updates) => {
     let prevSnapshot: Customer | undefined;
     let mergedPayload: Customer | undefined;
     setCustomerList((prev) =>
@@ -4419,37 +4488,45 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         return c;
       })
     );
-    if (mergedPayload) {
-      api
-        .patch(`/customers/${id}`, mergedPayload)
-        .then((res) => {
-          const saved = (res?.data || mergedPayload) as Customer;
-          setCustomerList((prev) => prev.map((item) => (item.id === id ? saved : item)));
-        })
-        .catch((err) => {
-          console.error("Failed to sync update customer:", err);
-          if (prevSnapshot) {
-            setCustomerList((prev) => prev.map((item) => (item.id === id ? prevSnapshot! : item)));
-          }
-          toast.error(err?.response?.data?.error || "Gagal update customer di server");
-        });
+    if (!mergedPayload) return false;
+    try {
+      const res = await api.patch(`/customers/${id}`, mergedPayload);
+      const saved = (res?.data || mergedPayload) as Customer;
+      setCustomerList((prev) => prev.map((item) => (item.id === id ? saved : item)));
+      addAuditLog({
+        action: "CUSTOMER_UPDATED",
+        module: "Finance",
+        details: `Mengupdate data customer: ${saved.namaCustomer || id}`,
+        status: "Success",
+      });
+      return true;
+    } catch (err: any) {
+      console.error("Failed to sync update customer:", err);
+      if (prevSnapshot) {
+        setCustomerList((prev) => prev.map((item) => (item.id === id ? prevSnapshot! : item)));
+      }
+      toast.error(err?.response?.data?.error || "Gagal update customer di server");
+      return false;
     }
-    addAuditLog({
-      action: "CUSTOMER_UPDATED",
-      module: "Finance",
-      details: `Mengupdate data customer: ${id}`,
-      status: "Success",
-    });
   };
 
-  const deleteCustomer: AppContextType["deleteCustomer"] = (id) => {
+  const deleteCustomer: AppContextType["deleteCustomer"] = async (id) => {
     const customer = customerList.find((c) => c.id === id);
     let deletedSnapshot: Customer | undefined;
     setCustomerList((prev) => {
       deletedSnapshot = prev.find((c) => c.id === id);
       return prev.filter((c) => c.id !== id);
     });
-    api.delete(`/customers/${id}`).catch((err) => {
+    try {
+      await api.delete(`/customers/${id}`);
+      addAuditLog({
+        action: "CUSTOMER_DELETED",
+        module: "Finance",
+        details: `Menghapus customer: ${customer?.namaCustomer || id}`,
+        status: "Success",
+      });
+      return true;
+    } catch (err: any) {
       console.error("Failed to sync delete customer:", err);
       if (deletedSnapshot) {
         setCustomerList((prev) => {
@@ -4459,39 +4536,34 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         });
       }
       toast.error(err?.response?.data?.error || "Gagal hapus customer di server");
-    });
-    addAuditLog({
-      action: "CUSTOMER_DELETED",
-      module: "Finance",
-      details: `Menghapus customer: ${customer?.namaCustomer || id}`,
-      status: "Success",
-    });
+      return false;
+    }
   };
 
-  const addCustomerInvoice: AppContextType["addCustomerInvoice"] = (invoice) => {
+  const addCustomerInvoice: AppContextType["addCustomerInvoice"] = async (invoice) => {
     setCustomerInvoiceList((prev) => [...prev, invoice]);
-    api
-      .post("/finance/customer-invoices", invoice)
-      .then((res) => {
-        const saved = (res?.data || invoice) as CustomerInvoice;
-        setCustomerInvoiceList((prev) => {
-          const exists = prev.some((item) => item.id === saved.id);
-          if (exists) return prev.map((item) => (item.id === saved.id ? saved : item));
-          return [...prev, saved];
-        });
-      })
-      .catch((err) => {
-        console.error("Failed to sync create customer invoice:", err);
-        setCustomerInvoiceList((prev) => prev.filter((item) => item.id !== invoice.id));
-        toast.error(err?.response?.data?.error || "Gagal simpan customer invoice ke server");
+    try {
+      const res = await api.post("/finance/customer-invoices", invoice);
+      const saved = (res?.data || invoice) as CustomerInvoice;
+      setCustomerInvoiceList((prev) => {
+        const exists = prev.some((item) => item.id === saved.id);
+        if (exists) return prev.map((item) => (item.id === saved.id ? saved : item));
+        return [...prev, saved];
       });
-    toast.success(`Invoice ${invoice.noInvoice} berhasil dibuat!`);
-    addAuditLog({
-      action: "INVOICE_CREATED",
-      module: "Finance",
-      details: `Membuat invoice baru: ${invoice.noInvoice} - ${invoice.customerName}`,
-      status: "Success",
-    });
+      toast.success(`Invoice ${saved.noInvoice || invoice.noInvoice} berhasil dibuat!`);
+      addAuditLog({
+        action: "INVOICE_CREATED",
+        module: "Finance",
+        details: `Membuat invoice baru: ${saved.noInvoice || invoice.noInvoice} - ${saved.customerName || invoice.customerName}`,
+        status: "Success",
+      });
+      return true;
+    } catch (err: any) {
+      console.error("Failed to sync create customer invoice:", err);
+      setCustomerInvoiceList((prev) => prev.filter((item) => item.id !== invoice.id));
+      toast.error(err?.response?.data?.error || "Gagal simpan customer invoice ke server");
+      return false;
+    }
   };
 
   const updateCustomerInvoice: AppContextType["updateCustomerInvoice"] = async (id, updates) => {
@@ -4535,14 +4607,24 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
   };
 
-  const deleteCustomerInvoice: AppContextType["deleteCustomerInvoice"] = (id) => {
+  const deleteCustomerInvoice: AppContextType["deleteCustomerInvoice"] = async (id) => {
     const inv = customerInvoiceList.find((x) => x.id === id);
     let deletedSnapshot: CustomerInvoice | undefined;
     setCustomerInvoiceList((prev) => {
       deletedSnapshot = prev.find((x) => x.id === id);
       return prev.filter((x) => x.id !== id);
     });
-    api.delete(`/finance/customer-invoices/${id}`).catch((err) => {
+    try {
+      await api.delete(`/finance/customer-invoices/${id}`);
+      toast.success(`Invoice ${inv?.noInvoice || id} berhasil dihapus!`);
+      addAuditLog({
+        action: "INVOICE_DELETED",
+        module: "Finance",
+        details: `Menghapus invoice: ${inv?.noInvoice || id}`,
+        status: "Success",
+      });
+      return true;
+    } catch (err: any) {
       console.error("Failed to sync delete customer invoice:", err);
       if (deletedSnapshot) {
         setCustomerInvoiceList((prev) => {
@@ -4552,14 +4634,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         });
       }
       toast.error(err?.response?.data?.error || "Gagal hapus customer invoice di server");
-    });
-    toast.success(`Invoice ${inv?.noInvoice || id} berhasil dihapus!`);
-    addAuditLog({
-      action: "INVOICE_DELETED",
-      module: "Finance",
-      details: `Menghapus invoice: ${inv?.noInvoice || id}`,
-      status: "Success",
-    });
+      return false;
+    }
   };
 
   const addInvoicePayment: AppContextType["addInvoicePayment"] = async (invoiceId, payment) => {
@@ -4612,26 +4688,26 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
    *  VENDOR INVOICE
    * =========================
    */
-  const addVendorInvoice: AppContextType["addVendorInvoice"] = (inv) => {
+  const addVendorInvoice: AppContextType["addVendorInvoice"] = async (inv) => {
     setVendorInvoiceList((prev) => [...prev, inv]);
-    api
-      .post("/finance/vendor-invoices", inv)
-      .then((res) => {
-        const saved = (res?.data || inv) as VendorInvoice;
-        setVendorInvoiceList((prev) => {
-          const exists = prev.some((item) => item.id === saved.id);
-          if (exists) return prev.map((item) => (item.id === saved.id ? saved : item));
-          return [...prev, saved];
-        });
-      })
-      .catch((err) => {
-        console.error("Failed to sync create vendor invoice:", err);
-        setVendorInvoiceList((prev) => prev.filter((item) => item.id !== inv.id));
-        toast.error(err?.response?.data?.error || "Gagal simpan invoice vendor ke server");
+    try {
+      const res = await api.post("/finance/vendor-invoices", inv);
+      const saved = (res?.data || inv) as VendorInvoice;
+      setVendorInvoiceList((prev) => {
+        const exists = prev.some((item) => item.id === saved.id);
+        if (exists) return prev.map((item) => (item.id === saved.id ? saved : item));
+        return [...prev, saved];
       });
+      return true;
+    } catch (err: any) {
+      console.error("Failed to sync create vendor invoice:", err);
+      setVendorInvoiceList((prev) => prev.filter((item) => item.id !== inv.id));
+      toast.error(err?.response?.data?.error || "Gagal simpan invoice vendor ke server");
+      return false;
+    }
   };
 
-  const updateVendorInvoice: AppContextType["updateVendorInvoice"] = (id, updates) => {
+  const updateVendorInvoice: AppContextType["updateVendorInvoice"] = async (id, updates) => {
     let prevSnapshot: VendorInvoice | undefined;
     let mergedPayload: VendorInvoice | undefined;
     setVendorInvoiceList((prev) =>
@@ -4644,20 +4720,20 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         return item;
       })
     );
-    if (!mergedPayload) return;
-    api
-      .patch(`/finance/vendor-invoices/${id}`, mergedPayload)
-      .then((res) => {
-        const saved = (res?.data || mergedPayload) as VendorInvoice;
-        setVendorInvoiceList((prev) => prev.map((item) => (item.id === id ? saved : item)));
-      })
-      .catch((err) => {
-        console.error("Failed to sync update vendor invoice:", err);
-        if (prevSnapshot) {
-          setVendorInvoiceList((prev) => prev.map((item) => (item.id === id ? prevSnapshot! : item)));
-        }
-        toast.error(err?.response?.data?.error || "Gagal update invoice vendor di server");
-      });
+    if (!mergedPayload) return false;
+    try {
+      const res = await api.patch(`/finance/vendor-invoices/${id}`, mergedPayload);
+      const saved = (res?.data || mergedPayload) as VendorInvoice;
+      setVendorInvoiceList((prev) => prev.map((item) => (item.id === id ? saved : item)));
+      return true;
+    } catch (err: any) {
+      console.error("Failed to sync update vendor invoice:", err);
+      if (prevSnapshot) {
+        setVendorInvoiceList((prev) => prev.map((item) => (item.id === id ? prevSnapshot! : item)));
+      }
+      toast.error(err?.response?.data?.error || "Gagal update invoice vendor di server");
+      return false;
+    }
   };
 
   /**
@@ -4843,6 +4919,34 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setAlerts([]);
     hasInitializedAutoSyncSnapshot.current = false;
     lastSyncedSignaturesRef.current = {};
+  };
+
+  const syncCurrentUserFromAuthState = () => {
+    const token = safeGetLocalStorageItem("token");
+    if (!token) {
+      persistAuthUser(null);
+      setCurrentUser(null);
+      return;
+    }
+
+    const persistedUser = readPersistedAuthUser();
+    if (persistedUser) {
+      setCurrentUser(persistedUser);
+      return;
+    }
+
+    api
+      .get("/auth/me")
+      .then((res) => {
+        const user = normalizeAuthUser(res.data);
+        setCurrentUser(user);
+        persistAuthUser(user);
+      })
+      .catch(() => {
+        safeRemoveLocalStorageItem("token");
+        persistAuthUser(null);
+        setCurrentUser(null);
+      });
   };
 
   /**

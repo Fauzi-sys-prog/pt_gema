@@ -7,6 +7,25 @@ import api from '../../services/api';
 // Physical Archive Image from user
 import physicalArchiveImg from 'figma:asset/8a215f70fe30661dded39794b547f89ef79421a3.png';
 
+const STAT_STYLES = {
+  blue: {
+    icon: 'bg-blue-50 text-blue-600 group-hover:bg-blue-600 group-hover:text-white',
+    sub: 'text-blue-600',
+  },
+  emerald: {
+    icon: 'bg-emerald-50 text-emerald-600 group-hover:bg-emerald-600 group-hover:text-white',
+    sub: 'text-emerald-600',
+  },
+  purple: {
+    icon: 'bg-purple-50 text-purple-600 group-hover:bg-purple-600 group-hover:text-white',
+    sub: 'text-purple-600',
+  },
+  orange: {
+    icon: 'bg-orange-50 text-orange-600 group-hover:bg-orange-600 group-hover:text-white',
+    sub: 'text-orange-600',
+  },
+} as const;
+
 export default function DashboardSurat() {
   const navigate = useNavigate();
   const { 
@@ -100,6 +119,37 @@ export default function DashboardSurat() {
     ...(effectiveSuratJalanList || []).map(sj => ({ type: 'sj', action: `Surat Jalan ${sj.noSurat} diterbitkan`, time: sj.createdAt || sj.tanggal, icon: Truck, color: 'text-orange-600' }))
   ].filter(act => act.time).sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime()).slice(0, 5);
 
+  const dashboardStats = [
+    {
+      label: 'Surat Masuk',
+      val: effectiveSuratMasukList.filter((s) => String(s.status || '').toUpperCase() !== 'SELESAI').length,
+      icon: Mail,
+      color: 'blue' as const,
+      sub: 'Butuh Tindak Lanjut',
+    },
+    {
+      label: 'Surat Keluar',
+      val: effectiveSuratKeluarList.filter((s) => String(s.status || '').toUpperCase() === 'SENT').length,
+      icon: Send,
+      color: 'emerald' as const,
+      sub: 'Terkirim',
+    },
+    {
+      label: 'Berita Acara',
+      val: effectiveBeritaAcaraList.length,
+      icon: FileText,
+      color: 'purple' as const,
+      sub: effectiveBeritaAcaraList.length > 0 ? 'Arsip Tersimpan' : 'Belum Ada Arsip',
+    },
+    {
+      label: 'Surat Jalan',
+      val: effectiveSuratJalanList.filter((s) => !s.archived && String(s.deliveryStatus || '').toUpperCase() !== 'DELIVERED').length,
+      icon: Truck,
+      color: 'orange' as const,
+      sub: 'Pengiriman Aktif',
+    },
+  ];
+
   const handleExportArchive = async () => {
     const rows = [
       ['Module', 'Document No', 'Date', 'Party', 'Status'],
@@ -189,21 +239,16 @@ export default function DashboardSurat() {
 
       {/* Stats Overview */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        {[
-          { label: 'Surat Masuk', val: effectiveSuratMasukList.length, icon: Mail, color: 'blue', sub: 'Active Docs' },
-          { label: 'Surat Keluar', val: effectiveSuratKeluarList.length, icon: Send, color: 'emerald', sub: 'Terkirim' },
-          { label: 'Berita Acara', val: effectiveBeritaAcaraList.length, icon: FileText, color: 'purple', sub: 'Signed' },
-          { label: 'Surat Jalan', val: effectiveSuratJalanList.length, icon: Truck, color: 'orange', sub: 'On Progress' },
-        ].map((stat, i) => (
+        {dashboardStats.map((stat, i) => (
           <div key={i} className="bg-white border-2 border-slate-100 rounded-2xl p-6 shadow-sm group hover:border-blue-500/20 transition-all">
             <div className="flex items-center justify-between mb-4">
-              <div className={`p-3 bg-${stat.color}-50 text-${stat.color}-600 rounded-xl group-hover:bg-${stat.color}-600 group-hover:text-white transition-colors`}>
+              <div className={`p-3 rounded-xl transition-colors ${STAT_STYLES[stat.color].icon}`}>
                 <stat.icon size={24} />
               </div>
               <span className="text-4xl font-black text-slate-900 tracking-tighter">{stat.val}</span>
             </div>
             <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{stat.label}</div>
-            <div className={`mt-1 text-[10px] font-bold text-${stat.color}-600 italic uppercase`}>{stat.sub}</div>
+            <div className={`mt-1 text-[10px] font-bold italic uppercase ${STAT_STYLES[stat.color].sub}`}>{stat.sub}</div>
           </div>
         ))}
       </div>
@@ -292,6 +337,14 @@ export default function DashboardSurat() {
               </h2>
             </div>
             <div className="p-5 space-y-6">
+              {allActivity.length === 0 && (
+                <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center">
+                  <div className="text-[11px] font-black uppercase tracking-widest text-slate-500">No Activity</div>
+                  <div className="mt-2 text-[11px] text-slate-400 font-medium italic">
+                    Belum ada aktivitas korespondensi yang cukup untuk ditampilkan.
+                  </div>
+                </div>
+              )}
               {allActivity.map((activity, index) => {
                 const Icon = activity.icon;
                 return (

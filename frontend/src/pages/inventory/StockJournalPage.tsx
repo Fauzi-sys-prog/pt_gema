@@ -2,6 +2,7 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom'; import { History, Search, Filter, ArrowUpRight, ArrowDownLeft, ArrowLeft, Download, Calendar, Package, User, ExternalLink, Table as TableIcon, LayoutGrid } from 'lucide-react'; import { useApp } from '../../contexts/AppContext';
 import { toast } from 'sonner@2.0.3';
 import api from '../../services/api';
+import { normalizeEntityRows } from '../../utils/normalizeEntityRows';
 
 export default function StockJournalPage() {
   const navigate = useNavigate();
@@ -15,15 +16,6 @@ export default function StockJournalPage() {
   const effectiveStockItemList = serverStockItemList ?? stockItemList;
   const isCanonicalSku = (value: unknown) => /^GTP-MTR-[A-Z0-9]{3}-\d{3}$/.test(String(value || '').trim().toUpperCase());
 
-  const normalizeEntityRows = <T,>(rows: any[]): T[] =>
-    rows.map((row: any) => {
-      const payload = row?.payload ?? {};
-      if (payload && typeof payload === 'object' && !Array.isArray(payload) && !payload.id) {
-        return { ...payload, id: row.entityId } as T;
-      }
-      return payload as T;
-    });
-
   const fetchStockJournal = async () => {
     try {
       setIsRefreshing(true);
@@ -31,8 +23,8 @@ export default function StockJournalPage() {
         api.get('/inventory/movements'),
         api.get('/inventory/items'),
       ]);
-      setServerStockMovementList(normalizeEntityRows<any>(Array.isArray(movementsRes.data) ? movementsRes.data : []));
-      setServerStockItemList(normalizeEntityRows<any>(Array.isArray(stockItemsRes.data) ? stockItemsRes.data : []));
+      setServerStockMovementList(normalizeEntityRows<any>(movementsRes.data));
+      setServerStockItemList(normalizeEntityRows<any>(stockItemsRes.data));
     } catch {
       setServerStockMovementList(null);
       setServerStockItemList(null);

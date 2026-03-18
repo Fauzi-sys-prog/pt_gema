@@ -83,12 +83,13 @@ export default function StockInPage() {
   const actorRoleLabel = String(currentUser?.role || 'USER').trim().toUpperCase() || 'USER';
 
   const filteredStockIn = effectiveStockInList.filter(si => {
-    const noStockIn = si.noStockIn || si.noPO || si.id || '';
-    const sj = si.noSuratJalan || '';
-    
-    const matchSearch = noStockIn.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      sj.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (si.items || []).some(item => item.nama?.toLowerCase().includes(searchTerm.toLowerCase()));
+    const keyword = String(searchTerm || '').toLowerCase();
+    const noStockIn = String(si.noStockIn || si.noPO || si.id || '');
+    const sj = String(si.noSuratJalan || '');
+
+    const matchSearch = noStockIn.toLowerCase().includes(keyword) ||
+      sj.toLowerCase().includes(keyword) ||
+      (si.items || []).some(item => String(item.nama || '').toLowerCase().includes(keyword));
       
     const matchType = filterType === 'all' || si.type === filterType;
     const matchStatus = filterStatus === 'all' || si.status === filterStatus;
@@ -393,7 +394,7 @@ export default function StockInPage() {
                           type="date" 
                           value={item.expiryDate || ''} 
                           onChange={(e) => updateItem(index, 'expiryDate', e.target.value)} 
-                          className={`w-full px-4 py-2.5 border-transparent rounded-xl text-xs font-bold outline-none ${item.kategori?.toLowerCase().includes('castable') || item.kategori === 'Monolithics' ? 'bg-amber-50' : 'bg-white'}`}
+                          className={`w-full px-4 py-2.5 border-transparent rounded-xl text-xs font-bold outline-none ${String(item.kategori || '').toLowerCase().includes('castable') || item.kategori === 'Monolithics' ? 'bg-amber-50' : 'bg-white'}`}
                         />
                       </div>
                       <div className="col-span-1">

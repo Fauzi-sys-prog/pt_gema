@@ -56,6 +56,9 @@ interface LocationState {
   }>;
 }
 
+const makeReceivingItemId = (seed: string, index: number) =>
+  `RCVITEM-${seed}-${String(index + 1).padStart(3, '0')}`;
+
 export default function ReceivingPage() {
   const { 
     poList, 
@@ -140,6 +143,7 @@ export default function ReceivingPage() {
 
   useEffect(() => {
     if (locationState?.fromPO && locationState?.items) {
+      const itemSeed = `${locationState.poId || 'PO'}-${Date.now()}`;
       setFormData({
         noPO: locationState.poNo || '',
         poId: locationState.poId || '',
@@ -153,7 +157,7 @@ export default function ReceivingPage() {
       });
 
       const receivingItems: ReceivingItem[] = locationState.items.map((item, index) => ({
-        id: `item-${index + 1}`,
+        id: makeReceivingItemId(itemSeed, index),
         itemKode: item.kode,
         itemName: item.nama,
         qtyOrdered: item.qty,
@@ -342,10 +346,11 @@ export default function ReceivingPage() {
   };
 
   const filteredReceiving = effectiveReceivingList.filter((rcv) => {
+    const keyword = String(searchTerm || '').toLowerCase();
     const matchesSearch =
-      rcv.noReceiving.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      rcv.noPO.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      rcv.supplier.toLowerCase().includes(searchTerm.toLowerCase());
+      String(rcv.noReceiving || '').toLowerCase().includes(keyword) ||
+      String(rcv.noPO || '').toLowerCase().includes(keyword) ||
+      String(rcv.supplier || '').toLowerCase().includes(keyword);
     const matchesStatus = filterStatus === 'all' || rcv.status === filterStatus;
     return matchesSearch && matchesStatus;
   });
@@ -535,9 +540,10 @@ export default function ReceivingPage() {
                       onChange={(e) => {
                         const po = effectivePoList.find(p => p.id === e.target.value);
                         if (po) {
+                          const itemSeed = `${po.id || 'PO'}-${Date.now()}`;
                           setFormData({ ...formData, poId: po.id, noPO: po.noPO, supplier: po.supplier, projectId: po.projectId || '' });
                           setItems(po.items.map((item, index) => ({
-                            id: `item-${index + 1}`,
+                            id: makeReceivingItemId(itemSeed, index),
                             itemKode: item.kode,
                             itemName: item.nama,
                             qtyOrdered: item.qty,

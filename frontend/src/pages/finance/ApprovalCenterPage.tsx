@@ -14,13 +14,11 @@ import {
   ArrowRightLeft,
   Eye,
 } from "lucide-react";
-import { useNavigate } from "react-router-dom";
 import { useApp } from "../../contexts/AppContext";
 import { toast } from "sonner@2.0.3";
 import { motion, AnimatePresence } from 'motion/react';
 import api from "../../services/api";
 import FlowHintBar from "../../components/ui/FlowHintBar";
-import { emitDataSync } from "../../services/dataSyncBus";
 import { subscribeDataSync } from "../../services/dataSyncBus";
 import { isOwnerLike } from "../../utils/roles";
 
@@ -30,6 +28,10 @@ type ApprovalPoItem = {
   supplier: string;
   total: number;
   status: string;
+  projectId?: string;
+  auditStatus?: string;
+  auditTrail?: string;
+  availableActions?: string[];
 };
 
 type ApprovalQuotationItem = {
@@ -38,6 +40,33 @@ type ApprovalQuotationItem = {
   kepada: string;
   grandTotal: number;
   status: string;
+  tanggal?: string;
+  perihal?: string;
+  sentAt?: string;
+  sentBy?: string;
+  sentByRole?: string;
+  spvApprovedBy?: string;
+  spvApprovedByRole?: string;
+  spvApprovedAt?: string;
+  approvedBy?: string;
+  approvedByRole?: string;
+  approvedAt?: string;
+  rejectedBy?: string;
+  rejectedByRole?: string;
+  rejectedAt?: string;
+  rejectReason?: string;
+  items: Array<{
+    id?: string;
+    kode: string;
+    nama: string;
+    qty: number;
+    unit: string;
+    harga?: number;
+    total?: number;
+  }>;
+  auditStatus?: string;
+  auditTrail?: string;
+  availableActions?: string[];
 };
 
 type ApprovalInvoiceItem = {
@@ -46,6 +75,12 @@ type ApprovalInvoiceItem = {
   customer: string;
   totalBayar: number;
   status: string;
+  verifiedBy?: string;
+  verifiedByRole?: string;
+  tanggalBayar?: string;
+  auditStatus?: string;
+  auditTrail?: string;
+  availableActions?: string[];
 };
 
 type ApprovalMaterialRequestItem = {
@@ -54,11 +89,23 @@ type ApprovalMaterialRequestItem = {
   projectName: string;
   requestedBy: string;
   status: string;
+  approvedBy?: string;
+  approvedByRole?: string;
+  approvedAt?: string;
+  rejectedBy?: string;
+  rejectedByRole?: string;
+  rejectedAt?: string;
+  issuedBy?: string;
+  issuedByRole?: string;
+  issuedAt?: string;
+  rejectReason?: string;
   items: Array<Record<string, unknown>>;
+  auditStatus?: string;
+  auditTrail?: string;
+  availableActions?: string[];
 };
 
 export default function ApprovalCenterPage() {
-  const navigate = useNavigate();
   const { 
     currentUser,
     addAuditLog
@@ -75,23 +122,66 @@ export default function ApprovalCenterPage() {
   const [serverStats, setServerStats] = useState<{ total: number; highValue: number } | null>(null);
   const [actionLoadingMap, setActionLoadingMap] = useState<Record<string, boolean>>({});
   const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
+  const [selectedQuotationDetail, setSelectedQuotationDetail] = useState<ApprovalQuotationItem | null>(null);
+  const [quotationTimeline, setQuotationTimeline] = useState<any[]>([]);
+  const [quotationTimelineLoading, setQuotationTimelineLoading] = useState(false);
+  const [quotationTimelineError, setQuotationTimelineError] = useState<string | null>(null);
 
   const normalizeStatus = (value: unknown) => String(value || "").trim().toUpperCase();
   const currentRole = String(currentUser?.role || "").trim().toUpperCase();
   const isActualOwner = currentRole === "OWNER";
-  const isSpv = currentRole === "SPV";
-  const isOwner = isOwnerLike(currentRole);
-  const isAdmin = currentRole === "ADMIN";
-  const isManager = currentRole === "MANAGER";
-  const canSendQuotation = isOwner || isAdmin || isManager || currentRole === "SALES";
-  const canVerifyInvoice = isOwner || isAdmin || isManager || currentRole === "FINANCE";
-  const canApproveRejectMr =
-    isOwner || isAdmin || isManager || currentRole === "SUPPLY_CHAIN" || currentRole === "WAREHOUSE" || currentRole === "PURCHASING";
-  const canIssueMr = isOwner || isAdmin || currentRole === "SUPPLY_CHAIN" || currentRole === "WAREHOUSE" || currentRole === "PRODUKSI";
-  const canApprovePo = (total: number) => {
-    const highValue = total > 10_000_000;
-    if (highValue) return isOwner || isAdmin;
-    return isOwner || isAdmin || isManager || currentRole === "FINANCE" || currentRole === "SUPPLY_CHAIN" || currentRole === "PURCHASING";
+  const getPoAuditLabel = (po: ApprovalPoItem) => {
+    if (po.auditStatus) return po.auditStatus;
+    const status = normalizeStatus(po.status);
+    if (status === "DRAFT") return "Ready to Send";
+    if (status === "SENT") return "Owner / SPV Review";
+    if (status === "PARTIAL") return "Receiving Partial";
+    if (status === "RECEIVED") return "Received";
+    return status.replace(/_/g, " ");
+  };
+  const getPoAuditTrail = (po: ApprovalPoItem) => {
+    if (po.auditTrail) return po.auditTrail;
+    const status = normalizeStatus(po.status);
+    if (status === "SENT") return "Waiting owner / SPV approval";
+    if (status === "DRAFT") return "PO masih draft dan belum masuk approval";
+    return "PO processed from procurement database";
+  };
+  const getInvoiceAuditLabel = (inv: ApprovalInvoiceItem) => {
+    if (inv.auditStatus) return inv.auditStatus;
+    const status = normalizeStatus(inv.status);
+    if (status === "UNPAID") return "Awaiting Verification";
+    if (status === "PAID") return "Verified Paid";
+    return status.replace(/_/g, " ");
+  };
+  const getInvoiceAuditTrail = (inv: ApprovalInvoiceItem) => {
+    if (inv.auditTrail) return inv.auditTrail;
+    if (inv.verifiedBy) {
+      return `Verified by ${inv.verifiedBy}${inv.verifiedByRole ? ` (${inv.verifiedByRole})` : ""}`;
+    }
+    return "Waiting finance verification";
+  };
+  const getMrAuditLabel = (mr: ApprovalMaterialRequestItem) => {
+    if (mr.auditStatus) return mr.auditStatus;
+    const status = normalizeStatus(mr.status);
+    if (status === "PENDING") return "Pending Review";
+    if (status === "APPROVED") return "Ready to Issue";
+    if (status === "ISSUED") return "Issued";
+    if (status === "REJECTED") return "Rejected";
+    return status.replace(/_/g, " ");
+  };
+  const getMrAuditTrail = (mr: ApprovalMaterialRequestItem) => {
+    if (mr.auditTrail) return mr.auditTrail;
+    const status = normalizeStatus(mr.status);
+    if (status === "APPROVED" && mr.approvedBy) {
+      return `Approved by ${mr.approvedBy}${mr.approvedByRole ? ` (${mr.approvedByRole})` : ""}`;
+    }
+    if (status === "ISSUED" && mr.issuedBy) {
+      return `Issued by ${mr.issuedBy}${mr.issuedByRole ? ` (${mr.issuedByRole})` : ""}`;
+    }
+    if (status === "REJECTED" && mr.rejectedBy) {
+      return `Rejected by ${mr.rejectedBy}${mr.rejectedByRole ? ` (${mr.rejectedByRole})` : ""}`;
+    }
+    return "Waiting approval";
   };
 
   const fetchApprovalCenterData = async (silent = true) => {
@@ -158,61 +248,72 @@ export default function ApprovalCenterPage() {
     };
   }, []);
 
-  // 1. Filter Pending POs
+  // Backend queue sudah menentukan baris yang relevan; frontend tinggal search/filter text.
   const pendingPOs = useMemo(() => {
     return serverPOs.filter(po => 
-      (normalizeStatus(po.status) === 'DRAFT' || normalizeStatus(po.status) === 'SENT') &&
       ((po.noPO || '').toLowerCase().includes(searchTerm.toLowerCase()) || (po.supplier || '').toLowerCase().includes(searchTerm.toLowerCase()))
     );
   }, [serverPOs, searchTerm]);
 
-  // 2. Filter Pending Quotations
   const pendingQuotations = useMemo(() => {
     return serverQuotations.filter(q => 
-      (normalizeStatus(q.status) === 'DRAFT' || normalizeStatus(q.status) === 'SENT' || normalizeStatus(q.status) === 'REVIEW') &&
       ((q.noPenawaran || '').toLowerCase().includes(searchTerm.toLowerCase()) || (q.kepada || '').toLowerCase().includes(searchTerm.toLowerCase()))
     );
   }, [serverQuotations, searchTerm]);
 
-  // 3. Filter Unpaid Invoices
   const pendingInvoices = useMemo(() => {
     return serverInvoices.filter(inv => 
-      normalizeStatus(inv.status) === 'UNPAID' &&
       ((inv.noInvoice || '').toLowerCase().includes(searchTerm.toLowerCase()) || (inv.customer || '').toLowerCase().includes(searchTerm.toLowerCase()))
     );
   }, [serverInvoices, searchTerm]);
 
-  // 4. Filter Material Requests (Warehouse Ops)
   const pendingRequests = useMemo(() => {
     return serverMaterialRequests.filter(mr => 
-      (normalizeStatus(mr.status) === 'PENDING' || normalizeStatus(mr.status) === 'APPROVED') &&
       ((mr.noRequest || '').toLowerCase().includes(searchTerm.toLowerCase()) || (mr.projectName || '').toLowerCase().includes(searchTerm.toLowerCase()))
     );
   }, [serverMaterialRequests, searchTerm]);
 
-  const isPendingQuotationStatus = (status: string) =>
-    status === "DRAFT" || status === "SENT" || status === "REVIEW";
-  const isPendingMaterialRequestStatus = (status: string) =>
-    status === "PENDING" || status === "APPROVED";
   const canApproveQuotationItem = (q: ApprovalQuotationItem) => {
-    const status = normalizeStatus(q.status);
-    if (status === "SENT") return isSpv;
-    if (status === "REVIEW") return isActualOwner;
-    return false;
+    return Array.isArray(q.availableActions) && q.availableActions.includes("APPROVE");
   };
   const canRejectQuotationItem = (q: ApprovalQuotationItem) => {
-    const status = normalizeStatus(q.status);
-    if (status === "SENT") return isSpv || isActualOwner;
-    if (status === "REVIEW") return isActualOwner;
-    return false;
+    return Array.isArray(q.availableActions) && q.availableActions.includes("REJECT");
+  };
+  const canReviewQuotationItem = (q: ApprovalQuotationItem) => {
+    return Array.isArray(q.availableActions) && q.availableActions.includes("REVIEW");
   };
   const getQuotationAuditLabel = (q: ApprovalQuotationItem) => {
+    if (q.auditStatus) return q.auditStatus;
     const status = normalizeStatus(q.status);
     if (status === "DRAFT") return "Ready to Send";
     if (status === "SENT") return "SPV Review";
     if (status === "REVIEW") return "Owner Final Review";
+    if (status === "REJECTED") return "Rejected";
+    if (status === "APPROVED") return "Approved";
     return "Processed";
   };
+  const getQuotationAuditTrail = (q: ApprovalQuotationItem) => {
+    if (q.auditTrail) return q.auditTrail;
+    const status = normalizeStatus(q.status);
+    if (status === "REVIEW") {
+      const actor = q.spvApprovedBy ? `${q.spvApprovedBy}${q.spvApprovedByRole ? ` (${q.spvApprovedByRole})` : ""}` : "SPV";
+      return `SPV reviewed by ${actor}`;
+    }
+    if (status === "APPROVED") {
+      const actor = q.approvedBy ? `${q.approvedBy}${q.approvedByRole ? ` (${q.approvedByRole})` : ""}` : "Owner";
+      return `Final approved by ${actor}`;
+    }
+    if (status === "REJECTED") {
+      const actor = q.rejectedBy ? `${q.rejectedBy}${q.rejectedByRole ? ` (${q.rejectedByRole})` : ""}` : "Reviewer";
+      return `Rejected by ${actor}`;
+    }
+    if (status === "SENT") {
+      return q.sentBy ? `Sent by ${q.sentBy}` : "Waiting SPV review";
+    }
+    return "Draft quotation";
+  };
+  const canResendRejectedQuotation = (q: ApprovalQuotationItem) =>
+    Array.isArray(q.availableActions) && q.availableActions.includes("SEND") && normalizeStatus(q.status) === "REJECTED";
 
   const executeApprovalAction = async (
     documentType: "PO" | "INVOICE" | "MATERIAL_REQUEST" | "QUOTATION",
@@ -232,58 +333,7 @@ export default function ApprovalCenterPage() {
         action,
         reason: reason || undefined,
       });
-      const nextStatus = normalizeStatus(res?.data?.status);
-      let pendingDelta = -1;
-
-      // Local state update only (no global refresh) to avoid UI "kedip" after action.
-      if (documentType === "PO") {
-        setServerPOs((prev) => prev.filter((item) => item.id !== documentId));
-      } else if (documentType === "INVOICE") {
-        setServerInvoices((prev) => prev.filter((item) => item.id !== documentId));
-      } else if (documentType === "QUOTATION") {
-        const currentItem = serverQuotations.find((item) => item.id === documentId);
-        const wasPending = currentItem ? isPendingQuotationStatus(normalizeStatus(currentItem.status)) : true;
-        const remainsPending = isPendingQuotationStatus(nextStatus);
-        pendingDelta = (remainsPending ? 1 : 0) - (wasPending ? 1 : 0);
-        if (remainsPending) {
-          setServerQuotations((prev) =>
-            prev.map((item) =>
-              item.id === documentId
-                ? { ...item, status: nextStatus || item.status }
-                : item
-            )
-          );
-        } else {
-          setServerQuotations((prev) => prev.filter((item) => item.id !== documentId));
-        }
-      } else if (documentType === "MATERIAL_REQUEST") {
-        const currentItem = serverMaterialRequests.find((item) => item.id === documentId);
-        const wasPending = currentItem ? isPendingMaterialRequestStatus(normalizeStatus(currentItem.status)) : true;
-        const remainsPending = isPendingMaterialRequestStatus(nextStatus);
-        pendingDelta = (remainsPending ? 1 : 0) - (wasPending ? 1 : 0);
-        if (action === "APPROVE") {
-          setServerMaterialRequests((prev) =>
-            prev.map((item) =>
-              item.id === documentId
-                ? { ...item, status: nextStatus || "Approved" }
-                : item
-            )
-          );
-        } else if (!remainsPending) {
-          setServerMaterialRequests((prev) => prev.filter((item) => item.id !== documentId));
-        }
-      }
-
-      setServerStats((prev) => {
-        if (!prev) return prev;
-        const nextTotal = Math.max(0, Number(prev.total || 0) + pendingDelta);
-        return {
-          ...prev,
-          total: nextTotal,
-        };
-      });
-
-      emitDataSync(`finance-approval:${documentType}:${action}`);
+      await fetchApprovalCenterData(true);
       toast.success(successMessage);
     } catch (err: any) {
       toast.error(err?.response?.data?.error || err?.response?.data?.message || 'Aksi approval gagal');
@@ -345,7 +395,22 @@ export default function ApprovalCenterPage() {
   };
 
   const handleViewQuotation = (q: ApprovalQuotationItem) => {
-    navigate('/sales/quotation', { state: { openPreviewQuotationId: q.id } });
+    setSelectedQuotationDetail(q);
+    setQuotationTimeline([]);
+    setQuotationTimelineError(null);
+    setQuotationTimelineLoading(true);
+    void api
+      .get(`/quotations/${q.id}/approval-logs`)
+      .then((res) => {
+        setQuotationTimeline(Array.isArray(res.data) ? res.data : []);
+      })
+      .catch((err: any) => {
+        setQuotationTimelineError(err?.response?.data?.error || "Gagal memuat timeline approval quotation");
+        setQuotationTimeline([]);
+      })
+      .finally(() => {
+        setQuotationTimelineLoading(false);
+      });
   };
 
   const handleApproveRequest = async (mr: ApprovalMaterialRequestItem) => {
@@ -557,16 +622,29 @@ export default function ApprovalCenterPage() {
                           {po.total > 10000000 && <div className="text-[8px] font-black text-amber-600 uppercase mt-1 italic tracking-widest">High Value Threshold</div>}
                        </td>
                        <td className="px-10 py-8 text-center">
-                          <span className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase italic border ${po.total > 10000000 ? 'bg-amber-50 text-amber-600 border-amber-100' : 'bg-indigo-50 text-indigo-600 border-indigo-100'}`}>
-                             {po.total > 10000000 ? 'Director Review' : 'Manager Approval'}
-                          </span>
+                          <div className="flex flex-col items-center gap-2">
+                            <span className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase italic border ${
+                              normalizeStatus(po.status) === 'DRAFT'
+                                ? 'bg-slate-100 text-slate-700 border-slate-200'
+                                : normalizeStatus(po.status) === 'REJECTED'
+                                  ? 'bg-rose-50 text-rose-700 border-rose-100'
+                                  : normalizeStatus(po.status) === 'APPROVED'
+                                    ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
+                                    : 'bg-indigo-50 text-indigo-600 border-indigo-100'
+                            }`}>
+                               {getPoAuditLabel(po)}
+                            </span>
+                            <span className="max-w-[220px] text-[9px] font-bold uppercase tracking-wider text-slate-400 leading-relaxed">
+                              {getPoAuditTrail(po)}
+                            </span>
+                          </div>
                        </td>
                        <td className="px-10 py-8">
                           <div className="flex items-center justify-center gap-2">
-                             {canApprovePo(po.total) ? (
+                             {normalizeStatus(po.status) === 'SENT' && (po.availableActions || []).includes('APPROVE') ? (
                                <>
                                  <button disabled={!!actionLoadingMap[`PO:${po.id}:APPROVE`]} onClick={() => { void handleApprovePO(po); }} className="w-10 h-10 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center hover:bg-emerald-600 hover:text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed"><ThumbsUp size={18} /></button>
-                                 <button disabled={!!actionLoadingMap[`PO:${po.id}:REJECT`]} onClick={() => { void handleRejectPO(po); }} className="w-10 h-10 bg-rose-50 text-rose-600 rounded-xl flex items-center justify-center hover:bg-rose-600 hover:text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed"><ThumbsDown size={18} /></button>
+                                 {(po.availableActions || []).includes('REJECT') && <button disabled={!!actionLoadingMap[`PO:${po.id}:REJECT`]} onClick={() => { void handleRejectPO(po); }} className="w-10 h-10 bg-rose-50 text-rose-600 rounded-xl flex items-center justify-center hover:bg-rose-600 hover:text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed"><ThumbsDown size={18} /></button>}
                                </>
                              ) : (
                                <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Read Only</span>
@@ -596,18 +674,23 @@ export default function ApprovalCenterPage() {
                             const mrStatus = normalizeStatus(mr.status);
                             const isApproved = mrStatus === 'APPROVED';
                             return (
-                          <span className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase italic border ${
-                            isApproved ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-rose-50 text-rose-600 border-rose-100'
-                          }`}>
-                             {isApproved ? 'Ready to Issue' : 'Pending Review'}
-                          </span>
+                              <div className="flex flex-col items-center gap-2">
+                                <span className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase italic border ${
+                                  isApproved ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-rose-50 text-rose-600 border-rose-100'
+                                }`}>
+                                   {getMrAuditLabel(mr)}
+                                </span>
+                                <div className="max-w-[240px] text-[9px] font-bold uppercase tracking-wider text-slate-400 leading-relaxed">
+                                  {getMrAuditTrail(mr)}
+                                </div>
+                              </div>
                             );
                           })()}
                        </td>
                        <td className="px-10 py-8">
                           <div className="flex items-center justify-center gap-2">
                              {normalizeStatus(mr.status) === 'PENDING' ? (
-                               canApproveRejectMr ? (
+                               (mr.availableActions || []).includes('APPROVE') ? (
                                  <button disabled={!!actionLoadingMap[`MATERIAL_REQUEST:${mr.id}:APPROVE`]} onClick={() => { void handleApproveRequest(mr); }} className="px-6 py-2 bg-slate-900 text-white rounded-xl text-[9px] font-black uppercase italic tracking-widest hover:bg-black transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
                                     <PackageCheck size={14} /> Approve Request
                                  </button>
@@ -615,7 +698,7 @@ export default function ApprovalCenterPage() {
                                  <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Read Only</span>
                                )
                              ) : (
-                               canIssueMr ? (
+                               (mr.availableActions || []).includes('ISSUE') ? (
                                  <button disabled={!!actionLoadingMap[`MATERIAL_REQUEST:${mr.id}:ISSUE`]} onClick={() => { void handleIssueRequest(mr); }} className="px-6 py-2 bg-emerald-600 text-white rounded-xl text-[9px] font-black uppercase italic tracking-widest hover:bg-emerald-700 transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
                                     <ArrowRightLeft size={14} /> Issue to Site
                                  </button>
@@ -623,7 +706,7 @@ export default function ApprovalCenterPage() {
                                  <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Read Only</span>
                                )
                              )}
-                             {normalizeStatus(mr.status) === 'PENDING' && canApproveRejectMr && (
+                             {normalizeStatus(mr.status) === 'PENDING' && (mr.availableActions || []).includes('REJECT') && (
                                <button disabled={!!actionLoadingMap[`MATERIAL_REQUEST:${mr.id}:REJECT`]} onClick={() => { void handleRejectRequest(mr); }} className="p-2 bg-rose-50 text-rose-600 rounded-xl hover:bg-rose-600 hover:text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed"><PackageX size={14} /></button>
                              )}
                           </div>
@@ -647,65 +730,66 @@ export default function ApprovalCenterPage() {
                           {(() => {
                             const quoStatus = normalizeStatus(q.status);
                             return (
+                          <div className="flex flex-col items-center gap-2">
                           <span className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase italic border ${
                             quoStatus === 'DRAFT'
                               ? 'bg-slate-100 text-slate-700 border-slate-200'
                               : quoStatus === 'REVIEW'
                                 ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
-                                : 'bg-amber-50 text-amber-600 border-amber-100'
+                                : quoStatus === 'REJECTED'
+                                  ? 'bg-rose-50 text-rose-700 border-rose-100'
+                                  : quoStatus === 'APPROVED'
+                                    ? 'bg-blue-50 text-blue-700 border-blue-100'
+                                    : 'bg-amber-50 text-amber-600 border-amber-100'
                           }`}>
                              {getQuotationAuditLabel(q)}
                           </span>
+                          <span className="max-w-[240px] text-[9px] font-bold text-slate-400 uppercase tracking-wider leading-relaxed">
+                            {getQuotationAuditTrail(q)}
+                          </span>
+                          </div>
                             );
                           })()}
                        </td>
                        <td className="px-10 py-8 text-center">
-                          {normalizeStatus(q.status) === 'DRAFT' ? (
-                            <div className="flex items-center justify-center gap-2">
-                              <button
-                                onClick={() => handleViewQuotation(q)}
-                                className="w-10 h-10 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center hover:bg-blue-600 hover:text-white transition-all"
-                                title="Lihat quotation"
-                              >
-                                <Eye size={18} />
+                          <div className="flex items-center justify-center gap-2 flex-wrap">
+                            <button
+                              onClick={() => handleViewQuotation(q)}
+                              className="w-10 h-10 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center hover:bg-blue-600 hover:text-white transition-all"
+                              title="Detail barang quotation"
+                            >
+                              <Eye size={18} />
+                            </button>
+                            {(normalizeStatus(q.status) === 'DRAFT' || canResendRejectedQuotation(q)) && (q.availableActions || []).includes('SEND') && (
+                              <button disabled={!!actionLoadingMap[`QUOTATION:${q.id}:SEND`]} onClick={() => { void handleSendQuotation(q); }} className="px-4 py-2.5 bg-slate-900 text-white rounded-xl text-[9px] font-black uppercase tracking-widest italic flex items-center gap-2 hover:bg-black transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+                                 <CheckCircle size={14} /> {normalizeStatus(q.status) === 'REJECTED' ? 'Send Again' : 'Send'}
                               </button>
-                              {canSendQuotation ? (
-                                <button disabled={!!actionLoadingMap[`QUOTATION:${q.id}:SEND`]} onClick={() => { void handleSendQuotation(q); }} className="px-6 py-3 bg-slate-900 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest italic flex items-center gap-2 hover:bg-black transition-all disabled:opacity-50 disabled:cursor-not-allowed">
-                                   <CheckCircle size={16} /> Send Quotation
-                                </button>
-                              ) : (
-                                <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Read Only</span>
-                              )}
-                            </div>
-                          ) : (
-                            <div className="flex items-center justify-center gap-2">
+                            )}
+                            {canReviewQuotationItem(q) && (
                               <button
-                                onClick={() => handleViewQuotation(q)}
-                                className="w-10 h-10 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center hover:bg-blue-600 hover:text-white transition-all"
-                                title="Lihat quotation"
+                                type="button"
+                                disabled
+                                className="px-4 py-2.5 bg-amber-50 text-amber-700 rounded-xl text-[9px] font-black uppercase tracking-widest italic border border-amber-100 cursor-default"
                               >
-                                <Eye size={18} />
+                                Review
                               </button>
-                              {canApproveQuotationItem(q) || canRejectQuotationItem(q) ? (
-                                <>
-                                  {canApproveQuotationItem(q) && (
-                                    <button disabled={!!actionLoadingMap[`QUOTATION:${q.id}:APPROVE`]} onClick={() => { void handleApproveQuotation(q); }} className="w-10 h-10 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center hover:bg-emerald-600 hover:text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed">
-                                       <ThumbsUp size={18} />
-                                    </button>
-                                  )}
-                                  {canRejectQuotationItem(q) && (
-                                    <button disabled={!!actionLoadingMap[`QUOTATION:${q.id}:REJECT`]} onClick={() => { void handleRejectQuotation(q); }} className="w-10 h-10 bg-rose-50 text-rose-600 rounded-xl flex items-center justify-center hover:bg-rose-600 hover:text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed">
-                                       <ThumbsDown size={18} />
-                                    </button>
-                                  )}
-                                </>
-                              ) : (
-                                <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400">
-                                  {normalizeStatus(q.status) === 'SENT' ? 'Menunggu SPV' : 'Owner Only'}
-                                </span>
-                              )}
-                            </div>
-                          )}
+                            )}
+                            {canApproveQuotationItem(q) && (
+                              <button disabled={!!actionLoadingMap[`QUOTATION:${q.id}:APPROVE`]} onClick={() => { void handleApproveQuotation(q); }} className="px-4 py-2.5 bg-emerald-50 text-emerald-700 rounded-xl text-[9px] font-black uppercase tracking-widest italic border border-emerald-100 hover:bg-emerald-600 hover:text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+                                 Approve
+                              </button>
+                            )}
+                            {canRejectQuotationItem(q) && (
+                              <button disabled={!!actionLoadingMap[`QUOTATION:${q.id}:REJECT`]} onClick={() => { void handleRejectQuotation(q); }} className="px-4 py-2.5 bg-rose-50 text-rose-700 rounded-xl text-[9px] font-black uppercase tracking-widest italic border border-rose-100 hover:bg-rose-600 hover:text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+                                 Reject
+                              </button>
+                            )}
+                            {!canApproveQuotationItem(q) && !canRejectQuotationItem(q) && normalizeStatus(q.status) !== 'DRAFT' && !canResendRejectedQuotation(q) && (
+                              <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400">
+                                {normalizeStatus(q.status) === 'SENT' ? 'Menunggu SPV' : normalizeStatus(q.status) === 'REVIEW' ? 'Menunggu Owner' : 'Read Only'}
+                              </span>
+                            )}
+                          </div>
                        </td>
                     </tr>
                   ))}
@@ -723,12 +807,17 @@ export default function ApprovalCenterPage() {
                           <span className="text-sm font-black text-emerald-600 italic">Rp {inv.totalBayar.toLocaleString('id-ID')}</span>
                        </td>
                        <td className="px-10 py-8 text-center">
-                          <span className="px-4 py-1.5 rounded-full text-[9px] font-black uppercase italic border bg-emerald-50 text-emerald-600 border-emerald-100">
-                             Payment Verification
-                          </span>
+                          <div className="flex flex-col items-center gap-2">
+                            <span className="px-4 py-1.5 rounded-full text-[9px] font-black uppercase italic border bg-emerald-50 text-emerald-600 border-emerald-100">
+                               {getInvoiceAuditLabel(inv)}
+                            </span>
+                            <span className="max-w-[220px] text-[9px] font-bold uppercase tracking-wider text-slate-400 leading-relaxed">
+                              {getInvoiceAuditTrail(inv)}
+                            </span>
+                          </div>
                        </td>
                        <td className="px-10 py-8 text-center">
-                          {canVerifyInvoice ? (
+                          {(inv.availableActions || []).includes('VERIFY') ? (
                             <button disabled={!!actionLoadingMap[`INVOICE:${inv.id}:VERIFY`]} onClick={() => { void handleVerifyInvoice(inv); }} className="px-6 py-3 bg-emerald-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest italic flex items-center gap-2 mx-auto hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-100 disabled:opacity-50 disabled:cursor-not-allowed">
                                <UserCheck size={16} /> Mark as Paid
                             </button>
@@ -756,6 +845,145 @@ export default function ApprovalCenterPage() {
           </AnimatePresence>
         </div>
       </div>
+      <AnimatePresence>
+        {selectedQuotationDetail && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 bg-slate-950/45 backdrop-blur-sm flex items-center justify-center p-6"
+            onClick={() => setSelectedQuotationDetail(null)}
+          >
+            <motion.div
+              initial={{ opacity: 0, y: 12, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 8, scale: 0.98 }}
+              transition={{ duration: 0.18 }}
+              className="w-full max-w-5xl bg-white rounded-[2rem] border border-slate-200 shadow-2xl overflow-hidden"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div className="px-8 py-6 border-b border-slate-100 flex items-start justify-between gap-6">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400 mb-2">Quotation Detail</p>
+                  <h3 className="text-2xl font-black italic tracking-tighter text-slate-900 uppercase">{selectedQuotationDetail.noPenawaran || selectedQuotationDetail.id}</h3>
+                  <p className="text-xs font-bold uppercase tracking-wider text-slate-400 mt-2">Client: {selectedQuotationDetail.kepada || "-"}</p>
+                  {selectedQuotationDetail.perihal && (
+                    <p className="text-sm text-slate-600 mt-3">{selectedQuotationDetail.perihal}</p>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSelectedQuotationDetail(null)}
+                  className="px-4 py-2 rounded-xl bg-slate-100 text-slate-600 text-[10px] font-black uppercase tracking-widest hover:bg-slate-900 hover:text-white transition-all"
+                >
+                  Close
+                </button>
+              </div>
+              <div className="px-8 py-6 grid grid-cols-1 md:grid-cols-4 gap-4 border-b border-slate-100 bg-slate-50/40">
+                <div className="rounded-2xl border border-slate-100 bg-white px-5 py-4">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Audit Status</p>
+                  <p className="text-sm font-black italic text-slate-900 mt-2">{getQuotationAuditLabel(selectedQuotationDetail)}</p>
+                </div>
+                <div className="rounded-2xl border border-slate-100 bg-white px-5 py-4">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Audit Trail</p>
+                  <p className="text-sm font-bold text-slate-700 mt-2">{getQuotationAuditTrail(selectedQuotationDetail)}</p>
+                </div>
+                <div className="rounded-2xl border border-slate-100 bg-white px-5 py-4">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Tanggal</p>
+                  <p className="text-sm font-bold text-slate-700 mt-2">{selectedQuotationDetail.tanggal || "-"}</p>
+                </div>
+                <div className="rounded-2xl border border-slate-100 bg-white px-5 py-4">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Grand Total</p>
+                  <p className="text-sm font-black italic text-indigo-600 mt-2">Rp {(selectedQuotationDetail.grandTotal || 0).toLocaleString('id-ID')}</p>
+                </div>
+              </div>
+              <div className="px-8 py-6">
+                <div className="overflow-x-auto rounded-[1.5rem] border border-slate-100">
+                  <table className="w-full text-left">
+                    <thead className="bg-slate-50 border-b border-slate-100">
+                      <tr>
+                        <th className="px-5 py-4 text-[10px] font-black uppercase tracking-widest text-slate-400">Kode</th>
+                        <th className="px-5 py-4 text-[10px] font-black uppercase tracking-widest text-slate-400">Barang</th>
+                        <th className="px-5 py-4 text-[10px] font-black uppercase tracking-widest text-slate-400 text-right">Qty</th>
+                        <th className="px-5 py-4 text-[10px] font-black uppercase tracking-widest text-slate-400">Unit</th>
+                        <th className="px-5 py-4 text-[10px] font-black uppercase tracking-widest text-slate-400 text-right">Harga</th>
+                        <th className="px-5 py-4 text-[10px] font-black uppercase tracking-widest text-slate-400 text-right">Total</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {selectedQuotationDetail.items.length > 0 ? selectedQuotationDetail.items.map((item, index) => (
+                        <tr key={item.id || `${selectedQuotationDetail.id}-${index}`}>
+                          <td className="px-5 py-4 text-sm font-bold text-slate-700">{item.kode || "-"}</td>
+                          <td className="px-5 py-4 text-sm font-black text-slate-900 uppercase">{item.nama || "-"}</td>
+                          <td className="px-5 py-4 text-sm font-bold text-slate-700 text-right">{item.qty || 0}</td>
+                          <td className="px-5 py-4 text-sm font-bold text-slate-700">{item.unit || "-"}</td>
+                          <td className="px-5 py-4 text-sm font-bold text-slate-700 text-right">Rp {Number(item.harga || 0).toLocaleString('id-ID')}</td>
+                          <td className="px-5 py-4 text-sm font-black italic text-slate-900 text-right">Rp {Number(item.total || 0).toLocaleString('id-ID')}</td>
+                        </tr>
+                      )) : (
+                        <tr>
+                          <td colSpan={6} className="px-5 py-12 text-center text-sm font-bold uppercase tracking-widest text-slate-400">
+                            Detail barang belum tersedia di quotation ini.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+                {selectedQuotationDetail.rejectReason && (
+                  <div className="mt-6 rounded-2xl border border-rose-100 bg-rose-50 px-5 py-4">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-rose-500 mb-2">Reject Reason</p>
+                    <p className="text-sm font-bold text-rose-700">{selectedQuotationDetail.rejectReason}</p>
+                  </div>
+                )}
+                <div className="mt-6 rounded-[1.5rem] border border-slate-100 bg-slate-50/50 px-6 py-5">
+                  <div className="flex items-center justify-between gap-4 mb-4">
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-400">Approval Timeline</p>
+                      <p className="text-sm font-bold text-slate-600 mt-1">Timeline ini langsung diambil dari tabel approval log quotation.</p>
+                    </div>
+                  </div>
+                  {quotationTimelineLoading ? (
+                    <div className="text-sm font-bold text-slate-500">Loading timeline...</div>
+                  ) : quotationTimelineError ? (
+                    <div className="text-sm font-bold text-rose-600">{quotationTimelineError}</div>
+                  ) : quotationTimeline.length === 0 ? (
+                    <div className="text-sm font-bold text-slate-500">Belum ada audit trail quotation ini.</div>
+                  ) : (
+                    <div className="space-y-3">
+                      {quotationTimeline.map((row: any) => (
+                        <div key={row.id} className="rounded-2xl border border-slate-100 bg-white px-5 py-4">
+                          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                            <div>
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="px-3 py-1 rounded-full bg-indigo-50 border border-indigo-100 text-[10px] font-black uppercase tracking-widest text-indigo-700">
+                                  {row?.action || "-"}
+                                </span>
+                                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                                  {row?.createdAt ? new Date(row.createdAt).toLocaleString('id-ID') : "-"}
+                                </span>
+                              </div>
+                              <p className="text-sm font-bold text-slate-700 mt-2">
+                                {getApprovalActorLabel(row)} ({getApprovalRoleLabel(row?.actorRole)})
+                              </p>
+                            </div>
+                            <div className="text-sm font-bold text-slate-600">
+                              {row?.fromStatus || "-"} → {row?.toStatus || "-"}
+                            </div>
+                          </div>
+                          {row?.reason ? (
+                            <p className="mt-3 text-sm font-bold text-rose-600">Reason: {row.reason}</p>
+                          ) : null}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 
@@ -766,4 +994,22 @@ export default function ApprovalCenterPage() {
     if (activeTab === 'warehouse') return pendingRequests.length;
     return 0;
   }
+}
+
+function getApprovalActorLabel(row: any) {
+  const actorName = String(row?.metadata?.actorName || '').trim();
+  if (actorName) return actorName;
+  return row?.actorUserId || '-';
+}
+
+function getApprovalRoleLabel(role: string | undefined | null) {
+  const normalized = String(role || "").trim().toUpperCase();
+  if (!normalized) return "-";
+  if (normalized === "OWNER") return "Owner";
+  if (normalized === "SPV") return "SPV";
+  if (normalized === "ADMIN") return "Admin";
+  if (normalized === "MANAGER") return "Manager";
+  if (normalized === "FINANCE") return "Finance";
+  if (normalized === "SALES") return "Sales";
+  return normalized;
 }

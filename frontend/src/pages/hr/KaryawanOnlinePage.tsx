@@ -114,12 +114,8 @@ export default function KaryawanOnlinePage() {
             phone: emp.phone,
           };
         });
+        await api.put('/hr-online-status/bulk', seed);
         setRows(seed);
-
-        await api.put(
-          '/hr-online-status/bulk',
-          seed
-        );
       }
 
       setLastUpdate(new Date());

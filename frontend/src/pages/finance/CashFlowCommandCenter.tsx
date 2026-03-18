@@ -112,6 +112,18 @@ export default function CashFlowCommandCenter() {
   }, []);
 
   const metrics = useMemo(() => serverMetrics || DEFAULT_METRICS, [serverMetrics]);
+  const hasCashflowData = useMemo(
+    () =>
+      metrics.totalARInvoiced > 0 ||
+      metrics.totalAP > 0 ||
+      metrics.totalAPPaid > 0 ||
+      metrics.totalARPaid > 0 ||
+      metrics.unpaidInvoiceCount > 0 ||
+      metrics.pendingExpenseCount > 0 ||
+      metrics.topCustomers.length > 0 ||
+      metrics.topVendors.length > 0,
+    [metrics]
+  );
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('id-ID', {
@@ -122,12 +134,14 @@ export default function CashFlowCommandCenter() {
   };
 
   const getHealthColor = (score: number) => {
+    if (!hasCashflowData) return 'text-slate-600 bg-slate-100';
     if (score >= 80) return 'text-green-600 bg-green-100';
     if (score >= 60) return 'text-yellow-600 bg-yellow-100';
     return 'text-red-600 bg-red-100';
   };
 
   const getHealthStatus = (score: number) => {
+    if (!hasCashflowData) return 'No Data';
     if (score >= 80) return 'Excellent';
     if (score >= 60) return 'Good';
     if (score >= 40) return 'Fair';
@@ -260,6 +274,7 @@ export default function CashFlowCommandCenter() {
             <div className="w-full bg-gray-200 rounded-full h-2">
               <div
                 className={`h-2 rounded-full transition-all ${
+                  !hasCashflowData ? 'bg-slate-400' :
                   metrics.healthScore >= 80 ? 'bg-green-500' :
                   metrics.healthScore >= 60 ? 'bg-yellow-500' : 'bg-red-500'
                 }`}
@@ -271,7 +286,11 @@ export default function CashFlowCommandCenter() {
       </div>
 
       {/* Critical Alerts */}
-      {(metrics.overdueInvoices > 0 || metrics.highValueOverdue > 0) && (
+      {!hasCashflowData ? (
+        <div className="bg-slate-50 border border-slate-200 p-4 sm:p-5 mb-4 sm:mb-6 rounded-lg text-sm text-slate-600">
+          Belum ada transaksi AR/AP relasional yang cukup untuk dianalisis. Dashboard ini akan terisi setelah invoice customer, vendor invoice, atau vendor expense mulai masuk.
+        </div>
+      ) : (metrics.overdueInvoices > 0 || metrics.highValueOverdue > 0) && (
         <div className="bg-red-50 border-l-4 border-red-500 p-3 sm:p-4 mb-4 sm:mb-6 rounded-lg">
           <div className="flex items-start gap-2 sm:gap-3">
             <AlertTriangle className="w-5 h-5 text-red-600 mt-0.5 flex-shrink-0" />

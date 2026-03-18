@@ -26,6 +26,8 @@ export default function DeliveryTrackingPage() {
   const [serverPodList, setServerPodList] = useState<ProofOfDeliveryPayload[] | null>(null);
   const [sj, setSj] = useState<any>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+  const [isUploadingSignature, setIsUploadingSignature] = useState(false);
   
   const [podData, setPodData] = useState({
     name: '',
@@ -40,6 +42,17 @@ export default function DeliveryTrackingPage() {
       reader.onerror = reject;
       reader.readAsDataURL(file);
     });
+
+  const uploadPodAsset = async (file: File, kind: "photo" | "signature") => {
+    const dataUrl = await readFileAsDataUrl(file);
+    const res = await api.post("/media/pod-assets", {
+      suratJalanId: String(id || ""),
+      kind,
+      fileName: file.name,
+      dataUrl,
+    });
+    return String(res?.data?.publicUrl || "");
+  };
 
   useEffect(() => {
     let mounted = true;
@@ -72,9 +85,14 @@ export default function DeliveryTrackingPage() {
     const found = effectiveSuratJalanList.find(s => s.id === id);
     if (found) {
       setSj(found);
-      setPodData(prev => ({ ...prev, name: found.penerima || '' }));
+      const existingPod = (serverPodList ?? []).find((pod) => pod.suratJalanId === found.id);
+      setPodData({
+        name: String(existingPod?.receiverName || found.podName || found.penerima || ''),
+        photo: String(existingPod?.photo || found.podPhoto || ''),
+        signature: String(existingPod?.signature || found.podSignature || ''),
+      });
     }
-  }, [id, effectiveSuratJalanList]);
+  }, [id, effectiveSuratJalanList, serverPodList]);
 
   const handleConfirmDelivery = async () => {
     if (!podData.name) {
@@ -93,7 +111,6 @@ export default function DeliveryTrackingPage() {
         podPhoto: podData.photo || sj.podPhoto || '',
         podSignature: podData.signature || sj.podSignature || ''
       };
-      await api.patch(`/surat-jalan/${sj.id}`, mergedSuratJalan);
 
       const existingPod = (serverPodList ?? []).find((pod) => pod.suratJalanId === sj.id);
       const podId = existingPod?.id || `POD-${sj.id}`;
@@ -116,7 +133,10 @@ export default function DeliveryTrackingPage() {
         await api.post('/proof-of-delivery', podPayload);
       }
 
-      updateSuratJalan(sj.id, mergedSuratJalan);
+      const updated = await updateSuratJalan(sj.id, mergedSuratJalan);
+      if (!updated) {
+        throw new Error("Gagal sinkron status surat jalan");
+      }
       addAuditLog({
         module: "Logistics",
         action: "DELIVERY_CONFIRMED",
@@ -142,25 +162,38 @@ export default function DeliveryTrackingPage() {
   };
 
   const handleViewPODArchive = () => {
-    const podPayload = {
-      noSurat: sj.noSurat,
-      tujuan: sj.tujuan,
-      deliveredAt: sj.podTime || null,
-      receiver: sj.podName || null,
-      driver: sj.sopir || null,
-      plate: sj.noPolisi || null,
-      items: sj.items || [],
-    };
-    const blob = new Blob([JSON.stringify(podPayload, null, 2)], { type: "application/json;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `POD_${String(sj.noSurat || sj.id).replace(/[^\w-]+/g, "_")}.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    toast.success("POD archive berhasil diunduh");
+    const existingPod = (serverPodList ?? []).find((pod) => pod.suratJalanId === sj.id);
+    const exportId = existingPod?.id || `POD-${sj.id}`;
+    const safeNo = String(sj.noSurat || exportId).replace(/[^\w.-]+/g, "_");
+    Promise.all([
+      api.get(`/exports/proof-of-delivery/${exportId}/word`, { responseType: "blob" }),
+      api.get(`/exports/proof-of-delivery/${exportId}/excel`, { responseType: "blob" }),
+    ])
+      .then(([wordResponse, excelResponse]) => {
+        const wordUrl = URL.createObjectURL(new Blob([wordResponse.data], { type: "application/msword" }));
+        const excelUrl = URL.createObjectURL(new Blob([excelResponse.data], { type: "application/vnd.ms-excel" }));
+
+        const wordLink = document.createElement("a");
+        wordLink.href = wordUrl;
+        wordLink.download = `proof_of_delivery_${safeNo}.doc`;
+        document.body.appendChild(wordLink);
+        wordLink.click();
+        document.body.removeChild(wordLink);
+        URL.revokeObjectURL(wordUrl);
+
+        const excelLink = document.createElement("a");
+        excelLink.href = excelUrl;
+        excelLink.download = `proof_of_delivery_${safeNo}.xls`;
+        document.body.appendChild(excelLink);
+        excelLink.click();
+        document.body.removeChild(excelLink);
+        URL.revokeObjectURL(excelUrl);
+
+        toast.success("POD archive Word + Excel berhasil diunduh");
+      })
+      .catch(() => {
+        toast.error("Gagal export POD archive");
+      });
   };
 
   const handleSendCustomerReceipt = () => {
@@ -319,16 +352,22 @@ export default function DeliveryTrackingPage() {
                               const file = e.target.files?.[0];
                               if (!file) return;
                               try {
-                                const dataUrl = await readFileAsDataUrl(file);
-                                setPodData((prev) => ({ ...prev, photo: dataUrl }));
+                                setIsUploadingPhoto(true);
+                                const publicUrl = await uploadPodAsset(file, "photo");
+                                if (!publicUrl) throw new Error("UPLOAD_EMPTY");
+                                setPodData((prev) => ({ ...prev, photo: publicUrl }));
                                 toast.success(`Foto POD terpasang: ${file.name}`);
                               } catch {
-                                toast.error("Gagal membaca file foto");
+                                toast.error("Gagal upload file foto");
+                              } finally {
+                                setIsUploadingPhoto(false);
                               }
                             }}
                           />
                           <Camera className="text-slate-300 group-hover:text-indigo-600 mb-2" />
-                          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Upload POD Photo</span>
+                          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                            {isUploadingPhoto ? 'Uploading Photo...' : 'Upload POD Photo'}
+                          </span>
                        </label>
                        <label className="flex flex-col items-center justify-center p-6 border-2 border-dashed border-slate-200 rounded-2xl hover:bg-slate-50 transition-all group cursor-pointer">
                           <input
@@ -339,16 +378,22 @@ export default function DeliveryTrackingPage() {
                               const file = e.target.files?.[0];
                               if (!file) return;
                               try {
-                                const dataUrl = await readFileAsDataUrl(file);
-                                setPodData((prev) => ({ ...prev, signature: dataUrl }));
+                                setIsUploadingSignature(true);
+                                const publicUrl = await uploadPodAsset(file, "signature");
+                                if (!publicUrl) throw new Error("UPLOAD_EMPTY");
+                                setPodData((prev) => ({ ...prev, signature: publicUrl }));
                                 toast.success(`Signature terpasang: ${file.name}`);
                               } catch {
-                                toast.error("Gagal membaca file signature");
+                                toast.error("Gagal upload file signature");
+                              } finally {
+                                setIsUploadingSignature(false);
                               }
                             }}
                           />
                           <PenTool className="text-slate-300 group-hover:text-emerald-600 mb-2" />
-                          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Upload Signature</span>
+                          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                            {isUploadingSignature ? 'Uploading Signature...' : 'Upload Signature'}
+                          </span>
                        </label>
                     </div>
 
@@ -375,13 +420,13 @@ export default function DeliveryTrackingPage() {
 
                     <button 
                       onClick={handleConfirmDelivery}
-                      disabled={isSubmitting}
+                      disabled={isSubmitting || isUploadingPhoto || isUploadingSignature}
                       className={`w-full py-5 rounded-2xl text-[11px] font-black uppercase tracking-[0.2em] shadow-xl flex items-center justify-center gap-3 transition-all ${
-                        isSubmitting ? 'bg-slate-400 text-white' : 'bg-emerald-600 text-white shadow-emerald-100 hover:bg-emerald-700'
+                        isSubmitting || isUploadingPhoto || isUploadingSignature ? 'bg-slate-400 text-white' : 'bg-emerald-600 text-white shadow-emerald-100 hover:bg-emerald-700'
                       }`}
                     >
-                       {isSubmitting ? 'Processing Ledger Update...' : 'Confirm Delivered & Sync P&L'}
-                       {!isSubmitting && <Send size={18} />}
+                       {isSubmitting ? 'Processing Ledger Update...' : isUploadingPhoto || isUploadingSignature ? 'Uploading POD Assets...' : 'Confirm Delivered & Sync P&L'}
+                       {!isSubmitting && !isUploadingPhoto && !isUploadingSignature && <Send size={18} />}
                     </button>
                  </div>
               </div>

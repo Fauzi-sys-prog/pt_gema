@@ -169,7 +169,8 @@ export default function CutiPage() {
       startDate: toIsoDate(leave.startDate),
       endDate: toIsoDate(leave.endDate),
     };
-    await api.patch(`/hr-leaves/${leave.id}`, payload);
+    const res = await api.patch(`/hr-leaves/${leave.id}`, payload);
+    return mapEntityToLeave(res?.data as LeaveEntity) || payload;
   };
 
   const handleApprove = async (leave: Leave) => {
@@ -180,10 +181,10 @@ export default function CutiPage() {
         approvedBy: currentUser?.fullName || currentUser?.name || currentUser?.username || 'System',
         approvedDate: new Date().toISOString(),
       };
-      await persistLeaveUpdate(updated);
-      setLeaveList((prev) => prev.map((x) => (x.id === updated.id ? updated : x)));
-      setSelectedLeave((prev) => (prev && prev.id === updated.id ? updated : prev));
-      toast.success(`Cuti ${updated.leaveNo} disetujui`);
+      const saved = await persistLeaveUpdate(updated);
+      setLeaveList((prev) => prev.map((x) => (x.id === saved.id ? saved : x)));
+      setSelectedLeave((prev) => (prev && prev.id === saved.id ? saved : prev));
+      toast.success(`Cuti ${saved.leaveNo} disetujui`);
     } catch {
       toast.error('Gagal approve cuti');
     }
@@ -194,15 +195,17 @@ export default function CutiPage() {
     if (!reason) return;
 
     try {
+      const actorName = currentUser?.fullName || currentUser?.name || currentUser?.username || 'System';
+      const rejectedAt = new Date().toISOString();
       const updated: Leave = {
         ...leave,
         status: 'Rejected',
-        notes: `Rejected: ${reason}`,
+        notes: `Rejected by ${actorName} at ${rejectedAt}: ${reason}`,
       };
-      await persistLeaveUpdate(updated);
-      setLeaveList((prev) => prev.map((x) => (x.id === updated.id ? updated : x)));
-      setSelectedLeave((prev) => (prev && prev.id === updated.id ? updated : prev));
-      toast.success(`Cuti ${updated.leaveNo} ditolak`);
+      const saved = await persistLeaveUpdate(updated);
+      setLeaveList((prev) => prev.map((x) => (x.id === saved.id ? saved : x)));
+      setSelectedLeave((prev) => (prev && prev.id === saved.id ? saved : prev));
+      toast.success(`Cuti ${saved.leaveNo} ditolak`);
     } catch {
       toast.error('Gagal reject cuti');
     }
@@ -238,8 +241,9 @@ export default function CutiPage() {
     };
 
     try {
-      await api.post('/hr-leaves', newLeave);
-      setLeaveList((prev) => [newLeave, ...prev]);
+      const res = await api.post('/hr-leaves', newLeave);
+      const saved = mapEntityToLeave(res?.data as LeaveEntity) || newLeave;
+      setLeaveList((prev) => [saved, ...prev]);
       toast.success('Pengajuan cuti berhasil disubmit');
       setShowModal(false);
       setFormData(DEFAULT_FORM);

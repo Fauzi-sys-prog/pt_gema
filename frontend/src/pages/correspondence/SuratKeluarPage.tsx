@@ -24,7 +24,7 @@ export default function SuratKeluarPage() {
     tujuan: '',
     perihal: '',
     jenisSurat: '',
-    pembuat: 'Current User',
+    pembuat: currentUser?.fullName || currentUser?.username || 'System',
     status: 'Draft',
     kategori: 'General',
     isiSurat: '',
@@ -59,11 +59,12 @@ export default function SuratKeluarPage() {
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (editMode && selectedSurat) {
-      updateSuratKeluar(selectedSurat.id, formData);
+      const ok = await updateSuratKeluar(selectedSurat.id, formData);
+      if (!ok) return;
       addAuditLog({
         action: 'SURAT_KELUAR_UPDATED',
         module: 'Correspondence',
@@ -79,7 +80,8 @@ export default function SuratKeluarPage() {
         pembuat: (formData.pembuat || '').trim() || currentUser?.fullName || currentUser?.username || 'System',
         ...formData as SuratKeluar,
       };
-      addSuratKeluar(newSurat);
+      const ok = await addSuratKeluar(newSurat);
+      if (!ok) return;
       addAuditLog({
         action: 'SURAT_KELUAR_CREATED',
         module: 'Correspondence',
@@ -100,10 +102,11 @@ export default function SuratKeluarPage() {
     setShowModal(true);
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
     if (window.confirm('Apakah Anda yakin ingin menghapus surat ini?')) {
       const deleted = effectiveSuratKeluarList.find((s) => s.id === id);
-      deleteSuratKeluar(id);
+      const ok = await deleteSuratKeluar(id);
+      if (!ok) return;
       addAuditLog({
         action: 'SURAT_KELUAR_DELETED',
         module: 'Correspondence',
@@ -114,15 +117,21 @@ export default function SuratKeluarPage() {
     }
   };
 
-  const handleApproval = (approved: boolean) => {
+  const handleApproval = async (approved: boolean) => {
     if (selectedSurat) {
+      const actorName = currentUser?.fullName || currentUser?.username || 'System';
+      const actorRole = currentUser?.role || 'UNKNOWN';
+      const reviewedAt = new Date().toISOString();
       if (approved) {
-        updateSuratKeluar(selectedSurat.id, {
+        const ok = await updateSuratKeluar(selectedSurat.id, {
           status: 'Approved',
-          approvedBy: currentUser?.fullName || currentUser?.username || 'Direktur',
-          reviewedBy: currentUser?.fullName || currentUser?.username || 'Manager',
-          reviewedAt: new Date().toISOString(),
+          approvedBy: actorName,
+          approvedByRole: actorRole,
+          reviewedBy: actorName,
+          reviewedByRole: actorRole,
+          reviewedAt,
         });
+        if (!ok) return;
         addAuditLog({
           action: 'SURAT_KELUAR_APPROVED',
           module: 'Correspondence',
@@ -131,10 +140,14 @@ export default function SuratKeluarPage() {
         });
         toast.success('Surat disetujui');
       } else {
-        updateSuratKeluar(selectedSurat.id, {
+        const ok = await updateSuratKeluar(selectedSurat.id, {
           status: 'Draft',
-          notes: 'Perlu revisi',
+          reviewedBy: actorName,
+          reviewedByRole: actorRole,
+          reviewedAt,
+          notes: `Perlu revisi · ${actorName} · ${new Date(reviewedAt).toLocaleString('id-ID')}`,
         });
+        if (!ok) return;
         addAuditLog({
           action: 'SURAT_KELUAR_REJECTED',
           module: 'Correspondence',
@@ -148,13 +161,14 @@ export default function SuratKeluarPage() {
     }
   };
 
-  const handleSend = (id: string) => {
+  const handleSend = async (id: string) => {
     if (window.confirm('Apakah Anda yakin ingin mengirim surat ini?')) {
       const surat = effectiveSuratKeluarList.find((s) => s.id === id);
-      updateSuratKeluar(id, {
+      const ok = await updateSuratKeluar(id, {
         status: 'Sent',
         tglKirim: new Date().toISOString().split('T')[0],
       });
+      if (!ok) return;
       addAuditLog({
         action: 'SURAT_KELUAR_SENT',
         module: 'Correspondence',
@@ -202,7 +216,7 @@ export default function SuratKeluarPage() {
       tujuan: '',
       perihal: '',
       jenisSurat: '',
-      pembuat: 'Current User',
+      pembuat: currentUser?.fullName || currentUser?.username || 'System',
       status: 'Draft',
       kategori: 'General',
       isiSurat: '',

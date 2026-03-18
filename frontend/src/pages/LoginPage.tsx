@@ -4,10 +4,24 @@ import { LogIn, Mail, Lock, Eye, EyeOff, AlertCircle } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import logoImage from 'figma:asset/661f558dc14c79fa090b7039a885f26b843f5c04.png';
 
+const clearStoredAuth = () => {
+  try {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+  } catch {
+    // Ignore storage cleanup failures on login page.
+  }
+  try {
+    sessionStorage.removeItem('auth401_notified');
+  } catch {
+    // Ignore session cleanup failures on login page.
+  }
+};
+
 export default function LoginPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { login, isAuthenticated } = useAuth();
+  const { login, currentUser } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -19,17 +33,9 @@ export default function LoginPage() {
 
   const nextPath = searchParams.get('next') || '/';
 
-  // Redirect if already authenticated
   useEffect(() => {
-    try {
-      sessionStorage.removeItem("auth401_notified");
-    } catch {
-      // Ignore session storage access failures during login navigation.
-    }
-    if (isAuthenticated) {
-      navigate(nextPath, { replace: true });
-    }
-  }, [isAuthenticated, navigate, nextPath]);
+    clearStoredAuth();
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -37,10 +43,11 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
+      clearStoredAuth();
       const success = await login(formData.username, formData.password);
       
       if (success) {
-        navigate(nextPath, { replace: true });
+        window.location.replace(nextPath);
       } else {
         setError('Username atau password salah');
       }
@@ -73,6 +80,12 @@ export default function LoginPage() {
             <h2 className="text-2xl text-gray-900 mb-1">Selamat Datang</h2>
             <p className="text-sm text-gray-500">Silakan login untuk melanjutkan</p>
           </div>
+
+          {currentUser && (
+            <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+              Sesi lama terdeteksi. Login di sini akan mengganti akun yang sedang aktif.
+            </div>
+          )}
 
           {error && (
             <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2 text-red-700">

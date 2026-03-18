@@ -121,6 +121,12 @@ export default function ExecutiveDashboardPage() {
   const [productionSummary, setProductionSummary] = useState<ProductionSummary | null>(null);
   const [hrSummary, setHrSummary] = useState<HrSummary | null>(null);
   const [financeArSummary, setFinanceArSummary] = useState<FinanceArSummary | null>(null);
+  const hasExecutiveData =
+    Boolean(executiveSummary) ||
+    Boolean(cashflowPageSummary) ||
+    Boolean(productionSummary) ||
+    Boolean(hrSummary) ||
+    Boolean(financeArSummary);
 
   const formatCurrency = (val: number) => {
     return new Intl.NumberFormat('id-ID', {
@@ -188,11 +194,12 @@ export default function ExecutiveDashboardPage() {
     toast.loading("Synchronizing financial & operational data...", { id: "refresh-sync" });
     try {
       await loadExecutiveSummary();
+      toast.success("Data synchronized successfully. All ledgers are up-to-date.", { id: "refresh-sync" });
     } catch {
-      setLastSynced(new Date());
+      toast.error("Gagal sinkronisasi executive dashboard.", { id: "refresh-sync" });
+    } finally {
+      setIsRefreshing(false);
     }
-    setIsRefreshing(false);
-    toast.success("Data synchronized successfully. All ledgers are up-to-date.", { id: "refresh-sync" });
   };
 
   const handleDownloadAudit = () => {
@@ -318,7 +325,7 @@ export default function ExecutiveDashboardPage() {
         <div className="flex flex-col items-end gap-2">
            <div className="text-right">
               <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1 italic">Last Synced</p>
-              <p className="text-xl font-black text-indigo-400 italic">{formatDate(lastSynced)}</p>
+              <p className="text-xl font-black text-indigo-400 italic">{hasExecutiveData ? formatDate(lastSynced) : 'NO DATA'}</p>
            </div>
            <div className="flex gap-2 mt-4">
               <button 

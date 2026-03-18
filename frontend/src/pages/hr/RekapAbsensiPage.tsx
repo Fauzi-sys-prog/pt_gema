@@ -64,7 +64,7 @@ export default function RekapAbsensiPage() {
     return matchSearch && matchType;
   });
 
-  const handleExportToPayroll = () => {
+  const handleExportToPayroll = async () => {
     const [yearRaw, monthRaw] = selectedMonth.split('-');
     const year = Number(yearRaw || new Date().getFullYear());
     const month = monthRaw || String(new Date().getMonth() + 1).padStart(2, '0');
@@ -86,17 +86,14 @@ export default function RekapAbsensiPage() {
     };
 
     setExportingPayroll(true);
-    api
-      .put('/payrolls/bulk', [payload])
-      .then(() => {
-        toast.success(`Batch payroll ${month}/${year} tersimpan ke database.`);
-      })
-      .catch((err: any) => {
-        toast.error(getApiErrorMessage(err, 'Gagal kirim batch payroll ke server'));
-      })
-      .finally(() => {
-        setExportingPayroll(false);
-      });
+    try {
+      await api.put('/payrolls/bulk', [payload]);
+      toast.success(`Batch payroll ${month}/${year} tersimpan ke database.`);
+    } catch (err: any) {
+      toast.error(getApiErrorMessage(err, 'Gagal kirim batch payroll ke server'));
+    } finally {
+      setExportingPayroll(false);
+    }
   };
 
   const handleExportPDF = () => {

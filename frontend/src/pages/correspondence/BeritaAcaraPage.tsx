@@ -8,7 +8,7 @@ import { toast } from 'sonner@2.0.3';
 import api from '../../services/api';
 
 export default function BeritaAcaraPage() {
-  const { beritaAcaraList, addBeritaAcara, updateBeritaAcara, deleteBeritaAcara, addAuditLog, suratJalanList } = useApp();
+  const { beritaAcaraList, addBeritaAcara, updateBeritaAcara, deleteBeritaAcara, addAuditLog, suratJalanList, currentUser } = useApp();
   const [serverBeritaAcaraList, setServerBeritaAcaraList] = useState<BeritaAcara[] | null>(null);
   const [serverSuratJalanList, setServerSuratJalanList] = useState<SuratJalan[] | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -233,18 +233,19 @@ export default function BeritaAcaraPage() {
     });
   };
 
-  const handleCreate = (e: React.FormEvent) => {
+  const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     
     const newBA = {
       id: `BA-${Date.now()}`,
       ...formData,
       contentHTML: contentRef.current?.innerHTML || editableContent,
-      createdBy: 'Admin',
+      createdBy: currentUser?.fullName || currentUser?.username || 'System',
       createdAt: new Date().toISOString()
     };
 
-    addBeritaAcara(newBA);
+    const ok = await addBeritaAcara(newBA);
+    if (!ok) return;
     addAuditLog({
       action: 'CREATE_BERITA_ACARA',
       module: 'Correspondence',
