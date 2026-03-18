@@ -1,25 +1,34 @@
-import { useMemo, useState } from 'react'; import { Plus, Search, Edit2, Trash2, Shield, User as UserIcon, Mail, Phone } from 'lucide-react'; import { useApp } from '../../contexts/AppContext';
+import { useMemo, useState } from 'react'; import { Plus, Search, Edit2, Trash2, Shield, User as UserIcon, Mail, Phone, KeyRound } from 'lucide-react'; import { useApp } from '../../contexts/AppContext';
 import type { User } from '../../contexts/AppContext';
 import api from '../../services/api';
 import { toast } from 'sonner@2.0.3';
 import { getRoleLabel, isOwnerLike } from '../../utils/roles';
+import { useAuth } from '../../contexts/AuthContext';
 
 export default function UserManagementPage() {
   const { userList, refreshAll } = useApp();
+  const { currentUser } = useAuth();
   const [searchTerm, setSearchTerm] = useState('');
   const [filterRole, setFilterRole] = useState('all');
   const [filterStatus, setFilterStatus] = useState('all');
   const [showModal, setShowModal] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
 
-  const [formData, setFormData] = useState<Partial<User>>({
+  const [formData, setFormData] = useState<Partial<User> & { password?: string }>({
     username: '',
     email: '',
     fullName: '',
     role: 'OWNER',
     phone: '',
+    password: '',
     status: 'Active',
   });
+
+  const actorRole = String(currentUser?.role || '').toUpperCase();
+  const canCreateUser = actorRole === 'OWNER' || actorRole === 'ADMIN';
+  const canDeleteUser = actorRole === 'OWNER';
+  const canResetUserPassword = actorRole === 'SPV' || actorRole === 'OWNER' || actorRole === 'ADMIN';
+  const isSpvActor = actorRole === 'SPV';
 
   const ROLE_OPTIONS: Array<User['role']> = [
     'OWNER',
@@ -52,26 +61,51 @@ export default function UserManagementPage() {
     return matchSearch && matchRole && matchStatus;
   });
 
+  const validatePassword = (rawPassword: string, required: boolean): string | null => {
+    const password = String(rawPassword || '').trim();
+    if (!password) {
+      return required ? 'Password wajib diisi' : null;
+    }
+    const hasLetter = /[A-Za-z]/.test(password);
+    const hasNumber = /[0-9]/.test(password);
+    if (password.length < 10 || !hasLetter || !hasNumber) {
+      return 'Password minimal 10 karakter dan wajib mengandung huruf + angka';
+    }
+    return null;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     try {
       if (editingUser) {
-        await api.patch(`/users/${editingUser.id}`, {
-          email: String(formData.email || '').trim(),
-          username: String(formData.username || '').trim(),
-          name: String(formData.fullName || '').trim(),
-          phone: String(formData.phone || '').trim(),
-          role: formData.role,
-          isActive: formData.status === 'Active',
-        });
-        toast.success('User berhasil diupdate');
+        const password = String(formData.password || '').trim();
+        const passwordValidation = validatePassword(password, isSpvActor);
+        if (passwordValidation) {
+          toast.error(passwordValidation);
+          return;
+        }
+
+        if (isSpvActor) {
+          await api.patch(`/users/${editingUser.id}`, { password });
+          toast.success('Password user berhasil direset');
+        } else {
+          await api.patch(`/users/${editingUser.id}`, {
+            email: String(formData.email || '').trim(),
+            username: String(formData.username || '').trim(),
+            name: String(formData.fullName || '').trim(),
+            phone: String(formData.phone || '').trim(),
+            role: formData.role,
+            isActive: formData.status === 'Active',
+            ...(password ? { password } : {}),
+          });
+          toast.success(password ? 'User dan password berhasil diupdate' : 'User berhasil diupdate');
+        }
       } else {
-        const password = String((formData as any).password || '').trim();
-        const hasLetter = /[A-Za-z]/.test(password);
-        const hasNumber = /[0-9]/.test(password);
-        if (password.length < 10 || !hasLetter || !hasNumber) {
-          toast.error('Password minimal 10 karakter dan wajib mengandung huruf + angka');
+        const password = String(formData.password || '').trim();
+        const passwordValidation = validatePassword(password, true);
+        if (passwordValidation) {
+          toast.error(passwordValidation);
           return;
         }
         await api.post('/users', {
@@ -103,6 +137,7 @@ export default function UserManagementPage() {
       fullName: user.fullName,
       role: user.role,
       phone: user.phone,
+      password: '',
       status: user.status,
     });
     setShowModal(true);
@@ -128,6 +163,7 @@ export default function UserManagementPage() {
       fullName: '',
       role: 'OWNER',
       phone: '',
+      password: '',
       status: 'Active',
     });
   };
@@ -164,19 +200,23 @@ export default function UserManagementPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-gray-900">User Management</h1>
-          <p className="text-gray-600">Kelola user dan hak akses sistem</p>
+          <p className="text-gray-600">
+            {isSpvActor ? 'SPV hanya dapat mereset password user non-owner' : 'Kelola user dan hak akses sistem'}
+          </p>
         </div>
-        <button
-          onClick={() => {
-            setEditingUser(null);
-            resetForm();
-            setShowModal(true);
-          }}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-        >
-          <Plus size={20} />
-          Tambah User
-        </button>
+        {canCreateUser && (
+          <button
+            onClick={() => {
+              setEditingUser(null);
+              resetForm();
+              setShowModal(true);
+            }}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            <Plus size={20} />
+            Tambah User
+          </button>
+        )}
       </div>
 
       {/* Stats */}
@@ -317,17 +357,19 @@ export default function UserManagementPage() {
                       <button
                         onClick={() => handleEdit(user)}
                         className="p-2 text-blue-600 hover:bg-blue-50 rounded transition-colors"
-                        title="Edit"
+                        title={isSpvActor ? 'Reset Password' : 'Edit'}
                       >
-                        <Edit2 size={18} />
+                        {isSpvActor ? <KeyRound size={18} /> : <Edit2 size={18} />}
                       </button>
-                      <button
-                        onClick={() => handleDelete(user)}
-                        className="p-2 text-red-600 hover:bg-red-50 rounded transition-colors"
-                        title="Delete"
-                      >
-                        <Trash2 size={18} />
-                      </button>
+                      {canDeleteUser && (
+                        <button
+                          onClick={() => handleDelete(user)}
+                          className="p-2 text-red-600 hover:bg-red-50 rounded transition-colors"
+                          title="Delete"
+                        >
+                          <Trash2 size={18} />
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -343,7 +385,7 @@ export default function UserManagementPage() {
           <div className="bg-white rounded-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto">
             <div className="border-b border-gray-200 p-6">
               <h2 className="text-gray-900">
-                {editingUser ? 'Edit User' : 'Tambah User Baru'}
+                {editingUser ? (isSpvActor ? 'Reset Password User' : 'Edit User') : 'Tambah User Baru'}
               </h2>
             </div>
 
@@ -358,6 +400,7 @@ export default function UserManagementPage() {
                       setFormData({ ...formData, fullName: e.target.value })
                     }
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                    disabled={isSpvActor && !!editingUser}
                     required
                   />
                 </div>
@@ -370,14 +413,17 @@ export default function UserManagementPage() {
                       setFormData({ ...formData, username: e.target.value })
                     }
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                    disabled={isSpvActor && !!editingUser}
                     required
                   />
                 </div>
               </div>
 
-              {!editingUser && (
+              {(!editingUser || canResetUserPassword) && (
                 <div>
-                  <label className="block text-gray-700 mb-2">Password *</label>
+                  <label className="block text-gray-700 mb-2">
+                    {editingUser ? 'Password Baru' : 'Password *'}
+                  </label>
                   <input
                     type="password"
                     value={formData.password}
@@ -385,8 +431,15 @@ export default function UserManagementPage() {
                       setFormData({ ...formData, password: e.target.value })
                     }
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg"
-                    required
+                    required={!editingUser || isSpvActor}
                   />
+                  {editingUser && (
+                    <p className="mt-2 text-xs text-gray-500">
+                      {isSpvActor
+                        ? 'SPV hanya dapat mereset password user non-owner.'
+                        : 'Kosongkan jika tidak ingin mengganti password user.'}
+                    </p>
+                  )}
                 </div>
               )}
 
@@ -400,6 +453,7 @@ export default function UserManagementPage() {
                       setFormData({ ...formData, email: e.target.value })
                     }
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                    disabled={isSpvActor && !!editingUser}
                     required
                   />
                 </div>
@@ -412,6 +466,7 @@ export default function UserManagementPage() {
                       setFormData({ ...formData, phone: e.target.value })
                     }
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                    disabled={isSpvActor && !!editingUser}
                   />
                 </div>
               </div>
@@ -428,6 +483,7 @@ export default function UserManagementPage() {
                       })
                     }
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                    disabled={isSpvActor && !!editingUser}
                   >
                     {ROLE_OPTIONS.map((role) => (
                       <option key={role} value={role}>
@@ -449,6 +505,7 @@ export default function UserManagementPage() {
                     })
                   }
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                  disabled={isSpvActor && !!editingUser}
                 >
                   <option value="Active">Active</option>
                   <option value="Inactive">Inactive</option>
@@ -471,7 +528,7 @@ export default function UserManagementPage() {
                   type="submit"
                   className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
                 >
-                  {editingUser ? 'Update' : 'Tambah'} User
+                  {editingUser ? (isSpvActor ? 'Reset Password' : 'Update') : 'Tambah'} User
                 </button>
               </div>
             </form>

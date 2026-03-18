@@ -107,7 +107,7 @@ usersRouter.post("/users", authenticate, authorize(["OWNER", "ADMIN"]), async (r
 
 usersRouter.get("/users", authenticate, async (req: AuthRequest, res: Response) => {
   try {
-    if (hasRoleAccess(req.user?.role, ["OWNER", "ADMIN"])) {
+    if (hasRoleAccess(req.user?.role, ["OWNER", "ADMIN", "SPV"])) {
       const users = await prisma.user.findMany({
         where: {
           isActive: true,
@@ -154,7 +154,7 @@ usersRouter.get("/users", authenticate, async (req: AuthRequest, res: Response) 
 usersRouter.patch(
   "/users/:id",
   authenticate,
-  authorize(["OWNER", "ADMIN"]),
+  authorize(["OWNER", "ADMIN", "SPV"]),
   async (req: AuthRequest, res: Response) => {
     const { id } = req.params;
     const parsed = updateUserSchema.safeParse(req.body);
@@ -165,7 +165,7 @@ usersRouter.patch(
       });
     }
 
-    const { email, username, role, name, phone, isActive } = parsed.data;
+    const { email, username, role, name, phone, password, isActive } = parsed.data;
 
     const existingUser = await prisma.user.findUnique({
       where: { id },
@@ -173,6 +173,24 @@ usersRouter.patch(
 
     if (!existingUser) {
       return res.status(404).json({ error: "User not found" });
+    }
+
+    if (req.user?.role === "SPV") {
+      if (existingUser.role === "OWNER") {
+        return res.status(403).json({
+          error: "SPV cannot update OWNER",
+        });
+      }
+
+      const nonPasswordUpdates = [email, username, role, name, phone, isActive].some(
+        (value) => typeof value !== "undefined"
+      );
+
+      if (nonPasswordUpdates || !password) {
+        return res.status(403).json({
+          error: "SPV hanya boleh mereset password user",
+        });
+      }
     }
 
     if (req.user?.role === "ADMIN") {
@@ -201,6 +219,11 @@ usersRouter.patch(
     }
 
     try {
+      const hashedPassword =
+        typeof password === "string" && password.trim().length > 0
+          ? await bcrypt.hash(password, 10)
+          : undefined;
+
       const updatedUser = await prisma.user.update({
         where: { id },
         data: {
@@ -214,6 +237,7 @@ usersRouter.patch(
               : phone.trim().length > 0
                 ? phone.trim()
                 : null,
+          password: hashedPassword,
           isActive,
         },
         select: {
@@ -231,6 +255,7 @@ usersRouter.patch(
         username: updatedUser.username,
         role: updatedUser.role,
         isActive: updatedUser.isActive,
+        passwordReset: typeof hashedPassword === "string",
       }).catch(() => undefined);
 
       return res.json({
