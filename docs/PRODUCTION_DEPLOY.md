@@ -58,7 +58,7 @@ Use template from:
 ## 4) Reverse Proxy HTTPS
 
 Use:
-- `deploy/nginx/erp-prod.conf.example`
+- `deploy/nginx/gemateknik.online.conf`
 
 Adjust:
 - domain names
