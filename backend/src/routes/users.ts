@@ -176,12 +176,6 @@ usersRouter.patch(
     }
 
     if (req.user?.role === "SPV") {
-      if (existingUser.role === "OWNER") {
-        return res.status(403).json({
-          error: "SPV cannot update OWNER",
-        });
-      }
-
       const nonPasswordUpdates = [email, username, role, name, phone, isActive].some(
         (value) => typeof value !== "undefined"
       );

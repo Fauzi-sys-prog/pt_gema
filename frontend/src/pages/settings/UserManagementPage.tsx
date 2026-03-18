@@ -201,7 +201,7 @@ export default function UserManagementPage() {
         <div>
           <h1 className="text-gray-900">User Management</h1>
           <p className="text-gray-600">
-            {isSpvActor ? 'SPV hanya dapat mereset password user non-owner' : 'Kelola user dan hak akses sistem'}
+            {isSpvActor ? 'SPV dapat mereset password semua user' : 'Kelola user dan hak akses sistem'}
           </p>
         </div>
         {canCreateUser && (
@@ -356,10 +356,11 @@ export default function UserManagementPage() {
                     <div className="flex items-center gap-2">
                       <button
                         onClick={() => handleEdit(user)}
-                        className="p-2 text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                        className="inline-flex items-center gap-2 px-3 py-2 text-blue-600 hover:bg-blue-50 rounded transition-colors"
                         title={isSpvActor ? 'Reset Password' : 'Edit'}
                       >
-                        {isSpvActor ? <KeyRound size={18} /> : <Edit2 size={18} />}
+                        {isSpvActor ? <KeyRound size={16} /> : <Edit2 size={18} />}
+                        {isSpvActor && <span className="text-sm font-medium">Reset Password</span>}
                       </button>
                       {canDeleteUser && (
                         <button
@@ -436,7 +437,7 @@ export default function UserManagementPage() {
                   {editingUser && (
                     <p className="mt-2 text-xs text-gray-500">
                       {isSpvActor
-                        ? 'SPV hanya dapat mereset password user non-owner.'
+                        ? 'SPV dapat mereset password semua user dari halaman ini.'
                         : 'Kosongkan jika tidak ingin mengganti password user.'}
                     </p>
                   )}
