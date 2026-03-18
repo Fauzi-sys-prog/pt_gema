@@ -12,9 +12,25 @@ Alternative:
 
 Built PTGema ERP, an integrated full-stack platform for project, finance, procurement, inventory, HR, and logistics operations.
 
+## GitHub Profile Bio
+
+Full-stack developer focused on ERP systems, backend architecture, and secure business workflows using React, Vite, Express, Prisma, and PostgreSQL.
+
+Alternative:
+
+Building full-stack operational systems with strong backend design, modular architecture, and security-first thinking.
+
+Alternative:
+
+Full-stack engineer focused on business systems, workflow automation, and scalable backend architecture.
+
 ## GitHub Repository Description
 
 Full-stack ERP platform built with React, Vite, Express, Prisma, and PostgreSQL for project, finance, procurement, inventory, HR, and logistics operations.
+
+## Pinned Project Summary
+
+PTGema ERP is a full-stack enterprise resource planning platform built to centralize operational workflows across projects, procurement, inventory, logistics, HR, finance, production, and audit reporting. It uses React, Vite, Express, Prisma, and PostgreSQL, with a backend-first architecture that keeps authentication, authorization, approval flows, and data integrity enforced at the API layer.
 
 ## LinkedIn About
 
@@ -44,6 +60,12 @@ PTGema ERP adalah platform enterprise resource planning full-stack yang dirancan
 ## Non-Technical Recruiter Version
 
 PTGema ERP adalah sistem internal perusahaan yang saya bangun untuk membantu berbagai tim bekerja dalam satu platform, mulai dari proyek, pembelian, stok gudang, logistik, HR, sampai keuangan. Fokus utama saya bukan hanya membuat tampilan aplikasi, tetapi juga memastikan aturan bisnis, hak akses pengguna, dan keamanan data berjalan dengan benar di belakang layar. Hasilnya adalah sistem yang lebih rapi, lebih aman, dan lebih mudah dikembangkan sesuai kebutuhan operasional perusahaan.
+
+## Recruiter Answer: Biggest Contribution
+
+Kontribusi terbesar saya di repo ini adalah membangun dan merapikan arsitektur sistem supaya banyak modul operasional bisa jalan dalam satu platform tanpa kehilangan kontrol terhadap business rules dan keamanan data. Saya menangani integrasi frontend dan backend, menyusun domain-based backend routes, mengelola relational schema lewat Prisma migrations, serta memastikan auth, role access, approval flow, dan validasi payload tetap dipusatkan di backend.
+
+Selain pengembangan fitur, saya juga memperkuat maintainability dan reliability project lewat smoke checks, security-oriented validation scripts, dan dokumentasi yang lebih jelas. Jadi kontribusi saya bukan cuma menambah fitur, tapi membuat sistem yang kompleks ini tetap modular, aman, dan siap dipahami engineer maupun recruiter.
 
 ## Interview Answer: Short Technical
 
