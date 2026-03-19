@@ -142,4 +142,27 @@ CI workflow `Security Fast Gate` is defined in:
 
 - `.github/workflows/security-fast.yml`
 
+## CI/CD
+
+Production deploy workflow is defined in:
+
+- `.github/workflows/deploy-prod.yml`
+
+Required GitHub repository secrets:
+
+- `PROD_HOST`
+- `PROD_PORT`
+- `PROD_USERNAME`
+- `PROD_PASSWORD`
+
+Expected server app path:
+
+- `/root/pt_gema`
+
+Deploy behavior:
+
+- trigger on push to `main`
+- can also be triggered manually from GitHub Actions
+- server runs `git fetch`, `git reset --hard origin/main`, rebuilds `backend/frontend/migrate`, then checks backend health
+
 The badge above points to repository `Fauzi-sys-prog/pt_gema`.
