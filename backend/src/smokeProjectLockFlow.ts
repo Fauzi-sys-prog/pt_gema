@@ -1,24 +1,37 @@
-type RoleKey = "owner" | "sales";
+import { Role } from "@prisma/client";
+import { resolveSmokeCredential, resolveSmokeToken } from "./utils/smokeCredentials";
+
+type RoleKey = "owner" | "sales" | "spv";
 
 type Session = {
   token: string;
 };
 
 const BASE_URL = process.env.SMOKE_BASE_URL || "http://localhost:3000";
-const tokenOverrides: Partial<Record<RoleKey, string>> = {
-  owner: process.env.SMOKE_OWNER_TOKEN,
-  sales: process.env.SMOKE_SALES_TOKEN,
-};
+
+const ownerCredential = resolveSmokeCredential(
+  "SMOKE_OWNER_USERNAME",
+  "SMOKE_OWNER_PASSWORD",
+  [Role.OWNER, Role.ADMIN],
+  { username: "syamsudin", password: "SyamsudinBaru#2026Aman" }
+);
+const salesCredential = resolveSmokeCredential(
+  "SMOKE_SALES_USERNAME",
+  "SMOKE_SALES_PASSWORD",
+  [Role.SALES],
+  { username: "angesti", password: "changeMeAngesti123" }
+);
+const spvCredential = resolveSmokeCredential(
+  "SMOKE_SPV_USERNAME",
+  "SMOKE_SPV_PASSWORD",
+  [Role.SPV],
+  { username: "aji", password: "changeMeAji123" }
+);
 
 const credentials: Record<RoleKey, { username: string; password: string }> = {
-  owner: {
-    username: process.env.SMOKE_OWNER_USERNAME || "owner",
-    password: process.env.SMOKE_OWNER_PASSWORD || "owner",
-  },
-  sales: {
-    username: process.env.SMOKE_SALES_USERNAME || "angesti",
-    password: process.env.SMOKE_SALES_PASSWORD || "changeMeAngesti123",
-  },
+  owner: ownerCredential,
+  sales: salesCredential,
+  spv: spvCredential,
 };
 
 async function api(
@@ -56,9 +69,11 @@ function assertStatus(name: string, actual: number, expected: number) {
 }
 
 async function login(role: RoleKey): Promise<Session> {
-  const overrideToken = tokenOverrides[role];
-  if (typeof overrideToken === "string" && overrideToken.trim()) {
-    return { token: overrideToken.trim() };
+  const overrideEnvKey =
+    role === "owner" ? "SMOKE_OWNER_TOKEN" : role === "sales" ? "SMOKE_SALES_TOKEN" : "SMOKE_SPV_TOKEN";
+  const directToken = await resolveSmokeToken(overrideEnvKey, credentials[role].username);
+  if (directToken) {
+    return { token: directToken };
   }
 
   const cred = credentials[role];
@@ -80,6 +95,7 @@ async function run() {
   console.log(`Smoke base URL: ${BASE_URL}`);
   const owner = await login("owner");
   const sales = await login("sales");
+  const spv = await login("spv");
 
   const ts = Date.now();
   const quotationId = `QUO-LOCK-${ts}`;
@@ -96,6 +112,11 @@ async function run() {
   });
   assertStatus("create quotation", createRes.status, 201);
 
+  const spvApproveQuotationRes = await api("PATCH", `/quotations/${quotationId}`, spv.token, {
+    status: "Review",
+  });
+  assertStatus("spv approve quotation", spvApproveQuotationRes.status, 200);
+
   const ownerApproveQuotationRes = await api("PATCH", `/quotations/${quotationId}`, owner.token, {
     status: "Approved",
   });
@@ -108,6 +129,11 @@ async function run() {
   if (!project?.id) throw new Error("project not found for quotation lock flow");
   const projectId = String(project.id);
   console.log(`Linked project: ${projectId}`);
+
+  const spvApproveProjectRes = await api("PATCH", `/projects/${projectId}/approval`, spv.token, {
+    action: "APPROVE",
+  });
+  assertStatus("spv approve project", spvApproveProjectRes.status, 200);
 
   const approveProjectRes = await api("PATCH", `/projects/${projectId}/approval`, owner.token, {
     action: "APPROVE",

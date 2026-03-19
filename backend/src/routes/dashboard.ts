@@ -1445,6 +1445,12 @@ async function loadDashboardPayloadRows(resource: string): Promise<Array<{ entit
 }
 
 async function findFinanceResourceDoc(resource: string, entityId: string): Promise<{ source: "app" | "dedicated"; payload: Record<string, unknown> } | null> {
+  const appRow = await prisma.appEntity.findUnique({
+    where: { resource_entityId: { resource, entityId } },
+    select: { payload: true },
+  });
+  const appPayload = appRow ? asRecord(appRow.payload) : {};
+
   if (resource === "purchase-orders") {
     const procurementRow = await prisma.procurementPurchaseOrder.findUnique({
       where: { id: entityId },
@@ -1490,16 +1496,15 @@ async function findFinanceResourceDoc(resource: string, entityId: string): Promi
     if (procurementRow) {
       return {
         source: "dedicated",
-        payload: asRecord(mapProcurementPurchaseOrderDashboardPayload(procurementRow)),
+        payload: {
+          ...asRecord(mapProcurementPurchaseOrderDashboardPayload(procurementRow)),
+          ...appPayload,
+        },
       };
     }
   }
 
   if (resource === "invoices") {
-    const appRow = await prisma.appEntity.findUnique({
-      where: { resource_entityId: { resource, entityId } },
-      select: { payload: true },
-    });
     const dedicatedInvoice = await prisma.invoiceRecord.findUnique({
       where: { id: entityId },
       select: invoiceDashboardDetailSelect,
@@ -1509,17 +1514,13 @@ async function findFinanceResourceDoc(resource: string, entityId: string): Promi
         source: "dedicated",
         payload: {
           ...mapInvoiceDashboardPayload(dedicatedInvoice),
-          ...(appRow ? asRecord(appRow.payload) : {}),
+          ...appPayload,
         },
       };
     }
   }
 
   if (resource === "material-requests") {
-    const appRow = await prisma.appEntity.findUnique({
-      where: { resource_entityId: { resource, entityId } },
-      select: { payload: true },
-    });
     const materialRequest = await prisma.productionMaterialRequest.findUnique({
       where: { id: entityId },
       select: {
@@ -1543,7 +1544,6 @@ async function findFinanceResourceDoc(resource: string, entityId: string): Promi
       },
     });
     if (materialRequest) {
-      const appPayload = appRow ? asRecord(appRow.payload) : {};
       const dedicatedPayload = asRecord(mapProductionMaterialRequestDashboardPayload(materialRequest));
       return {
         source: "dedicated",
@@ -1552,19 +1552,21 @@ async function findFinanceResourceDoc(resource: string, entityId: string): Promi
     }
   }
 
-  const appRow = await prisma.appEntity.findUnique({
-    where: { resource_entityId: { resource, entityId } },
-    select: { payload: true },
-  });
   if (appRow) {
-    return { source: "app", payload: asRecord(appRow.payload) };
+    return { source: "app", payload: appPayload };
   }
 
   const delegate = getDashboardDedicatedDelegate(resource);
   if (!delegate) return null;
   const dedicatedRow = await delegate.findUnique({ where: { id: entityId } });
   if (!dedicatedRow) return null;
-  return { source: "dedicated", payload: asRecord(dedicatedRow.payload) };
+  return {
+    source: "dedicated",
+    payload: {
+      ...asRecord(dedicatedRow.payload),
+      ...appPayload,
+    },
+  };
 }
 
 async function updateFinanceResourceDoc(

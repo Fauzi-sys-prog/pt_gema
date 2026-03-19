@@ -28,7 +28,7 @@ services:
     environment:
       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/gemadb
       PORT: 3000
-      JWT_SECRET: supersecretproductionkey_min32_chars_2026_secure
+      JWT_SECRET: 7Kx4mQ9vL2sT8nY5cH1pR6wF3jB0dN4uZ8aE2tM7kP5xC9r
       PRISMA_DEBUG: "0"
     ports:
       - "3000:3000"

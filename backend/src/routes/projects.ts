@@ -367,6 +367,32 @@ function hydrateProjectPayload(row: ProjectReadRow): Record<string, unknown> {
   };
 }
 
+async function loadMergedProjectPayloadById(
+  id: string,
+  directRow?: ProjectReadRow | null
+): Promise<Record<string, unknown> | null> {
+  const [directPayload, legacyRow] = await Promise.all([
+    directRow ? Promise.resolve(hydrateProjectPayload(directRow)) : Promise.resolve(null),
+    prisma.appEntity.findUnique({
+      where: {
+        resource_entityId: {
+          resource: PROJECT_RESOURCE,
+          entityId: id,
+        },
+      },
+      select: { payload: true },
+    }),
+  ]);
+
+  if (!directPayload && !legacyRow) return null;
+
+  const legacyPayload = legacyRow ? ensurePayloadWithId(id, legacyRow.payload) : {};
+  return normalizeProjectPayloadForPersistence({
+    ...legacyPayload,
+    ...(directPayload || {}),
+  });
+}
+
 async function loadFinancialPurchaseOrders(): Promise<Record<string, unknown>[]> {
   const [appRows, procurementRows] = await Promise.all([
     prisma.appEntity.findMany({
@@ -1339,23 +1365,9 @@ projectsRouter.patch(
     });
 
     const now = new Date().toISOString();
-    let payload: Record<string, unknown>;
-    if (!existing) {
-      const legacy = await prisma.appEntity.findUnique({
-        where: {
-          resource_entityId: {
-            resource: PROJECT_RESOURCE,
-            entityId: id,
-          },
-        },
-        select: { payload: true },
-      });
-      if (!legacy) {
-        return sendError(res, 404, { code: "PROJECT_NOT_FOUND", message: "Project not found", legacyError: "Project not found" });
-      }
-      payload = ensurePayloadWithId(id, legacy.payload);
-    } else {
-      payload = hydrateProjectPayload(existing);
+    const payload = await loadMergedProjectPayloadById(id, existing);
+    if (!payload) {
+      return sendError(res, 404, { code: "PROJECT_NOT_FOUND", message: "Project not found", legacyError: "Project not found" });
     }
     const fromStatus = String(payload.approvalStatus || "Pending");
     const fromUpper = normalizeApprovalToken(fromStatus);
@@ -1520,23 +1532,9 @@ projectsRouter.post(
     });
 
     const now = new Date().toISOString();
-    let payload: Record<string, unknown>;
-    if (!existing) {
-      const legacy = await prisma.appEntity.findUnique({
-        where: {
-          resource_entityId: {
-            resource: PROJECT_RESOURCE,
-            entityId: id,
-          },
-        },
-        select: { payload: true },
-      });
-      if (!legacy) {
-        return sendError(res, 404, { code: "PROJECT_NOT_FOUND", message: "Project not found", legacyError: "Project not found" });
-      }
-      payload = ensurePayloadWithId(id, legacy.payload);
-    } else {
-      payload = hydrateProjectPayload(existing);
+    const payload = await loadMergedProjectPayloadById(id, existing);
+    if (!payload) {
+      return sendError(res, 404, { code: "PROJECT_NOT_FOUND", message: "Project not found", legacyError: "Project not found" });
     }
     const currentApproval = String(payload.approvalStatus || "Pending").toUpperCase();
     if (!["APPROVED", "REJECTED"].includes(currentApproval)) {
@@ -1656,23 +1654,9 @@ projectsRouter.post(
     });
 
     const now = new Date().toISOString();
-    let payload: Record<string, unknown>;
-    if (!existing) {
-      const legacy = await prisma.appEntity.findUnique({
-        where: {
-          resource_entityId: {
-            resource: PROJECT_RESOURCE,
-            entityId: id,
-          },
-        },
-        select: { payload: true },
-      });
-      if (!legacy) {
-        return sendError(res, 404, { code: "PROJECT_NOT_FOUND", message: "Project not found", legacyError: "Project not found" });
-      }
-      payload = ensurePayloadWithId(id, legacy.payload);
-    } else {
-      payload = hydrateProjectPayload(existing);
+    const payload = await loadMergedProjectPayloadById(id, existing);
+    if (!payload) {
+      return sendError(res, 404, { code: "PROJECT_NOT_FOUND", message: "Project not found", legacyError: "Project not found" });
     }
     const currentApproval = String(payload.approvalStatus || "Pending").toUpperCase();
     if (currentApproval === "APPROVED") {
@@ -1956,23 +1940,9 @@ projectsRouter.get("/projects/:id/financials", authenticate, async (req: AuthReq
       loadFinancialMaterialRequests(),
     ]);
 
-    let project: Record<string, unknown>;
-    if (!projectRow) {
-      const legacy = await prisma.appEntity.findUnique({
-        where: {
-          resource_entityId: {
-            resource: PROJECT_RESOURCE,
-            entityId: id,
-          },
-        },
-        select: { payload: true },
-      });
-      if (!legacy) {
-        return sendError(res, 404, { code: "PROJECT_NOT_FOUND", message: "Project not found", legacyError: "Project not found" });
-      }
-      project = ensurePayloadWithId(id, legacy.payload);
-    } else {
-      project = hydrateProjectPayload(projectRow);
+    const project = await loadMergedProjectPayloadById(id, projectRow);
+    if (!project) {
+      return sendError(res, 404, { code: "PROJECT_NOT_FOUND", message: "Project not found", legacyError: "Project not found" });
     }
     const contractValue = toNumber(project.nilaiKontrak, 0);
 

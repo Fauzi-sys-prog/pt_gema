@@ -1,3 +1,6 @@
+import { Role } from "@prisma/client";
+import { resolveSmokeCredential, resolveSmokeToken } from "./utils/smokeCredentials";
+
 type ApiResult = {
   status: number;
   json: any;
@@ -5,8 +8,12 @@ type ApiResult = {
 };
 
 const BASE_URL = process.env.SMOKE_BASE_URL || "http://localhost:3000";
-const USERNAME = process.env.SMOKE_OWNER_USERNAME || "owner";
-const PASSWORD = process.env.SMOKE_OWNER_PASSWORD || "owner";
+const { username: USERNAME, password: PASSWORD } = resolveSmokeCredential(
+  "SMOKE_OWNER_USERNAME",
+  "SMOKE_OWNER_PASSWORD",
+  [Role.OWNER, Role.ADMIN],
+  { username: "syamsudin", password: "SyamsudinBaru#2026Aman" }
+);
 const OWNER_TOKEN_OVERRIDE = process.env.SMOKE_OWNER_TOKEN;
 
 async function api(
@@ -48,8 +55,9 @@ async function sleep(ms: number): Promise<void> {
 }
 
 async function login(): Promise<string> {
-  if (typeof OWNER_TOKEN_OVERRIDE === "string" && OWNER_TOKEN_OVERRIDE.trim()) {
-    return OWNER_TOKEN_OVERRIDE.trim();
+  const directToken = await resolveSmokeToken("SMOKE_OWNER_TOKEN", USERNAME);
+  if (directToken) {
+    return directToken;
   }
   for (let attempt = 1; attempt <= 8; attempt += 1) {
     const res = await api("POST", "/auth/login", {
