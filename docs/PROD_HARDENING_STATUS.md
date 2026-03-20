@@ -56,6 +56,19 @@ cd /root/ptgema
 COMPOSE_FILE=docker-compose.prod.yml ./scripts/restore_postgres.sh /root/backups/ptgema-postgres/<backup-file>.sql.gz
 ```
 
+Manual download to the local laptop:
+
+```bash
+cd "/Users/macbook/Downloads/Ptgema-main 2"
+./scripts/download_prod_backup.sh
+```
+
+To pull a specific file:
+
+```bash
+./scripts/download_prod_backup.sh gemadb_backup_<timestamp>.sql.gz
+```
+
 ## Remaining Improvements
 
 - push backups to object storage or a second server

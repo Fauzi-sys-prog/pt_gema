@@ -78,3 +78,16 @@ Keep the existing local backup and retention jobs. Add the upload job after the 
 - R2 upload is a second copy, not a replacement for local backup.
 - If R2 upload fails, the local `.sql.gz` backup still remains on the server.
 - Test restore periodically, not just backup creation.
+
+## Local Laptop Pull Option
+
+If you want an extra manual copy without enabling R2 yet, you can pull the latest backup from the production server to the local machine:
+
+```bash
+cd "/Users/macbook/Downloads/Ptgema-main 2"
+./scripts/download_prod_backup.sh
+```
+
+Reference:
+
+- [scripts/download_prod_backup.sh](/Users/macbook/Downloads/Ptgema-main%202/scripts/download_prod_backup.sh)
