@@ -97,7 +97,7 @@ export default function WarehouseLedgerPage() {
   const filteredItems = useMemo(() => {
     const keyword = String(searchTerm || '').toLowerCase();
     return safeStockItemList.filter(item => {
-      const matchSearch = String(item?.nama || '').toLowerCase().includes(keyword) ||
+      const matchSearch = String(item?.nama || '').toLowerCase().includes(keyword) || 
                           String(item?.kode || '').toLowerCase().includes(keyword);
       const matchCat = selectedCategory === 'All' || String(item?.kategori || '') === selectedCategory;
       const matchLoc = selectedLocation === 'All' || String(item?.lokasi || '') === selectedLocation;

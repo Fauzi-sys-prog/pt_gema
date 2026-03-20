@@ -94,6 +94,18 @@ async function resolveInventoryWorkOrderRef(ref: string | null | undefined) {
   const key = asTrimmedString(ref);
   if (!key) return null;
 
+  const relationalById = await prisma.productionWorkOrder.findUnique({
+    where: { id: key },
+    select: { id: true, projectId: true, number: true },
+  });
+  if (relationalById) return relationalById;
+
+  const relationalByNumber = await prisma.productionWorkOrder.findUnique({
+    where: { number: key },
+    select: { id: true, projectId: true, number: true },
+  });
+  if (relationalByNumber) return relationalByNumber;
+
   const legacyById = await prisma.workOrderRecord.findUnique({
     where: { id: key },
     select: { id: true, projectId: true, payload: true },
@@ -118,30 +130,6 @@ async function resolveInventoryWorkOrderRef(ref: string | null | undefined) {
       id: legacyByNumber.id,
       projectId: legacyByNumber.projectId,
       number: asTrimmedString(asRecord(legacyByNumber.payload).woNumber ?? asRecord(legacyByNumber.payload).number) || key,
-    };
-  }
-
-  const relationalById = await prisma.productionWorkOrder.findUnique({
-    where: { id: key },
-    select: { id: true, projectId: true, number: true },
-  });
-  if (relationalById) {
-    return {
-      id: null,
-      projectId: relationalById.projectId,
-      number: relationalById.number || key,
-    };
-  }
-
-  const relationalByNumber = await prisma.productionWorkOrder.findUnique({
-    where: { number: key },
-    select: { id: true, projectId: true, number: true },
-  });
-  if (relationalByNumber) {
-    return {
-      id: null,
-      projectId: relationalByNumber.projectId,
-      number: relationalByNumber.number || key,
     };
   }
 
@@ -344,7 +332,7 @@ async function assertRefs(resource: InventoryResource, payload: Record<string, u
   }
   if (workOrderRef) {
     const row = await resolveInventoryWorkOrderRef(workOrderRef);
-    if (workOrderRef && !row) throw new Error(`${resource}: workOrder '${workOrderRef}' tidak ditemukan`);
+    if (workOrderId && !row) throw new Error(`${resource}: workOrderId '${workOrderId}' tidak ditemukan`);
     if (projectId && row?.projectId && row.projectId !== projectId) throw new Error(`${resource}: projectId '${projectId}' tidak match dengan projectId WO '${row.projectId}'`);
   }
 }

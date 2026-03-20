@@ -635,7 +635,7 @@ export default function ProjectManagementPage() {
     setShowProjectModal(true);
   };
 
-  const handleSaveProject = () => {
+  const handleSaveProject = async () => {
     const validatedProgress = Math.min(100, Math.max(0, formData.progress || 0));
     const finalFormData = { ...formData, progress: validatedProgress };
 
@@ -644,10 +644,11 @@ export default function ProjectManagementPage() {
         toast.error("Project sudah Approved. Edit field inti dikunci.");
         return;
       }
-      updateProject(selectedProject.id, {
+      const ok = await updateProject(selectedProject.id, {
         ...finalFormData,
         boq: projectFormMaterials,
       });
+      if (!ok) return;
     } else {
       const newProject: Project = {
         id: `prj-${Date.now()}`,
@@ -657,18 +658,19 @@ export default function ProjectManagementPage() {
         quotationId: formData.quotationId || undefined,
         approvalStatus: 'Pending'
       };
-      addProject(newProject);
+      const ok = await addProject(newProject);
+      if (!ok) return;
     }
     setShowProjectModal(false);
   };
 
-  const handleDeleteProject = (projectId: string) => {
+  const handleDeleteProject = async (projectId: string) => {
     if (window.confirm("Are you sure you want to delete this project?")) {
-      deleteProject(projectId);
+      await deleteProject(projectId);
     }
   };
 
-  const handleAddExpense = () => {
+  const handleAddExpense = async () => {
     if (!selectedProject) return;
     const newExpense = {
       id: `EXP-${Date.now()}`,
@@ -677,7 +679,8 @@ export default function ProjectManagementPage() {
     };
     
     const updatedExpenses = [...(selectedProject.workingExpenses || []), newExpense];
-    updateProject(selectedProject.id, { workingExpenses: updatedExpenses });
+    const ok = await updateProject(selectedProject.id, { workingExpenses: updatedExpenses });
+    if (!ok) return;
     setShowAddExpenseModal(false);
     setExpenseFormData({
       date: new Date().toISOString().split('T')[0],
@@ -689,7 +692,7 @@ export default function ProjectManagementPage() {
     toast.success("Biaya berhasil ditambahkan ke ledger project");
   };
 
-  const handleAddWorkOrder = () => {
+  const handleAddWorkOrder = async () => {
     if (!selectedProject) return;
     if (!canGenerateWorkOrder(selectedProject)) {
       toast.error("SPK hanya bisa dibuat jika Project atau Quotation sudah Approved.");
@@ -734,7 +737,8 @@ export default function ProjectManagementPage() {
         createdAt: new Date().toISOString(),
         source: "WORK_ORDER",
       };
-      updateProject(selectedProject.id, { spkList: [...existingSpkList, linkedSpk] } as any);
+      const linked = await updateProject(selectedProject.id, { spkList: [...existingSpkList, linkedSpk] } as any);
+      if (!linked) return;
     }
 
     addWorkOrder(newWO);
@@ -743,7 +747,7 @@ export default function ProjectManagementPage() {
     setWoFormData(createInitialWorkOrderFormData());
   };
 
-  const handleAddBOQItem = () => {
+  const handleAddBOQItem = async () => {
     if (!selectedProject) return;
     if (!guardApprovedProject(selectedProject)) return;
     const isManpower = boqFormData.category === "Manpower";
@@ -766,9 +770,10 @@ export default function ProjectManagementPage() {
     const updatedBOQ = [...(selectedProject.boq || []), newItem];
     // Don't update nilaiKontrak yet, wait for approval
     
-    updateProject(selectedProject.id, { 
+    const ok = await updateProject(selectedProject.id, { 
       boq: updatedBOQ
     });
+    if (!ok) return;
     
     setShowAddBOQItemModal(false);
     setBoqFormData(createInitialVoFormData());
@@ -794,7 +799,7 @@ export default function ProjectManagementPage() {
     setShowEditBoqItemModal(true);
   };
 
-  const handleSaveEditBoqItem = () => {
+  const handleSaveEditBoqItem = async () => {
     if (!selectedProject || !editingBoqRow) return;
     const index = Number(editingBoqRow.sourceIndex ?? -1);
     if (index < 0) return;
@@ -818,13 +823,14 @@ export default function ProjectManagementPage() {
       unitPrice: Number(editingBoqRow.unitPrice || 0),
     } as any;
 
-    updateProject(selectedProject.id, { boq: nextBoq });
+    const ok = await updateProject(selectedProject.id, { boq: nextBoq });
+    if (!ok) return;
     setShowEditBoqItemModal(false);
     setEditingBoqRow(null);
     toast.success("Item manpower BOQ berhasil diperbarui.");
   };
 
-  const handleDeleteBoqItem = (row: any) => {
+  const handleDeleteBoqItem = async (row: any) => {
     if (!selectedProject) return;
     const index = Number(row?.sourceIndex ?? -1);
     if (index < 0) return;
@@ -832,7 +838,8 @@ export default function ProjectManagementPage() {
     if (!confirmed) return;
 
     const nextBoq = (selectedProject.boq || []).filter((_, i) => i !== index);
-    updateProject(selectedProject.id, { boq: nextBoq });
+    const ok = await updateProject(selectedProject.id, { boq: nextBoq });
+    if (!ok) return;
     toast.success("Item manpower BOQ berhasil dihapus.");
   };
 
@@ -938,7 +945,8 @@ export default function ProjectManagementPage() {
         idx >= 0
           ? existing.map((item: any) => (item.id === report.id ? { ...item, ...report } : item))
           : [report, ...existing];
-      updateProject(selectedProject.id, { materialUsageReports: nextReports } as any);
+      const ok = await updateProject(selectedProject.id, { materialUsageReports: nextReports } as any);
+      if (!ok) return;
       setEditingMaterialUsageReport(null);
       setShowMaterialUsageModal(false);
       toast.success(idx >= 0 ? "Laporan material berhasil diperbarui" : "Laporan material berhasil dibuat");

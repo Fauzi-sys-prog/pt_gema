@@ -130,6 +130,15 @@ export default function ApprovalCenterPage() {
   const normalizeStatus = (value: unknown) => String(value || "").trim().toUpperCase();
   const currentRole = String(currentUser?.role || "").trim().toUpperCase();
   const isActualOwner = currentRole === "OWNER";
+  const isSpv = currentRole === "SPV";
+  const isOwner = isOwnerLike(currentRole);
+  const isAdmin = currentRole === "ADMIN";
+  const isManager = currentRole === "MANAGER";
+  const canSendQuotation = isOwner || isAdmin || isManager || currentRole === "SALES";
+  const canVerifyInvoice = isOwner || isAdmin || isManager || currentRole === "FINANCE";
+  const canApproveRejectMr = isActualOwner || isSpv;
+  const canIssueMr = isOwner || isAdmin || currentRole === "SUPPLY_CHAIN" || currentRole === "WAREHOUSE" || currentRole === "PRODUKSI";
+  const canApprovePo = () => isActualOwner || isSpv;
   const getPoAuditLabel = (po: ApprovalPoItem) => {
     if (po.auditStatus) return po.auditStatus;
     const status = normalizeStatus(po.status);
@@ -138,13 +147,6 @@ export default function ApprovalCenterPage() {
     if (status === "PARTIAL") return "Receiving Partial";
     if (status === "RECEIVED") return "Received";
     return status.replace(/_/g, " ");
-  };
-  const getPoAuditTrail = (po: ApprovalPoItem) => {
-    if (po.auditTrail) return po.auditTrail;
-    const status = normalizeStatus(po.status);
-    if (status === "SENT") return "Waiting owner / SPV approval";
-    if (status === "DRAFT") return "PO masih draft dan belum masuk approval";
-    return "PO processed from procurement database";
   };
   const getInvoiceAuditLabel = (inv: ApprovalInvoiceItem) => {
     if (inv.auditStatus) return inv.auditStatus;
@@ -248,39 +250,60 @@ export default function ApprovalCenterPage() {
     };
   }, []);
 
-  // Backend queue sudah menentukan baris yang relevan; frontend tinggal search/filter text.
+  // 1. Filter Pending POs
   const pendingPOs = useMemo(() => {
     return serverPOs.filter(po => 
+      (normalizeStatus(po.status) === 'DRAFT' || normalizeStatus(po.status) === 'SENT') &&
       ((po.noPO || '').toLowerCase().includes(searchTerm.toLowerCase()) || (po.supplier || '').toLowerCase().includes(searchTerm.toLowerCase()))
     );
   }, [serverPOs, searchTerm]);
 
+  // 2. Filter Pending Quotations
   const pendingQuotations = useMemo(() => {
     return serverQuotations.filter(q => 
+      (normalizeStatus(q.status) === 'DRAFT' || normalizeStatus(q.status) === 'SENT' || normalizeStatus(q.status) === 'REVIEW' || normalizeStatus(q.status) === 'REJECTED') &&
       ((q.noPenawaran || '').toLowerCase().includes(searchTerm.toLowerCase()) || (q.kepada || '').toLowerCase().includes(searchTerm.toLowerCase()))
     );
   }, [serverQuotations, searchTerm]);
 
+  // 3. Filter Unpaid Invoices
   const pendingInvoices = useMemo(() => {
     return serverInvoices.filter(inv => 
+      normalizeStatus(inv.status) === 'UNPAID' &&
       ((inv.noInvoice || '').toLowerCase().includes(searchTerm.toLowerCase()) || (inv.customer || '').toLowerCase().includes(searchTerm.toLowerCase()))
     );
   }, [serverInvoices, searchTerm]);
 
+  // 4. Filter Material Requests (Warehouse Ops)
   const pendingRequests = useMemo(() => {
     return serverMaterialRequests.filter(mr => 
+      (normalizeStatus(mr.status) === 'PENDING' || normalizeStatus(mr.status) === 'APPROVED') &&
       ((mr.noRequest || '').toLowerCase().includes(searchTerm.toLowerCase()) || (mr.projectName || '').toLowerCase().includes(searchTerm.toLowerCase()))
     );
   }, [serverMaterialRequests, searchTerm]);
 
+  const isPendingQuotationStatus = (status: string) =>
+    status === "DRAFT" || status === "SENT" || status === "REVIEW" || status === "REJECTED";
+  const isPendingMaterialRequestStatus = (status: string) =>
+    status === "PENDING" || status === "APPROVED";
   const canApproveQuotationItem = (q: ApprovalQuotationItem) => {
-    return Array.isArray(q.availableActions) && q.availableActions.includes("APPROVE");
+    if (Array.isArray(q.availableActions)) return q.availableActions.includes("APPROVE");
+    const status = normalizeStatus(q.status);
+    if (status === "SENT") return isSpv;
+    if (status === "REVIEW") return isActualOwner;
+    return false;
   };
   const canRejectQuotationItem = (q: ApprovalQuotationItem) => {
-    return Array.isArray(q.availableActions) && q.availableActions.includes("REJECT");
+    if (Array.isArray(q.availableActions)) return q.availableActions.includes("REJECT");
+    const status = normalizeStatus(q.status);
+    if (status === "SENT") return isSpv || isActualOwner;
+    if (status === "REVIEW") return isActualOwner;
+    return false;
   };
   const canReviewQuotationItem = (q: ApprovalQuotationItem) => {
-    return Array.isArray(q.availableActions) && q.availableActions.includes("REVIEW");
+    if (Array.isArray(q.availableActions)) return q.availableActions.includes("REVIEW");
+    const status = normalizeStatus(q.status);
+    return status === "SENT" || status === "REVIEW";
   };
   const getQuotationAuditLabel = (q: ApprovalQuotationItem) => {
     if (q.auditStatus) return q.auditStatus;
@@ -313,7 +336,9 @@ export default function ApprovalCenterPage() {
     return "Draft quotation";
   };
   const canResendRejectedQuotation = (q: ApprovalQuotationItem) =>
-    Array.isArray(q.availableActions) && q.availableActions.includes("SEND") && normalizeStatus(q.status) === "REJECTED";
+    Array.isArray(q.availableActions)
+      ? q.availableActions.includes("SEND") && normalizeStatus(q.status) === "REJECTED"
+      : normalizeStatus(q.status) === "REJECTED" && canSendQuotation;
 
   const executeApprovalAction = async (
     documentType: "PO" | "INVOICE" | "MATERIAL_REQUEST" | "QUOTATION",
@@ -622,22 +647,13 @@ export default function ApprovalCenterPage() {
                           {po.total > 10000000 && <div className="text-[8px] font-black text-amber-600 uppercase mt-1 italic tracking-widest">High Value Threshold</div>}
                        </td>
                        <td className="px-10 py-8 text-center">
-                          <div className="flex flex-col items-center gap-2">
-                            <span className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase italic border ${
-                              normalizeStatus(po.status) === 'DRAFT'
-                                ? 'bg-slate-100 text-slate-700 border-slate-200'
-                                : normalizeStatus(po.status) === 'REJECTED'
-                                  ? 'bg-rose-50 text-rose-700 border-rose-100'
-                                  : normalizeStatus(po.status) === 'APPROVED'
-                                    ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
-                                    : 'bg-indigo-50 text-indigo-600 border-indigo-100'
-                            }`}>
-                               {getPoAuditLabel(po)}
-                            </span>
-                            <span className="max-w-[220px] text-[9px] font-bold uppercase tracking-wider text-slate-400 leading-relaxed">
-                              {getPoAuditTrail(po)}
-                            </span>
-                          </div>
+                          <span className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase italic border ${
+                            normalizeStatus(po.status) === 'DRAFT'
+                              ? 'bg-slate-100 text-slate-700 border-slate-200'
+                              : 'bg-indigo-50 text-indigo-600 border-indigo-100'
+                          }`}>
+                             {getPoAuditLabel(po)}
+                          </span>
                        </td>
                        <td className="px-10 py-8">
                           <div className="flex items-center justify-center gap-2">

@@ -44,10 +44,10 @@ export const SKURegistrationModal: React.FC<SKURegistrationModalProps> = ({ isOp
       prj.boq?.forEach((item: any) => {
         const name = item.materialName || item.nama;
         const kode = item.itemKode || item.kode;
-
+        
         // Check if this item is already in inventory
-        const alreadyExists = safeStockItems.some(s =>
-          (kode && s?.kode === kode) ||
+        const alreadyExists = safeStockItems.some(s => 
+          (kode && s?.kode === kode) || 
           (String(s?.nama || '').toLowerCase().trim() === String(name || '').toLowerCase().trim())
         );
 

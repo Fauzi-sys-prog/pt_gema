@@ -26,9 +26,6 @@ export default function LogisticsCommandCenter() {
     deliveryStatus: 'Pending'
   });
 
-  const normalizeDeliveryStatus = (status?: SuratJalan['deliveryStatus']) =>
-    status === 'On Delivery' ? 'In Transit' : (status || 'Pending');
-
   useEffect(() => {
     let mounted = true;
     const normalizeEntityRows = <T,>(rows: unknown): T[] => {
@@ -101,7 +98,7 @@ export default function LogisticsCommandCenter() {
     const matchesSearch =
       String(sj.noSurat || '').toLowerCase().includes(keyword) ||
       String(sj.tujuan || '').toLowerCase().includes(keyword);
-    const matchesStatus = statusFilter === 'all' || normalizeDeliveryStatus(sj.deliveryStatus) === statusFilter;
+    const matchesStatus = statusFilter === 'all' || sj.deliveryStatus === statusFilter;
     return matchesSearch && matchesStatus && sj.sjType !== 'Equipment Loan';
   });
 
@@ -109,8 +106,8 @@ export default function LogisticsCommandCenter() {
   const maintenanceCount = effectiveAssetList.filter(a => a.status === 'Under Maintenance').length;
 
   const stats = {
-    inTransit: effectiveSuratJalanList.filter(s => normalizeDeliveryStatus(s.deliveryStatus) === 'In Transit').length,
-    deliveredToday: effectiveSuratJalanList.filter(s => normalizeDeliveryStatus(s.deliveryStatus) === 'Delivered').length,
+    inTransit: effectiveSuratJalanList.filter(s => s.deliveryStatus === 'In Transit').length,
+    deliveredToday: effectiveSuratJalanList.filter(s => s.deliveryStatus === 'Delivered').length,
     activeFleet: activeDeployments,
     maintenance: maintenanceCount,
   };
@@ -428,16 +425,16 @@ export default function LogisticsCommandCenter() {
                          </td>
                          <td className="px-8 py-6 text-center">
                             <span className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase italic border-2 transition-all ${
-                               normalizeDeliveryStatus(sj.deliveryStatus) === 'Delivered' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 
-                               normalizeDeliveryStatus(sj.deliveryStatus) === 'In Transit' ? 'bg-blue-50 text-blue-600 border-blue-100 animate-pulse' : 
+                               sj.deliveryStatus === 'Delivered' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 
+                               sj.deliveryStatus === 'In Transit' ? 'bg-blue-50 text-blue-600 border-blue-100 animate-pulse' : 
                                'bg-slate-50 text-slate-400 border-slate-100'
                             }`}>
-                               {normalizeDeliveryStatus(sj.deliveryStatus)}
+                               {sj.deliveryStatus || 'Pending'}
                             </span>
                          </td>
                          <td className="px-8 py-6 text-right">
                             <div className="flex items-center justify-end gap-2">
-                               {normalizeDeliveryStatus(sj.deliveryStatus) !== 'In Transit' && normalizeDeliveryStatus(sj.deliveryStatus) !== 'Delivered' && (
+                               {sj.deliveryStatus !== 'In Transit' && sj.deliveryStatus !== 'Delivered' && (
                                  <button
                                    onClick={() => handleUpdateShipmentStatus(sj, 'In Transit')}
                                    className="px-3 py-2 bg-blue-50 border border-blue-100 text-blue-600 rounded-xl hover:bg-blue-600 hover:text-white transition-all text-[9px] font-black uppercase tracking-widest"
@@ -445,7 +442,7 @@ export default function LogisticsCommandCenter() {
                                    Dispatch
                                  </button>
                                )}
-                               {normalizeDeliveryStatus(sj.deliveryStatus) === 'In Transit' && (
+                               {sj.deliveryStatus === 'In Transit' && (
                                  <button
                                    onClick={() => handleUpdateShipmentStatus(sj, 'Delivered')}
                                    className="px-3 py-2 bg-emerald-50 border border-emerald-100 text-emerald-600 rounded-xl hover:bg-emerald-600 hover:text-white transition-all text-[9px] font-black uppercase tracking-widest"

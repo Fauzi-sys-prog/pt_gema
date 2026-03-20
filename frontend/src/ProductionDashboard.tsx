@@ -43,6 +43,7 @@ export default function ProductionDashboard() {
   const [serverStockItems, setServerStockItems] = useState<StockItem[]>([]);
   const [serverAssets, setServerAssets] = useState<any[]>([]);
   const [serverProjects, setServerProjects] = useState<Project[]>([]);
+  const creatingWORef = useRef(false);
   const dataLoadInFlightRef = useRef(false);
   const summaryLoadInFlightRef = useRef(false);
   const PRODUCTION_POLL_INTERVAL_MS = 15000;
@@ -342,7 +343,7 @@ export default function ProductionDashboard() {
 
   const handleCreateWO = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (isCreatingWO) return;
+    if (creatingWORef.current || isCreatingWO) return;
     if (!formData.itemToProduce || !formData.leadTechnician) {
       toast.error("Harap isi semua field yang wajib.");
       return;
@@ -369,6 +370,7 @@ export default function ProductionDashboard() {
     };
 
     try {
+      creatingWORef.current = true;
       setIsCreatingWO(true);
       await addWorkOrder(newWO);
       await loadData(true);
@@ -379,6 +381,7 @@ export default function ProductionDashboard() {
     } catch {
       // toast handled in context
     } finally {
+      creatingWORef.current = false;
       setIsCreatingWO(false);
     }
   };

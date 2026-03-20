@@ -536,8 +536,8 @@ export default function StockOutPage() {
                           <div className="flex gap-1">
                             {item.kode && (
                               <span className={`text-[8px] px-1.5 py-0.5 rounded-full ${
-                                (stockItemList.find(s => String(s.kode || '').toLowerCase() === String(item.kode || '').toLowerCase())?.stok || 0) > 0
-                                  ? 'bg-emerald-50 text-emerald-600'
+                                (stockItemList.find(s => String(s.kode || '').toLowerCase() === String(item.kode || '').toLowerCase())?.stok || 0) > 0 
+                                  ? 'bg-emerald-50 text-emerald-600' 
                                   : 'bg-rose-50 text-rose-600'
                               }`}>
                                 Stok: {stockItemList.find(s => String(s.kode || '').toLowerCase() === String(item.kode || '').toLowerCase())?.stok || 0}

@@ -306,8 +306,15 @@ export default function QuotationPage() {
 
     if (current === "Approved") return ["Approved"];
     if (current === "Rejected") return isOwner ? ["Rejected", "Draft"] : ["Rejected"];
-    if (current === "Review") return ["Review"];
-    if (current === "Sent") return ["Sent", "Draft"];
+    if (current === "Review") {
+      return isOwner ? ["Review", "Approved", "Rejected", "Draft"] : ["Review"];
+    }
+
+    if (current === "Sent") {
+      if (isSpv) return ["Sent", "Draft", "Review", "Rejected"];
+      if (isOwner) return ["Sent", "Draft", "Rejected"];
+      return ["Sent", "Draft"];
+    }
 
     // Draft
     return ["Draft", "Sent"];
@@ -499,7 +506,7 @@ export default function QuotationPage() {
     }
     const allowed = getAllowedStatuses(quotation);
     if (!allowed.includes(newStatus)) {
-      toast.error(`Perubahan ke ${newStatus} harus lewat workflow approval yang sesuai.`);
+      toast.error(`Status ${quotation?.status || "Draft"} tidak bisa diubah ke ${newStatus}`);
       return;
     }
     const now = new Date().toISOString();
@@ -1336,18 +1343,14 @@ export default function QuotationPage() {
                         <Download className="w-4 h-4" />
                       </button>
                       <button
-                        onClick={async () => {
+                        onClick={() => {
                           if (isQuotationLockedByApprovedProject(quotation.id)) {
                             toast.error("Quotation terkunci karena sudah dipakai project Approved.");
                             return;
                           }
                           if (window.confirm('Delete quotation?')) {
-                            try {
-                              await deleteQuotation(quotation.id);
-                              toast.success('Quotation berhasil dihapus');
-                            } catch {
-                              // Error toast handled in AppContext
-                            }
+                            deleteQuotation(quotation.id);
+                            toast.success('Quotation berhasil dihapus');
                           }
                         }}
                         disabled={isQuotationLockedByApprovedProject(quotation.id)}
