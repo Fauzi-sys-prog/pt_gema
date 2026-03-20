@@ -58,3 +58,19 @@ These values must never be reused from dev or seed setup:
 - seed user passwords
 - local JWT secrets
 - localhost CORS values
+
+## Optional Off-Server Backup Values
+
+If you enable Cloudflare R2 backup uploads, prepare these values in a separate server-only env file:
+
+- `R2_ACCOUNT_ID`
+- `R2_BUCKET_NAME`
+- `R2_ACCESS_KEY_ID`
+- `R2_SECRET_ACCESS_KEY`
+- `R2_REGION=auto`
+- `R2_PREFIX=postgres`
+
+Reference files:
+
+- [deploy/backup/r2.env.example](/Users/macbook/Downloads/Ptgema-main%202/deploy/backup/r2.env.example)
+- [docs/R2_BACKUP_SETUP.md](/Users/macbook/Downloads/Ptgema-main%202/docs/R2_BACKUP_SETUP.md)
