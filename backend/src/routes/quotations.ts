@@ -21,6 +21,15 @@ const QUOTATION_WRITE_ROLES: Role[] = [
   "SALES",
 ];
 
+const QUOTATION_READ_ROLES: Role[] = [
+  ...QUOTATION_WRITE_ROLES,
+  "FINANCE",
+];
+
+function canReadQuotation(role?: Role): boolean {
+  return hasRoleAccess(role, QUOTATION_READ_ROLES);
+}
+
 function canWriteQuotation(role?: Role): boolean {
   return hasRoleAccess(role, QUOTATION_WRITE_ROLES);
 }
@@ -352,7 +361,6 @@ async function generateFinalNoPenawaran(excludeId: string, tanggal: string | nul
 
 function validateStatusTransition(prev: WorkflowStatus, next: WorkflowStatus, role?: Role): string | null {
   const isOwner = isOwnerLike(role);
-  const isSpv = role === "SPV";
   if (prev === next) return null;
   if (prev === "Approved") return "Quotation Approved tidak bisa diubah lagi";
   if (prev === "Draft") {
@@ -361,26 +369,22 @@ function validateStatusTransition(prev: WorkflowStatus, next: WorkflowStatus, ro
   }
   if (prev === "Sent") {
     if (next === "Draft") return null;
-    if (next === "Review" && isSpv) return null;
-    if (next === "Rejected") return null;
-    if (next === "Approved") {
-      return "Quotation harus melewati approval SPV dulu sebelum final approve OWNER";
-    }
-    if (next === "Review") {
-      return "Hanya SPV yang bisa menaikkan quotation dari Sent ke Review";
+    if ((next === "Review" || next === "Approved" || next === "Rejected") && isOwner) return null;
+    if (next === "Review" || next === "Approved" || next === "Rejected") {
+      return "Hanya OWNER/SPV yang bisa memproses quotation dari status Sent";
     }
     return "Transisi status tidak valid dari Sent";
   }
   if (prev === "Review") {
     if (isOwner && (next === "Approved" || next === "Rejected" || next === "Draft")) return null;
     if (next === "Approved" || next === "Rejected") {
-      return "Hanya OWNER yang bisa final approve/reject quotation dari Review";
+      return "Hanya OWNER/SPV yang bisa final approve/reject quotation dari Review";
     }
     return "Transisi status tidak valid dari Review";
   }
   if (prev === "Rejected") {
     if (isOwner && next === "Draft") return null;
-    return "Quotation Rejected hanya bisa dibuka ulang ke Draft oleh OWNER";
+    return "Quotation Rejected hanya bisa dibuka ulang ke Draft oleh OWNER/SPV";
   }
   return "Transisi status tidak valid";
 }
@@ -670,6 +674,14 @@ async function upsertProjectFromQuotation(payload: QuotationPayload): Promise<vo
 }
 
 quotationsRouter.get("/quotations", authenticate, async (_req: AuthRequest, res: Response) => {
+  if (!canReadQuotation(_req.user?.role)) {
+    return sendError(res, 403, {
+      code: "FORBIDDEN",
+      message: "Forbidden",
+      legacyError: "Forbidden",
+    });
+  }
+
   try {
     const [rows, legacyRows] = await Promise.all([
       prisma.quotation.findMany({
@@ -724,6 +736,14 @@ quotationsRouter.get("/quotations", authenticate, async (_req: AuthRequest, res:
 });
 
 quotationsRouter.get("/quotations/sample", authenticate, async (_req: AuthRequest, res: Response) => {
+  if (!canReadQuotation(_req.user?.role)) {
+    return sendError(res, 403, {
+      code: "FORBIDDEN",
+      message: "Forbidden",
+      legacyError: "Forbidden",
+    });
+  }
+
   try {
     const latestQuotation = await prisma.quotation.findFirst({
       orderBy: { updatedAt: "desc" },
@@ -857,6 +877,14 @@ quotationsRouter.get("/quotations/sample", authenticate, async (_req: AuthReques
 });
 
 quotationsRouter.get("/quotations/:id", authenticate, async (req: AuthRequest, res: Response) => {
+  if (!canReadQuotation(req.user?.role)) {
+    return sendError(res, 403, {
+      code: "FORBIDDEN",
+      message: "Forbidden",
+      legacyError: "Forbidden",
+    });
+  }
+
   const { id } = req.params;
   try {
     const row = await prisma.quotation.findUnique({
@@ -1086,7 +1114,7 @@ quotationsRouter.post("/quotations", authenticate, async (req: AuthRequest, res:
     return sendError(res, 403, { code: "STATUS_TRANSITION_INVALID", message: createTransitionError, legacyError: createTransitionError });
   }
   if ((nextStatus === "Approved" || nextStatus === "Rejected") && !isOwnerLike(req.user?.role)) {
-    return sendError(res, 403, { code: "OWNER_ONLY", message: "Hanya OWNER yang bisa final approve/reject quotation", legacyError: "Hanya OWNER yang bisa final approve/reject quotation" });
+    return sendError(res, 403, { code: "OWNER_ONLY", message: "Hanya OWNER/SPV yang bisa final approve/reject quotation", legacyError: "Hanya OWNER/SPV yang bisa final approve/reject quotation" });
   }
   if (nextStatus === "Sent" && !item.sentAt) {
     item.sentAt = new Date().toISOString();
@@ -1108,6 +1136,10 @@ quotationsRouter.post("/quotations", authenticate, async (req: AuthRequest, res:
   }
   if (nextStatus === "Approved") {
     if (!readString(item, "sentAt")) item.sentAt = new Date().toISOString();
+    if (req.user?.role === "SPV" && !readString(item, "spvApprovedAt")) item.spvApprovedAt = new Date().toISOString();
+    if (req.user?.role === "SPV" && !readString(item, "spvApprovedBy")) item.spvApprovedBy = actor.actorName;
+    if (req.user?.role === "SPV" && !readString(item, "spvApprovedByUserId")) item.spvApprovedByUserId = actor.actorUserId;
+    if (req.user?.role === "SPV" && !readString(item, "spvApprovedByRole")) item.spvApprovedByRole = actor.actorRole;
     item.approvedAt = new Date().toISOString();
     item.approvedBy = actor.actorName;
     item.approvedByUserId = actor.actorUserId;
@@ -1337,6 +1369,10 @@ quotationsRouter.patch("/quotations/:id", authenticate, async (req: AuthRequest,
     }
     if (nextStatus === "Approved" && previousStatus !== "Approved") {
       if (!readString(normalizedMerged, "sentAt")) normalizedMerged.sentAt = new Date().toISOString();
+      if (req.user?.role === "SPV" && !readString(normalizedMerged, "spvApprovedAt")) normalizedMerged.spvApprovedAt = new Date().toISOString();
+      if (req.user?.role === "SPV" && !readString(normalizedMerged, "spvApprovedBy")) normalizedMerged.spvApprovedBy = actor.actorName;
+      if (req.user?.role === "SPV" && !readString(normalizedMerged, "spvApprovedByUserId")) normalizedMerged.spvApprovedByUserId = actor.actorUserId;
+      if (req.user?.role === "SPV" && !readString(normalizedMerged, "spvApprovedByRole")) normalizedMerged.spvApprovedByRole = actor.actorRole;
       normalizedMerged.approvedAt = new Date().toISOString();
       normalizedMerged.approvedBy = actor.actorName;
       normalizedMerged.approvedByUserId = actor.actorUserId;

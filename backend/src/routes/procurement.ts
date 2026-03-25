@@ -36,6 +36,10 @@ function canWrite(role?: Role | null): boolean {
   return hasRoleAccess(role, PROCUREMENT_WRITE_ROLES);
 }
 
+function canRead(role?: Role | null): boolean {
+  return hasRoleAccess(role, PROCUREMENT_WRITE_ROLES);
+}
+
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, unknown>)
@@ -741,7 +745,10 @@ async function deleteResource(resource: ProcurementResource, id: string) {
 }
 
 function registerRoutes(resource: ProcurementResource, basePath: string) {
-  procurementRouter.get(basePath, authenticate, async (_req: AuthRequest, res: Response) => {
+  procurementRouter.get(basePath, authenticate, async (req: AuthRequest, res: Response) => {
+    if (!canRead(req.user?.role)) {
+      return sendError(res, 403, { code: "FORBIDDEN", message: "Forbidden", legacyError: "Forbidden" });
+    }
     try {
       return res.json(await listResource(resource));
     } catch {

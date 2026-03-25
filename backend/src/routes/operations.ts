@@ -68,6 +68,10 @@ function canWrite(role?: Role): boolean {
   return !!role && OPERATION_WRITE_ROLES.includes(role);
 }
 
+function canRead(role?: Role): boolean {
+  return !!role && OPERATION_WRITE_ROLES.includes(role);
+}
+
 function asObject(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, unknown>)
@@ -993,7 +997,10 @@ operationsRouter.post("/production/submit-lhp", authenticate, async (req: AuthRe
 });
 
 function registerResourceRoutes(basePath: string, resource: string) {
-  operationsRouter.get(basePath, authenticate, async (_req: AuthRequest, res: Response) => {
+  operationsRouter.get(basePath, authenticate, async (req: AuthRequest, res: Response) => {
+    if (!canRead(req.user?.role)) {
+      return sendError(res, 403, { code: "FORBIDDEN", message: "Forbidden", legacyError: "Forbidden" });
+    }
     try {
       const delegate = getOperationsDelegate(resource);
       if (!delegate) {

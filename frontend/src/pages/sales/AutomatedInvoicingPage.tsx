@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { useApp } from '../../contexts/AppContext';
-import type { SuratJalan, Invoice, Project } from '../../contexts/AppContext';
+import type { SuratJalan, Invoice, Project, BeritaAcara } from '../../contexts/AppContext';
 import { 
   FileCheck, 
   Truck, 
@@ -26,7 +26,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import api from '../../services/api';
 
 export default function AutomatedInvoicingPage() {
-  const { suratJalanList, projectList, invoiceList, addInvoice } = useApp();
+  const { suratJalanList, projectList, invoiceList, beritaAcaraList, addInvoice } = useApp();
   const [selectedSJ, setSelectedSJ] = useState<SuratJalan[]>([]);
   const [showConfig, setShowConfig] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -36,24 +36,29 @@ export default function AutomatedInvoicingPage() {
   const [serverSuratJalanList, setServerSuratJalanList] = useState<SuratJalan[] | null>(null);
   const [serverProjectList, setServerProjectList] = useState<Project[] | null>(null);
   const [serverInvoiceList, setServerInvoiceList] = useState<Invoice[] | null>(null);
+  const [serverBeritaAcaraList, setServerBeritaAcaraList] = useState<BeritaAcara[] | null>(null);
   const effectiveSuratJalanList = serverSuratJalanList ?? suratJalanList;
   const effectiveProjectList = serverProjectList ?? projectList;
   const effectiveInvoiceList = serverInvoiceList ?? invoiceList;
+  const effectiveBeritaAcaraList = serverBeritaAcaraList ?? beritaAcaraList;
   const safeSuratJalanList = useMemo(() => (effectiveSuratJalanList || []).filter(Boolean), [effectiveSuratJalanList]);
   const safeProjectList = useMemo(() => (effectiveProjectList || []).filter(Boolean), [effectiveProjectList]);
   const safeInvoiceList = useMemo(() => (effectiveInvoiceList || []).filter(Boolean), [effectiveInvoiceList]);
+  const safeBeritaAcaraList = useMemo(() => (effectiveBeritaAcaraList || []).filter(Boolean), [effectiveBeritaAcaraList]);
 
   const fetchInvoicingSources = async () => {
     try {
       setIsRefreshing(true);
-      const [sjRes, projectRes, invoiceRes] = await Promise.all([
+      const [sjRes, projectRes, invoiceRes, baRes] = await Promise.all([
         api.get('/surat-jalan'),
         api.get('/projects'),
         api.get('/invoices'),
+        api.get('/berita-acara'),
       ]);
       const suratJalan = Array.isArray(sjRes.data) ? (sjRes.data as SuratJalan[]) : [];
       const projects = Array.isArray(projectRes.data) ? (projectRes.data as Project[]) : [];
       const invoiceRows = Array.isArray(invoiceRes.data) ? invoiceRes.data : [];
+      const beritaAcara = Array.isArray(baRes.data) ? (baRes.data as BeritaAcara[]) : [];
       const invoices = invoiceRows.map((row: any) => {
         const payload = row?.payload ?? {};
         if (payload && typeof payload === 'object' && !Array.isArray(payload) && !payload.id) {
@@ -64,10 +69,12 @@ export default function AutomatedInvoicingPage() {
       setServerSuratJalanList(suratJalan);
       setServerProjectList(projects);
       setServerInvoiceList(invoices);
+      setServerBeritaAcaraList(beritaAcara);
     } catch {
       setServerSuratJalanList(null);
       setServerProjectList(null);
       setServerInvoiceList(null);
+      setServerBeritaAcaraList(null);
     } finally {
       setIsRefreshing(false);
     }
@@ -76,6 +83,36 @@ export default function AutomatedInvoicingPage() {
   useEffect(() => {
     fetchInvoicingSources();
   }, []);
+
+  const normalizeBeritaAcaraStatus = (value?: string) =>
+    String(value || '').trim().toUpperCase().replace(/[\s-]+/g, '_');
+
+  const invoiceReadyBeritaAcaraList = useMemo(
+    () =>
+      safeBeritaAcaraList.filter((ba) => {
+        const status = normalizeBeritaAcaraStatus(ba.status);
+        return status === 'FINAL' || status === 'DISETUJUI' || status === 'APPROVED';
+      }),
+    [safeBeritaAcaraList]
+  );
+
+  const invoiceReadySuratJalanRefs = useMemo(() => {
+    const refs = new Set<string>();
+    invoiceReadyBeritaAcaraList.forEach((ba) => {
+      const ref = String(ba.refSuratJalan || '').trim();
+      if (ref) refs.add(ref);
+    });
+    return refs;
+  }, [invoiceReadyBeritaAcaraList]);
+
+  const invoiceReadyProjectIds = useMemo(() => {
+    const ids = new Set<string>();
+    invoiceReadyBeritaAcaraList.forEach((ba) => {
+      const id = String(ba.projectId || '').trim();
+      if (id) ids.add(id);
+    });
+    return ids;
+  }, [invoiceReadyBeritaAcaraList]);
 
   const extractSourceRefFromDescription = (description?: string): string | null => {
     if (!description) return null;
@@ -96,6 +133,19 @@ export default function AutomatedInvoicingPage() {
     });
     return refs;
   }, [safeInvoiceList]);
+
+  const hasInvoiceReadyBeritaAcara = useCallback((sj: SuratJalan) => {
+    const suratJalanId = String(sj.id || '').trim();
+    const suratJalanNo = String(sj.noSurat || '').trim();
+    const projectId = String(sj.projectId || '').trim();
+    if ((suratJalanId && invoiceReadySuratJalanRefs.has(suratJalanId)) || (suratJalanNo && invoiceReadySuratJalanRefs.has(suratJalanNo))) {
+      return true;
+    }
+    if (projectId && invoiceReadyProjectIds.has(projectId)) {
+      return true;
+    }
+    return false;
+  }, [invoiceReadyProjectIds, invoiceReadySuratJalanRefs]);
 
   const resolveItemUnitPrice = useCallback((sj: SuratJalan, item: SuratJalan["items"][number]) => {
     const normalizedName = String(item.namaItem || "").trim().toLowerCase();
@@ -149,12 +199,20 @@ export default function AutomatedInvoicingPage() {
     return subtotal + ppn;
   }, [resolveItemUnitPrice]);
 
-  // Filter delivered SJ that don't have an invoice yet (stable linkage via sourceRef)
-  const deliveredSJ = useMemo(() => {
+  const deliveredWithoutInvoiceSJ = useMemo(() => {
     return safeSuratJalanList.filter((sj) =>
       sj.deliveryStatus === 'Delivered' && !invoicedSourceRefs.has(sj.noSurat)
     );
   }, [safeSuratJalanList, invoicedSourceRefs]);
+
+  // Filter delivered SJ that already have BAST/BA final approval before invoicing.
+  const deliveredSJ = useMemo(() => {
+    return deliveredWithoutInvoiceSJ.filter((sj) => hasInvoiceReadyBeritaAcara(sj));
+  }, [deliveredWithoutInvoiceSJ, hasInvoiceReadyBeritaAcara]);
+
+  const blockedDeliveredSJCount = useMemo(() => {
+    return deliveredWithoutInvoiceSJ.filter((sj) => !hasInvoiceReadyBeritaAcara(sj)).length;
+  }, [deliveredWithoutInvoiceSJ, hasInvoiceReadyBeritaAcara]);
 
   const filteredDeliveredSJ = useMemo(() => {
     const keyword = searchTerm.trim().toLowerCase();
@@ -350,6 +408,17 @@ export default function AutomatedInvoicingPage() {
                   </div>
                 </div>
               </div>
+              <div className="flex items-center justify-between p-4 bg-amber-50 rounded-3xl border border-amber-100">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-amber-500 rounded-2xl flex items-center justify-center text-white shadow-lg">
+                    <AlertCircle size={20} />
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-black text-amber-700 uppercase leading-none mb-1">Waiting BAST</p>
+                    <p className="text-xl font-black text-amber-900 italic leading-none">{blockedDeliveredSJCount}</p>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -442,7 +511,9 @@ export default function AutomatedInvoicingPage() {
                             <FileCheck size={40} />
                           </div>
                           <p className="text-slate-400 font-bold uppercase text-xs italic">
-                            {deliveredSJ.length === 0
+                            {blockedDeliveredSJCount > 0 && deliveredSJ.length === 0
+                              ? `Ada ${blockedDeliveredSJCount} e-POD delivered, tapi belum punya BA/BAST Final atau Disetujui.`
+                              : deliveredSJ.length === 0
                               ? 'Semua e-POD yang terverifikasi sudah diterbitkan invoicenya.'
                               : 'Tidak ada data yang cocok dengan filter.'}
                           </p>

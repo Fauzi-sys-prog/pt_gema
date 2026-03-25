@@ -73,10 +73,6 @@ const notifyAuthStateChanged = () => {
 
 const readPersistedUser = (): User | null => {
   try {
-    if (!safeGetStorageItem("token")) {
-      safeRemoveStorageItem("user");
-      return null;
-    }
     const raw = safeGetStorageItem("user");
     if (!raw) return null;
     return normalizeUser(JSON.parse(raw));
@@ -117,14 +113,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Auto-check token -> fetch /auth/me
   useEffect(() => {
-    const token = safeGetStorageItem("token");
-
-    if (!token) {
-      clearAuthState();
-      if (isMountedRef.current) {
-        setLoading(false);
-      }
-      return;
+    const persistedUser = readPersistedUser();
+    if (persistedUser && isMountedRef.current) {
+      setCurrentUser(persistedUser);
     }
 
     const requestVersion = ++authRequestVersionRef.current;
@@ -151,10 +142,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     const handleStorage = (event: StorageEvent) => {
-      if (event.key !== "token" && event.key !== "user") return;
+      if (event.key !== "user") return;
 
-      const nextToken = safeGetStorageItem("token");
-      if (!nextToken) {
+      const persistedUser = readPersistedUser();
+      if (!persistedUser) {
         clearAuthState();
         if (isMountedRef.current) {
           setLoading(false);
@@ -162,13 +153,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return;
       }
 
-      const persistedUser = readPersistedUser();
-      if (persistedUser) {
-        if (isMountedRef.current) {
-          setCurrentUser(persistedUser);
-          setLoading(false);
-        }
-        return;
+      if (isMountedRef.current) {
+        setCurrentUser(persistedUser);
       }
 
       const requestVersion = ++authRequestVersionRef.current;
@@ -207,9 +193,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       safeRemoveSessionStorageItem("auth401_notified");
       authRequestVersionRef.current += 1;
       const res = await api.post("/auth/login", { username, password });
-
-      // simpan JWT
-      safeSetStorageItem("token", res.data.token);
+      safeRemoveStorageItem("token");
 
       // hydrate user penuh dari /auth/me agar shape user konsisten
       const meRes = await api.get("/auth/me");

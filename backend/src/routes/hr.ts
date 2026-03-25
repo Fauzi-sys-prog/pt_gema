@@ -32,6 +32,10 @@ function canWrite(role?: Role): boolean {
   return hasRoleAccess(role, HR_WRITE_ROLES);
 }
 
+function canRead(role?: Role): boolean {
+  return hasRoleAccess(role, HR_WRITE_ROLES);
+}
+
 function sanitizeUpdateFields(updates: Record<string, unknown>): Record<string, unknown> {
   const blocked = new Set(["id", "createdAt", "createdBy"]);
   return Object.fromEntries(Object.entries(updates).filter(([key]) => !blocked.has(key)));
@@ -223,7 +227,10 @@ async function writeAuditLog(
 }
 
 function registerResourceRoutes(basePath: string, resource: string) {
-  hrRouter.get(basePath, authenticate, async (_req: AuthRequest, res: Response) => {
+  hrRouter.get(basePath, authenticate, async (req: AuthRequest, res: Response) => {
+    if (!canRead(req.user?.role)) {
+      return sendError(res, 403, { code: "FORBIDDEN", message: "Forbidden", legacyError: "Forbidden" });
+    }
     try {
       let items: Array<Record<string, unknown>> = [];
       if (resource === "employees") {

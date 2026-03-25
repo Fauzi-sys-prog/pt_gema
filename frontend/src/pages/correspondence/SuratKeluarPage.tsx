@@ -1,7 +1,10 @@
-import { useEffect, useState } from 'react'; import { Plus, Search, Eye, Edit, Send, Trash2, CheckCircle, XCircle, X, FileText, Download, Printer, RefreshCw } from 'lucide-react'; import { useApp } from '../../contexts/AppContext';
+import { useEffect, useState } from 'react';
+import { Plus, Search, Eye, Edit, Send, Trash2, CheckCircle, XCircle, X, FileText, Download, Printer, RefreshCw } from 'lucide-react';
+import { useApp } from '../../contexts/AppContext';
 import type { SuratKeluar } from '../../contexts/AppContext';
 import { toast } from 'sonner@2.0.3';
 import api from '../../services/api';
+import { sanitizeRichHtml } from '../../utils/sanitizeRichHtml';
 
 export default function SuratKeluarPage() {
   const { suratKeluarList, addSuratKeluar, updateSuratKeluar, deleteSuratKeluar, projectList, templateSuratList, applyTemplate, addAuditLog, currentUser } = useApp();
@@ -29,6 +32,7 @@ export default function SuratKeluarPage() {
     kategori: 'General',
     isiSurat: '',
   });
+  const sanitizedSelectedSuratBody = sanitizeRichHtml(selectedSurat?.isiSurat || '');
 
   const fetchSuratKeluar = async () => {
     try {
@@ -61,9 +65,16 @@ export default function SuratKeluarPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const sanitizedFormData: Partial<SuratKeluar> = {
+      ...formData,
+      isiSurat:
+        typeof formData.isiSurat === 'string'
+          ? sanitizeRichHtml(formData.isiSurat)
+          : formData.isiSurat,
+    };
     
     if (editMode && selectedSurat) {
-      const ok = await updateSuratKeluar(selectedSurat.id, formData);
+      const ok = await updateSuratKeluar(selectedSurat.id, sanitizedFormData);
       if (!ok) return;
       addAuditLog({
         action: 'SURAT_KELUAR_UPDATED',
@@ -76,9 +87,9 @@ export default function SuratKeluarPage() {
       const fallbackNo = `SK/${new Date().getFullYear()}/${String(Date.now()).slice(-6)}`;
       const newSurat: SuratKeluar = {
         id: `SK-${Date.now()}`,
-        noSurat: (formData.noSurat || '').trim() || fallbackNo,
-        pembuat: (formData.pembuat || '').trim() || currentUser?.fullName || currentUser?.username || 'System',
-        ...formData as SuratKeluar,
+        noSurat: (sanitizedFormData.noSurat || '').trim() || fallbackNo,
+        pembuat: (sanitizedFormData.pembuat || '').trim() || currentUser?.fullName || currentUser?.username || 'System',
+        ...sanitizedFormData as SuratKeluar,
       };
       const ok = await addSuratKeluar(newSurat);
       if (!ok) return;
@@ -194,7 +205,7 @@ export default function SuratKeluarPage() {
       const content = applyTemplate(templateId, variables);
       setFormData(prev => ({
         ...prev,
-        isiSurat: content,
+        isiSurat: sanitizeRichHtml(content),
         jenisSurat: template.jenisSurat,
         templateId: template.id,
       }));
@@ -786,7 +797,7 @@ export default function SuratKeluarPage() {
                   <div>
                     <label className="text-sm font-medium text-gray-500">Isi Surat</label>
                     <div className="text-gray-900 bg-gray-50 p-4 rounded-lg border mt-2 whitespace-pre-wrap">
-                      <div dangerouslySetInnerHTML={{ __html: selectedSurat.isiSurat }} />
+                      <div dangerouslySetInnerHTML={{ __html: sanitizedSelectedSuratBody }} />
                     </div>
                   </div>
                 )}

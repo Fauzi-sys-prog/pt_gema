@@ -289,15 +289,13 @@ export default function ApprovalCenterPage() {
   const canApproveQuotationItem = (q: ApprovalQuotationItem) => {
     if (Array.isArray(q.availableActions)) return q.availableActions.includes("APPROVE");
     const status = normalizeStatus(q.status);
-    if (status === "SENT") return isSpv;
-    if (status === "REVIEW") return isActualOwner;
+    if (status === "SENT" || status === "REVIEW") return isOwner;
     return false;
   };
   const canRejectQuotationItem = (q: ApprovalQuotationItem) => {
     if (Array.isArray(q.availableActions)) return q.availableActions.includes("REJECT");
     const status = normalizeStatus(q.status);
-    if (status === "SENT") return isSpv || isActualOwner;
-    if (status === "REVIEW") return isActualOwner;
+    if (status === "SENT" || status === "REVIEW") return isOwner;
     return false;
   };
   const canReviewQuotationItem = (q: ApprovalQuotationItem) => {
@@ -309,8 +307,8 @@ export default function ApprovalCenterPage() {
     if (q.auditStatus) return q.auditStatus;
     const status = normalizeStatus(q.status);
     if (status === "DRAFT") return "Ready to Send";
-    if (status === "SENT") return "SPV Review";
-    if (status === "REVIEW") return "Owner Final Review";
+    if (status === "SENT") return "Management Approval";
+    if (status === "REVIEW") return "Management Review";
     if (status === "REJECTED") return "Rejected";
     if (status === "APPROVED") return "Approved";
     return "Processed";
@@ -323,15 +321,15 @@ export default function ApprovalCenterPage() {
       return `SPV reviewed by ${actor}`;
     }
     if (status === "APPROVED") {
-      const actor = q.approvedBy ? `${q.approvedBy}${q.approvedByRole ? ` (${q.approvedByRole})` : ""}` : "Owner";
-      return `Final approved by ${actor}`;
+      const actor = q.approvedBy ? `${q.approvedBy}${q.approvedByRole ? ` (${q.approvedByRole})` : ""}` : "Management";
+      return `Approved by ${actor}`;
     }
     if (status === "REJECTED") {
       const actor = q.rejectedBy ? `${q.rejectedBy}${q.rejectedByRole ? ` (${q.rejectedByRole})` : ""}` : "Reviewer";
       return `Rejected by ${actor}`;
     }
     if (status === "SENT") {
-      return q.sentBy ? `Sent by ${q.sentBy}` : "Waiting SPV review";
+      return q.sentBy ? `Sent by ${q.sentBy}` : "Waiting management approval";
     }
     return "Draft quotation";
   };
@@ -802,7 +800,7 @@ export default function ApprovalCenterPage() {
                             )}
                             {!canApproveQuotationItem(q) && !canRejectQuotationItem(q) && normalizeStatus(q.status) !== 'DRAFT' && !canResendRejectedQuotation(q) && (
                               <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400">
-                                {normalizeStatus(q.status) === 'SENT' ? 'Menunggu SPV' : normalizeStatus(q.status) === 'REVIEW' ? 'Menunggu Owner' : 'Read Only'}
+                                {normalizeStatus(q.status) === 'SENT' ? 'Menunggu Approval' : normalizeStatus(q.status) === 'REVIEW' ? 'Menunggu Finalisasi' : 'Read Only'}
                               </span>
                             )}
                           </div>

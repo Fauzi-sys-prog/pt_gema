@@ -7,6 +7,7 @@ import { authenticate } from "../middlewares/auth";
 import { AuthRequest } from "../types/auth";
 import { sendError } from "../utils/http";
 import { materializeMediaDataUrls } from "../utils/mediaStorage";
+import { sanitizeRichHtml } from "../utils/sanitizeRichHtml";
 import {
   createEntitySchema,
   resourceEntityParamSchema,
@@ -121,7 +122,7 @@ const DATA_WRITE_ROLES_BY_RESOURCE: Record<string, Role[]> = {
   "material-requests": ["OWNER", "ADMIN", "SUPPLY_CHAIN", "PRODUKSI"],
   "surat-jalan": ["OWNER", "ADMIN", "SUPPLY_CHAIN", "SALES", "PRODUKSI"],
   "spk-records": ["OWNER", "ADMIN", "SUPPLY_CHAIN", "SALES", "PRODUKSI", "HR"],
-  "berita-acara": ["OWNER", "ADMIN", "HR", "SALES", "SUPPLY_CHAIN", "FINANCE"],
+  "berita-acara": ["OWNER", "ADMIN", "HR", "SALES", "SUPPLY_CHAIN", "FINANCE", "PRODUKSI"],
   "surat-masuk": ["OWNER", "ADMIN", "HR", "SALES", "SUPPLY_CHAIN", "FINANCE", "PRODUKSI"],
   "surat-keluar": ["OWNER", "ADMIN", "HR", "SALES", "SUPPLY_CHAIN", "FINANCE", "PRODUKSI"],
   "template-surat": ["OWNER", "ADMIN", "HR", "SALES", "SUPPLY_CHAIN", "FINANCE", "PRODUKSI"],
@@ -922,8 +923,8 @@ function mapProjectBeritaAcaraToLegacyPayload(row: {
     pihakKeduaJabatan: row.pihakKeduaJabatan ?? undefined,
     pihakKeduaNama: row.pihakKeduaNama ?? undefined,
     lokasi: row.lokasi ?? undefined,
-    contentHTML: row.contentHTML,
-    content: row.contentHTML,
+    contentHTML: sanitizeRichHtml(row.contentHTML),
+    content: sanitizeRichHtml(row.contentHTML),
     refSuratJalan: row.refSuratJalan ?? undefined,
     refProject: row.refProject ?? undefined,
     ttdPihakPertama: row.ttdPihakPertama ?? undefined,
@@ -2293,7 +2294,7 @@ async function relationalLogisticsDocsCreate(resource: string, entityId: string,
           pihakKeduaJabatan: asTrimmedString(record.pihakKeduaJabatan) || undefined,
           pihakKeduaNama: asTrimmedString(record.pihakKeduaNama) || undefined,
           lokasi: asTrimmedString(record.lokasi) || undefined,
-          contentHTML: asTrimmedString(record.contentHTML || record.content) || "",
+          contentHTML: sanitizeRichHtml(asTrimmedString(record.contentHTML || record.content) || ""),
           refSuratJalan: asTrimmedString(record.refSuratJalan) || undefined,
           refProject: asTrimmedString(record.refProject) || undefined,
           ttdPihakPertama: asTrimmedString(record.ttdPihakPertama) || undefined,
@@ -2466,7 +2467,7 @@ async function relationalLogisticsDocsUpdate(resource: string, entityId: string,
           pihakKeduaJabatan: asTrimmedString(record.pihakKeduaJabatan) || null,
           pihakKeduaNama: asTrimmedString(record.pihakKeduaNama) || null,
           lokasi: asTrimmedString(record.lokasi) || null,
-          contentHTML: asTrimmedString(record.contentHTML || record.content) || "",
+          contentHTML: sanitizeRichHtml(asTrimmedString(record.contentHTML || record.content) || ""),
           refSuratJalan: asTrimmedString(record.refSuratJalan) || null,
           refProject: asTrimmedString(record.refProject) || null,
           ttdPihakPertama: asTrimmedString(record.ttdPihakPertama) || null,
@@ -5227,7 +5228,7 @@ function mapSuratKeluarRecord(row: {
     pembuat: row.pembuat,
     status: row.status,
     kategori: row.kategori,
-    isiSurat: row.isiSurat ?? undefined,
+    isiSurat: row.isiSurat ? sanitizeRichHtml(row.isiSurat) : undefined,
     projectId: row.projectId ?? undefined,
     approvedBy: row.approvedBy ?? undefined,
     reviewedBy: row.reviewedBy ?? undefined,
@@ -5251,7 +5252,12 @@ function sanitizeSuratKeluarPayload(id: string, payload: Record<string, unknown>
     pembuat: asTrimmedString(payload.pembuat) ?? "",
     status: assertStatusInList(asTrimmedString(payload.status) || "Draft", ["Draft", "Review", "Approved", "Sent"], "surat-keluar.status") || "Draft",
     kategori: asTrimmedString(payload.kategori) ?? "General",
-    isiSurat: asTrimmedString(payload.isiSurat) ?? null,
+    isiSurat: (() => {
+      const rawValue = asTrimmedString(payload.isiSurat);
+      if (!rawValue) return null;
+      const safeHtml = sanitizeRichHtml(rawValue);
+      return safeHtml || null;
+    })(),
     approvedBy: asTrimmedString(payload.approvedBy) ?? null,
     reviewedBy: asTrimmedString(payload.reviewedBy) ?? null,
     reviewedAt: asTrimmedString(payload.reviewedAt) ?? null,
@@ -5271,7 +5277,7 @@ function mapTemplateSuratRecord(row: {
     id: row.id,
     nama: row.nama,
     jenisSurat: row.jenisSurat,
-    content: row.content,
+    content: sanitizeRichHtml(row.content),
     variables: Array.isArray(row.variables) ? row.variables : [],
   };
 }
@@ -5281,7 +5287,7 @@ function sanitizeTemplateSuratPayload(id: string, payload: Record<string, unknow
     id,
     nama: asTrimmedString(payload.nama) ?? id,
     jenisSurat: asTrimmedString(payload.jenisSurat) ?? "General",
-    content: asTrimmedString(payload.content) ?? "",
+    content: sanitizeRichHtml(asTrimmedString(payload.content) ?? ""),
     variables: Array.isArray(payload.variables)
       ? payload.variables
           .map((item) => asTrimmedString(item))
@@ -5528,6 +5534,119 @@ function sanitizeInvoicePayload(id: string, payload: unknown, existingPayload?: 
     tanggalBayar: asTrimmedString(merged.tanggalBayar) ?? null,
     items,
   };
+}
+
+function normalizeBeritaAcaraApprovalStatus(value: unknown): string {
+  return String(value || "")
+    .trim()
+    .toUpperCase()
+    .replace(/[\s-]+/g, "_");
+}
+
+function isInvoiceReadyBeritaAcaraStatus(value: unknown): boolean {
+  const status = normalizeBeritaAcaraApprovalStatus(value);
+  return status === "FINAL" || status === "DISETUJUI" || status === "APPROVED";
+}
+
+async function ensureInvoiceReadyForBilling(invoice: ReturnType<typeof sanitizeInvoicePayload>) {
+  const data = invoice as ReturnType<typeof sanitizeInvoicePayload> & {
+    projectId?: string | null;
+    noInvoice?: string | null;
+    items?: Array<{ sourceRef?: string | null }>;
+  };
+  const invoiceLabel = String(data.noInvoice || data.id || "invoice").trim();
+  const sourceRefs = Array.from(
+    new Set(
+      (Array.isArray(data.items) ? data.items : [])
+        .map((item) => asTrimmedString(item?.sourceRef))
+        .filter(Boolean)
+    )
+  ) as string[];
+  const projectId = asTrimmedString(data.projectId);
+
+  if (!sourceRefs.length && !projectId) return;
+
+  const suratJalanRows = sourceRefs.length
+    ? await prisma.logisticsSuratJalan.findMany({
+        where: {
+          OR: [
+            { id: { in: sourceRefs } },
+            { noSurat: { in: sourceRefs } },
+          ],
+        },
+        select: { id: true, noSurat: true, projectId: true },
+      })
+    : [];
+
+  const derivedProjectIds = new Set<string>();
+  if (projectId) derivedProjectIds.add(projectId);
+  suratJalanRows.forEach((row) => {
+    if (row.projectId) derivedProjectIds.add(row.projectId);
+  });
+
+  const refCandidates = new Set<string>(sourceRefs);
+  suratJalanRows.forEach((row) => {
+    refCandidates.add(row.id);
+    refCandidates.add(row.noSurat);
+  });
+
+  const filters: Prisma.ProjectBeritaAcaraWhereInput[] = [];
+  if (refCandidates.size > 0) {
+    filters.push({ refSuratJalan: { in: Array.from(refCandidates) } });
+  }
+  if (derivedProjectIds.size > 0) {
+    filters.push({ projectId: { in: Array.from(derivedProjectIds) } });
+  }
+  if (!filters.length) {
+    throw new PayloadValidationError(
+      `Invoice ${invoiceLabel} membutuhkan BA/BAST Final atau Disetujui sebelum dibuat`
+    );
+  }
+
+  const beritaAcaraRows = await prisma.projectBeritaAcara.findMany({
+    where: { OR: filters },
+    select: {
+      noBA: true,
+      status: true,
+      refSuratJalan: true,
+      projectId: true,
+    },
+  });
+
+  const readyRows = beritaAcaraRows.filter((row) => isInvoiceReadyBeritaAcaraStatus(row.status));
+  const readyProjectIds = new Set(
+    readyRows.map((row) => asTrimmedString(row.projectId)).filter(Boolean) as string[]
+  );
+  const readySuratJalanRefs = new Set(
+    readyRows.map((row) => asTrimmedString(row.refSuratJalan)).filter(Boolean) as string[]
+  );
+
+  if (Array.from(derivedProjectIds).some((id) => readyProjectIds.has(id))) {
+    return;
+  }
+
+  if (!sourceRefs.length) {
+    throw new PayloadValidationError(
+      `Invoice ${invoiceLabel} membutuhkan BA/BAST Final atau Disetujui untuk project terkait`
+    );
+  }
+
+  const missingRefs = sourceRefs.filter((ref) => {
+    if (readySuratJalanRefs.has(ref)) return false;
+    return !suratJalanRows.some(
+      (row) =>
+        (row.noSurat === ref || row.id === ref) &&
+        (readySuratJalanRefs.has(row.id) || readySuratJalanRefs.has(row.noSurat))
+    );
+  });
+
+  if (!missingRefs.length) return;
+
+  const preview = missingRefs.slice(0, 3).join(", ");
+  const remainder = missingRefs.length > 3 ? ` +${missingRefs.length - 3} lainnya` : "";
+  throw new PayloadValidationError(
+    `Invoice ${invoiceLabel} membutuhkan BA/BAST Final atau Disetujui untuk Surat Jalan: ${preview}${remainder}`
+  );
 }
 
 function buildInvoiceRecordWriteData(
@@ -8137,6 +8256,7 @@ dataRouter.put("/invoices/bulk", authenticate, async (req: AuthRequest, res: Res
         if (invoice.projectId && invoice.customerId && project?.customerId && invoice.customerId !== project.customerId) {
           throw new PayloadValidationError(`invoices: customerId '${invoice.customerId}' tidak match dengan customer project '${project.customerId}'`);
         }
+        await ensureInvoiceReadyForBilling(invoice);
         await tx.invoiceRecord.upsert({
           where: { id: item.id },
           update: buildInvoiceRecordWriteData(invoiceData, project?.customerId ?? null),
@@ -8193,6 +8313,7 @@ dataRouter.post("/invoices", authenticate, async (req: AuthRequest, res: Respons
         return sendError(res, 400, { code: "CUSTOMER_MISMATCH", message: `Customer '${normalized.customerId}' mismatch with project customer '${project.customerId}'`, legacyError: `Customer '${normalized.customerId}' mismatch with project customer '${project.customerId}'` });
       }
     }
+    await ensureInvoiceReadyForBilling(normalized);
     const created = await prisma.$transaction(async (tx) => {
       const saved = await tx.invoiceRecord.create({
         data: buildInvoiceRecordWriteData(invoiceData, project?.customerId ?? null),
@@ -8253,6 +8374,7 @@ dataRouter.patch("/invoices/:id", authenticate, async (req: AuthRequest, res: Re
         return sendError(res, 400, { code: "CUSTOMER_MISMATCH", message: `Customer '${normalized.customerId}' mismatch with project customer '${project.customerId}'`, legacyError: `Customer '${normalized.customerId}' mismatch with project customer '${project.customerId}'` });
       }
     }
+    await ensureInvoiceReadyForBilling(normalized);
     const saved = await prisma.$transaction(async (tx) => {
       await tx.invoiceRecord.update({
         where: { id: req.params.id },

@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { FileText, Plus, X, Printer, Save, Download, FileSignature, ChevronDown, Layers, Package, CheckCircle2, Clock, Copy, RefreshCw, Search } from 'lucide-react';
 import { toast } from 'sonner@2.0.3';
 import api from '../../services/api';
+import { sanitizeRichHtml } from '../../utils/sanitizeRichHtml';
 
 export default function BeritaAcaraPage() {
   const { beritaAcaraList, addBeritaAcara, updateBeritaAcara, deleteBeritaAcara, addAuditLog, suratJalanList, currentUser } = useApp();
@@ -40,6 +41,8 @@ export default function BeritaAcaraPage() {
   });
 
   const [editableContent, setEditableContent] = useState('');
+  const sanitizedEditableContent = sanitizeRichHtml(editableContent);
+  const sanitizedSelectedContent = sanitizeRichHtml(selectedBA?.contentHTML || '');
 
   const fetchBeritaAcaraSources = async () => {
     try {
@@ -157,7 +160,7 @@ export default function BeritaAcaraPage() {
 
   const handleTypeChange = (type: string) => {
     setFormData(prev => ({ ...prev, jenisBA: type }));
-    setEditableContent(generateTemplate(type, formData));
+    setEditableContent(sanitizeRichHtml(generateTemplate(type, formData)));
   };
 
   const handleAutoFillFromSJ = (sjId: string) => {
@@ -219,7 +222,7 @@ export default function BeritaAcaraPage() {
       <p style="margin-bottom: 40px;">Demikian Berita Acara ini dibuat dengan sebenarnya untuk dipergunakan sebagaimana mestinya.</p>
     `;
 
-    setEditableContent(autoContent);
+    setEditableContent(sanitizeRichHtml(autoContent));
     setFormData(prev => ({
       ...prev,
       pihakKedua: sj.tujuan,
@@ -239,7 +242,7 @@ export default function BeritaAcaraPage() {
     const newBA = {
       id: `BA-${Date.now()}`,
       ...formData,
-      contentHTML: contentRef.current?.innerHTML || editableContent,
+      contentHTML: sanitizeRichHtml(contentRef.current?.innerHTML || editableContent),
       createdBy: currentUser?.fullName || currentUser?.username || 'System',
       createdAt: new Date().toISOString()
     };
@@ -643,7 +646,7 @@ export default function BeritaAcaraPage() {
                       ref={contentRef}
                       contentEditable
                       suppressContentEditableWarning
-                      dangerouslySetInnerHTML={{ __html: editableContent }}
+                      dangerouslySetInnerHTML={{ __html: sanitizedEditableContent }}
                       className="min-h-[600px] p-16 bg-white border-2 border-slate-200 rounded-2xl shadow-inner prose prose-sm max-w-none focus:outline-none focus:ring-4 focus:ring-indigo-100 transition-all"
                       style={{
                         fontFamily: 'system-ui, -apple-system, sans-serif',
@@ -791,7 +794,7 @@ export default function BeritaAcaraPage() {
                     
                     {/* Dynamic Content */}
                     <div 
-                      dangerouslySetInnerHTML={{ __html: selectedBA.contentHTML }}
+                      dangerouslySetInnerHTML={{ __html: sanitizedSelectedContent }}
                       className="prose prose-sm max-w-none"
                       style={{
                         fontFamily: 'Arial, sans-serif',

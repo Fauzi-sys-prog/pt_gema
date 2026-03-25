@@ -5791,9 +5791,9 @@ dashboardRouter.get("/dashboard/finance-approval-queue", authenticate, async (re
           effectiveStatus === "DRAFT"
             ? "Ready to Send"
             : effectiveStatus === "SENT"
-              ? "SPV Review"
+              ? "Management Approval"
               : effectiveStatus === "REVIEW"
-                ? "Owner Final Review"
+                ? "Management Review"
                 : effectiveStatus === "REJECTED"
                   ? "Rejected"
                   : effectiveStatus === "APPROVED"
@@ -5803,24 +5803,21 @@ dashboardRouter.get("/dashboard/finance-approval-queue", authenticate, async (re
           effectiveStatus === "REVIEW"
             ? `SPV reviewed by ${spvActor?.name || readString(payload, "spvApprovedBy") || "SPV"}${spvActor?.role || readString(payload, "spvApprovedByRole") ? ` (${spvActor?.role || readString(payload, "spvApprovedByRole")})` : ""}`
             : effectiveStatus === "APPROVED"
-              ? `Final approved by ${approvedActor?.name || readString(payload, "approvedBy") || "Owner"}${approvedActor?.role || readString(payload, "approvedByRole") ? ` (${approvedActor?.role || readString(payload, "approvedByRole")})` : ""}`
+              ? `Approved by ${approvedActor?.name || readString(payload, "approvedBy") || "Management"}${approvedActor?.role || readString(payload, "approvedByRole") ? ` (${approvedActor?.role || readString(payload, "approvedByRole")})` : ""}`
               : effectiveStatus === "REJECTED"
                 ? `Rejected by ${rejectedActor?.name || readString(payload, "rejectedBy") || "Reviewer"}${rejectedActor?.role || readString(payload, "rejectedByRole") ? ` (${rejectedActor?.role || readString(payload, "rejectedByRole")})` : ""}`
                 : effectiveStatus === "SENT"
                   ? sentActor?.name || readString(payload, "sentBy")
                     ? `Sent by ${sentActor?.name || readString(payload, "sentBy")}`
-                    : "Waiting SPV review"
+                    : "Waiting management approval"
                   : "Draft quotation";
         const role = req.user?.role;
         const owner = isOwnerLike(role);
-        const spv = role === "SPV";
         const availableActions = toActionList(
           (effectiveStatus === "DRAFT" || effectiveStatus === "REJECTED") && canSendQuotationByRole(role) && "SEND",
           (effectiveStatus === "SENT" || effectiveStatus === "REVIEW") && "REVIEW",
-          effectiveStatus === "SENT" && spv && "APPROVE",
-          effectiveStatus === "SENT" && (spv || owner) && "REJECT",
-          effectiveStatus === "REVIEW" && owner && "APPROVE",
-          effectiveStatus === "REVIEW" && owner && "REJECT",
+          (effectiveStatus === "SENT" || effectiveStatus === "REVIEW") && owner && "APPROVE",
+          (effectiveStatus === "SENT" || effectiveStatus === "REVIEW") && owner && "REJECT",
           "VIEW"
         );
         return {
@@ -6140,19 +6137,12 @@ dashboardRouter.post("/dashboard/finance-approval-action", authenticate, async (
       const role = req.user?.role;
       const isOwner = isOwnerLike(role);
       const isSpv = role === "SPV";
-      let nextStatus: "REVIEW" | "APPROVED" | "REJECTED";
+      const canManageApproval = isSpv || isOwner;
+      let nextStatus: "APPROVED" | "REJECTED";
 
       if (action === "APPROVE") {
-        if (currentStatus === "SENT" && isSpv) {
-          nextStatus = "REVIEW";
-        } else if (currentStatus === "REVIEW" && isOwner) {
+        if ((currentStatus === "SENT" || currentStatus === "REVIEW") && canManageApproval) {
           nextStatus = "APPROVED";
-        } else if (currentStatus === "SENT" && isOwner) {
-          return sendError(res, 400, {
-            code: "SPV_REVIEW_REQUIRED",
-            message: "Quotation harus melewati approval SPV dulu sebelum final approve OWNER",
-            legacyError: "Quotation harus melewati approval SPV dulu sebelum final approve OWNER",
-          });
         } else {
           return sendError(res, 403, {
             code: "FORBIDDEN",
@@ -6161,7 +6151,7 @@ dashboardRouter.post("/dashboard/finance-approval-action", authenticate, async (
           });
         }
       } else {
-        if ((currentStatus === "SENT" && (isSpv || isOwner)) || (currentStatus === "REVIEW" && isOwner)) {
+        if ((currentStatus === "SENT" || currentStatus === "REVIEW") && canManageApproval) {
           nextStatus = "REJECTED";
         } else {
           return sendError(res, 403, {
@@ -6176,14 +6166,15 @@ dashboardRouter.post("/dashboard/finance-approval-action", authenticate, async (
         return sendError(res, 400, { code: "STATUS_INVALID", message: "Quotation hanya bisa diproses dari status Sent atau Review", legacyError: "Quotation hanya bisa diproses dari status Sent atau Review" });
       }
 
+      const shouldStampSpvApproval = action === "APPROVE" && req.user?.role === "SPV";
       const nextPayload = {
         ...payload,
         id: current.id,
         status: nextStatus,
-        spvApprovedBy: nextStatus === "REVIEW" ? actor.actorName : payload.spvApprovedBy,
-        spvApprovedByRole: nextStatus === "REVIEW" ? actor.actorRole : payload.spvApprovedByRole,
-        spvApprovedByUserId: nextStatus === "REVIEW" ? actor.actorUserId : payload.spvApprovedByUserId,
-        spvApprovedAt: nextStatus === "REVIEW" ? new Date().toISOString() : payload.spvApprovedAt,
+        spvApprovedBy: shouldStampSpvApproval ? actor.actorName : payload.spvApprovedBy,
+        spvApprovedByRole: shouldStampSpvApproval ? actor.actorRole : payload.spvApprovedByRole,
+        spvApprovedByUserId: shouldStampSpvApproval ? actor.actorUserId : payload.spvApprovedByUserId,
+        spvApprovedAt: shouldStampSpvApproval ? new Date().toISOString() : payload.spvApprovedAt,
         approvedBy: nextStatus === "APPROVED" ? actor.actorName : payload.approvedBy,
         approvedByRole: nextStatus === "APPROVED" ? actor.actorRole : payload.approvedByRole,
         approvedByUserId: nextStatus === "APPROVED" ? actor.actorUserId : payload.approvedByUserId,
@@ -6216,7 +6207,12 @@ dashboardRouter.post("/dashboard/finance-approval-action", authenticate, async (
         reason: action === "REJECT" ? reason || null : null,
         metadata: {
           source: "finance-approval-center",
-          approvalStage: nextStatus === "REVIEW" ? "SPV_REVIEW" : nextStatus === "APPROVED" ? "OWNER_FINAL" : "REJECT",
+          approvalStage:
+            nextStatus === "APPROVED"
+              ? req.user?.role === "SPV"
+                ? "SPV_FINAL"
+                : "MANAGEMENT_FINAL"
+              : "REJECT",
           actorName: actor.actorName,
           actorRole: actor.actorRole,
         },

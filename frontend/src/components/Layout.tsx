@@ -35,7 +35,7 @@ import {
   HelpCircle
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { getRoleLabel, isOwnerLike } from '../utils/roles';
+import { getRoleLabel, hasRoleAccess, isOwnerLike } from '../utils/roles';
 import logoImage from 'figma:asset/661f558dc14c79fa090b7039a885f26b843f5c04.png';
 
 // Using a standard URL or SVG for local build compatibility
@@ -112,11 +112,11 @@ export default function Layout({ children }: LayoutProps) {
       'Logistics Control': ['SUPPLY_CHAIN', 'PRODUKSI', 'OPERATIONS', 'SALES'],
       'Assets': ['SUPPLY_CHAIN', 'PRODUKSI', 'OPERATIONS', 'WAREHOUSE'],
       'Human Capital': ['HR', 'FINANCE'],
-      'Data Collection': ['HR', 'SALES', 'SUPPLY_CHAIN'],
+      'Data Collection': ['HR', 'SALES'],
       'Settings': []
     };
     
-    return accessMap[menuTitle]?.includes(role) || false;
+    return hasRoleAccess(role, accessMap[menuTitle] || []);
   };
 
   const menuItems: MenuItem[] = [

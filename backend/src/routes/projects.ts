@@ -87,73 +87,45 @@ function resolveProjectApprovalTransition(
   role: Role | undefined,
   currentStatus: string,
   action: "APPROVE" | "REJECT"
-): { ok: true; toStatus: "Review SPV" | "Approved" | "Rejected"; stage: "SPV_REVIEW" | "OWNER_FINAL" | "REJECT" }
+): { ok: true; toStatus: "Approved" | "Rejected"; stage: "FINAL_APPROVE" | "REJECT" }
  | { ok: false; code: string; message: string } {
   const current = normalizeApprovalToken(currentStatus || "Pending");
+  const canManageApproval = isOwner(role);
 
   if (action === "APPROVE") {
-    if (isSpv(role)) {
-      if (current === "PENDING") {
-        return { ok: true, toStatus: "Review SPV", stage: "SPV_REVIEW" };
+    if (canManageApproval) {
+      if (current === "PENDING" || current === "REVIEW_SPV") {
+        return { ok: true, toStatus: "Approved", stage: "FINAL_APPROVE" };
       }
       return {
         ok: false,
-        code: "SPV_APPROVAL_INVALID",
-        message: "SPV hanya bisa approve project dari status Pending ke Review SPV",
-      };
-    }
-
-    if (isOwner(role)) {
-      if (current === "REVIEW_SPV") {
-        return { ok: true, toStatus: "Approved", stage: "OWNER_FINAL" };
-      }
-      if (current === "PENDING") {
-        return {
-          ok: false,
-          code: "SPV_REVIEW_REQUIRED",
-          message: "Project harus melewati approval SPV dulu sebelum final approve OWNER",
-        };
-      }
-      return {
-        ok: false,
-        code: "OWNER_APPROVAL_INVALID",
-        message: "OWNER hanya bisa final approve project dari status Review SPV",
+        code: "APPROVAL_INVALID",
+        message: "Project hanya bisa di-approve dari status Pending atau Review SPV",
       };
     }
 
     return {
       ok: false,
       code: "FORBIDDEN",
-      message: "Hanya SPV atau OWNER yang bisa approve project",
+      message: "Hanya OWNER/SPV yang bisa approve project",
     };
   }
 
-  if (isSpv(role)) {
-    if (current === "PENDING") {
-      return { ok: true, toStatus: "Rejected", stage: "REJECT" };
-    }
-    return {
-      ok: false,
-      code: "SPV_REJECT_INVALID",
-      message: "SPV hanya bisa reject project dari status Pending",
-    };
-  }
-
-  if (isOwner(role)) {
+  if (canManageApproval) {
     if (current === "PENDING" || current === "REVIEW_SPV") {
       return { ok: true, toStatus: "Rejected", stage: "REJECT" };
     }
     return {
       ok: false,
-      code: "OWNER_REJECT_INVALID",
-      message: "OWNER hanya bisa reject project dari status Pending atau Review SPV",
+      code: "REJECT_INVALID",
+      message: "Project hanya bisa di-reject dari status Pending atau Review SPV",
     };
   }
 
   return {
     ok: false,
     code: "FORBIDDEN",
-    message: "Hanya SPV atau OWNER yang bisa reject project",
+    message: "Hanya OWNER/SPV yang bisa reject project",
   };
 }
 
@@ -1399,22 +1371,26 @@ projectsRouter.patch(
       rejectedByUserId: transition.toStatus === "Rejected" ? actor.actorUserId : payload.rejectedByUserId ?? null,
       rejectedByRole: transition.toStatus === "Rejected" ? actor.actorRole : payload.rejectedByRole ?? null,
       rejectedAt: transition.toStatus === "Rejected" ? now : payload.rejectedAt ?? null,
-      spvApprovedBy: transition.toStatus === "Review SPV" ? actor.actorName : payload.spvApprovedBy ?? null,
-      spvApprovedByUserId: transition.toStatus === "Review SPV" ? actor.actorUserId : payload.spvApprovedByUserId ?? null,
-      spvApprovedByRole: transition.toStatus === "Review SPV" ? actor.actorRole : payload.spvApprovedByRole ?? null,
-      spvApprovedAt: transition.toStatus === "Review SPV" ? now : payload.spvApprovedAt ?? null,
+      spvApprovedBy:
+        transition.toStatus === "Approved" && req.user?.role === "SPV"
+          ? actor.actorName
+          : payload.spvApprovedBy ?? null,
+      spvApprovedByUserId:
+        transition.toStatus === "Approved" && req.user?.role === "SPV"
+          ? actor.actorUserId
+          : payload.spvApprovedByUserId ?? null,
+      spvApprovedByRole:
+        transition.toStatus === "Approved" && req.user?.role === "SPV"
+          ? actor.actorRole
+          : payload.spvApprovedByRole ?? null,
+      spvApprovedAt:
+        transition.toStatus === "Approved" && req.user?.role === "SPV"
+          ? now
+          : payload.spvApprovedAt ?? null,
       ...(transition.toStatus === "Rejected"
         ? {
             approvedBy: null,
             approvedAt: null,
-          }
-        : {}),
-      ...(transition.toStatus === "Review SPV"
-        ? {
-            approvedBy: null,
-            approvedAt: null,
-            rejectedBy: null,
-            rejectedAt: null,
           }
         : {}),
       ...(transition.toStatus === "Approved"
@@ -1457,12 +1433,7 @@ projectsRouter.patch(
       await tx.projectApprovalLog.create({
         data: {
           projectId: id,
-          action:
-            transition.stage === "SPV_REVIEW"
-              ? "APPROVE"
-              : transition.stage === "OWNER_FINAL"
-                ? "APPROVE"
-                : "REJECT",
+          action: transition.stage === "REJECT" ? "REJECT" : "APPROVE",
           actorUserId: req.user?.id || null,
           actorRole: req.user?.role || null,
           fromStatus,

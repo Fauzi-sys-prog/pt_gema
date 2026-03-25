@@ -9,10 +9,25 @@ import { authWriteLimiter, loginLimiter } from "../middlewares/rateLimit";
 import { bootstrapOwnerSchema, changePasswordSchema } from "../schemas/user";
 import { loginSchema } from "../schemas/auth";
 import { signAccessToken, verifyAccessToken } from "../utils/token";
+import {
+  clearAccessTokenCookie,
+  readAccessTokenCookie,
+  setAccessTokenCookie,
+} from "../utils/authCookie";
 
 export const authRouter = Router();
 const BCRYPT_ROUNDS = 12;
 const logoutAllMarkerJti = (userId: string) => `logout-all:${userId}`;
+
+function readRequestAccessToken(req: AuthRequest): string | null {
+  const authHeader = req.headers.authorization;
+  if (typeof authHeader === "string" && authHeader.startsWith("Bearer ")) {
+    const bearerToken = authHeader.slice("Bearer ".length).trim();
+    if (bearerToken) return bearerToken;
+  }
+
+  return readAccessTokenCookie(req);
+}
 
 authRouter.post("/auth/bootstrap-owner", authWriteLimiter, async (req, res) => {
   const parsed = bootstrapOwnerSchema.safeParse(req.body);
@@ -52,6 +67,7 @@ authRouter.post("/auth/bootstrap-owner", authWriteLimiter, async (req, res) => {
       id: user.id,
       role: user.role,
     });
+    setAccessTokenCookie(res, token);
 
     return res.status(201).json({
       token,
@@ -118,6 +134,7 @@ authRouter.post("/auth/login", loginLimiter, async (req, res) => {
     id: userWithLastLogin.id,
     role: userWithLastLogin.role,
   });
+  setAccessTokenCookie(res, token);
 
   return res.json({
     token,
@@ -163,10 +180,10 @@ authRouter.get("/auth/me", authenticate, async (req: AuthRequest, res: Response)
 
 authRouter.post("/auth/logout", authWriteLimiter, async (req: AuthRequest, res: Response) => {
   try {
-    const authHeader = req.headers.authorization;
-    const token = authHeader?.split(" ")[1];
+    const token = readRequestAccessToken(req);
 
     if (!token) {
+      clearAccessTokenCookie(res);
       return res.json({ message: "Logged out successfully" });
     }
 
@@ -179,6 +196,7 @@ authRouter.post("/auth/logout", authWriteLimiter, async (req: AuthRequest, res: 
       | null;
 
     if (!decoded?.id || !decoded?.jti || !decoded?.exp) {
+      clearAccessTokenCookie(res);
       return res.json({ message: "Logged out successfully" });
     }
 
@@ -203,8 +221,10 @@ authRouter.post("/auth/logout", authWriteLimiter, async (req: AuthRequest, res: 
       },
     });
 
+    clearAccessTokenCookie(res);
     return res.json({ message: "Logged out successfully" });
   } catch {
+    clearAccessTokenCookie(res);
     return res.json({ message: "Logged out successfully" });
   }
 });
@@ -238,8 +258,11 @@ authRouter.post("/auth/logout-all", authenticate, authWriteLimiter, async (req: 
       },
     });
 
+    clearAccessTokenCookie(res);
+    clearAccessTokenCookie(res);
     return res.json({ message: "All sessions have been logged out successfully" });
   } catch {
+    clearAccessTokenCookie(res);
     return res.status(500).json({ error: "Failed to logout all sessions" });
   }
 });

@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'; import { Plus, Search, Edit2, Trash2,
 import type { User } from '../../contexts/AppContext';
 import api from '../../services/api';
 import { toast } from 'sonner@2.0.3';
-import { getRoleLabel, isOwnerLike } from '../../utils/roles';
+import { ALL_ROLE_OPTIONS, getRoleLabel, isOwnerLike } from '../../utils/roles';
 import { useAuth } from '../../contexts/AuthContext';
 
 export default function UserManagementPage() {
@@ -18,7 +18,7 @@ export default function UserManagementPage() {
     username: '',
     email: '',
     fullName: '',
-    role: 'OWNER',
+    role: 'USER',
     phone: '',
     password: '',
     status: 'Active',
@@ -30,15 +30,7 @@ export default function UserManagementPage() {
   const canResetUserPassword = actorRole === 'SPV' || actorRole === 'OWNER' || actorRole === 'ADMIN';
   const isSpvActor = actorRole === 'SPV';
 
-  const ROLE_OPTIONS: Array<User['role']> = [
-    'OWNER',
-    'SPV',
-    'ADMIN',
-    'SALES',
-    'FINANCE',
-    'SUPPLY_CHAIN',
-    'PRODUKSI',
-  ];
+  const ROLE_OPTIONS: Array<User['role']> = [...ALL_ROLE_OPTIONS] as Array<User['role']>;
 
   const normalizedUsers = useMemo(
     () =>
@@ -161,7 +153,7 @@ export default function UserManagementPage() {
       username: '',
       email: '',
       fullName: '',
-      role: 'OWNER',
+      role: 'USER',
       phone: '',
       password: '',
       status: 'Active',
@@ -180,10 +172,22 @@ export default function UserManagementPage() {
         return 'bg-purple-100 text-purple-700';
       case 'FINANCE':
         return 'bg-green-100 text-green-700';
+      case 'HR':
+        return 'bg-emerald-100 text-emerald-700';
       case 'SUPPLY_CHAIN':
         return 'bg-yellow-100 text-yellow-700';
+      case 'PURCHASING':
+        return 'bg-amber-100 text-amber-700';
+      case 'WAREHOUSE':
+        return 'bg-lime-100 text-lime-700';
       case 'SALES':
         return 'bg-pink-100 text-pink-700';
+      case 'OPERATIONS':
+        return 'bg-orange-100 text-orange-700';
+      case 'MANAGER':
+        return 'bg-cyan-100 text-cyan-700';
+      case 'USER':
+        return 'bg-gray-100 text-gray-700';
       default:
         return 'bg-gray-100 text-gray-700';
     }

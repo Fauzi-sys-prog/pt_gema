@@ -20,8 +20,14 @@ const DATA_COLLECTION_WRITE_ROLES: Role[] = [
   "HR",
 ];
 
+const DATA_COLLECTION_READ_ROLES: Role[] = [...DATA_COLLECTION_WRITE_ROLES];
+
 function canWriteDataCollection(role?: Role): boolean {
   return hasRoleAccess(role, DATA_COLLECTION_WRITE_ROLES);
+}
+
+function canReadDataCollection(role?: Role): boolean {
+  return hasRoleAccess(role, DATA_COLLECTION_READ_ROLES);
 }
 
 function toPayloadBytes(payload: unknown): number {
@@ -106,6 +112,14 @@ function hydrateDataCollectionPayload(row: DataCollectionReadRow): Record<string
 }
 
 dataCollectionsRouter.get("/data-collections", authenticate, async (_req: AuthRequest, res: Response) => {
+  if (!canReadDataCollection(_req.user?.role)) {
+    return sendError(res, 403, {
+      code: "FORBIDDEN",
+      message: "Forbidden",
+      legacyError: "Forbidden",
+    });
+  }
+
   try {
     const [rows, legacyRows] = await Promise.all([
       prisma.dataCollection.findMany({
@@ -169,6 +183,14 @@ dataCollectionsRouter.get("/data-collections", authenticate, async (_req: AuthRe
 });
 
 dataCollectionsRouter.get("/data-collections/:id", authenticate, async (req: AuthRequest, res: Response) => {
+  if (!canReadDataCollection(req.user?.role)) {
+    return sendError(res, 403, {
+      code: "FORBIDDEN",
+      message: "Forbidden",
+      legacyError: "Forbidden",
+    });
+  }
+
   const { id } = req.params;
 
   try {

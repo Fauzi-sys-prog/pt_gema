@@ -311,8 +311,8 @@ export default function QuotationPage() {
     }
 
     if (current === "Sent") {
-      if (isSpv) return ["Sent", "Draft", "Review", "Rejected"];
-      if (isOwner) return ["Sent", "Draft", "Rejected"];
+      if (isSpv) return ["Sent", "Draft", "Review", "Approved", "Rejected"];
+      if (isOwner) return ["Sent", "Draft", "Review", "Approved", "Rejected"];
       return ["Sent", "Draft"];
     }
 
@@ -1178,7 +1178,7 @@ export default function QuotationPage() {
             <option value="All">All Status</option>
             <option value="Draft">Draft</option>
             <option value="Sent">Sent</option>
-            <option value="Review">Review SPV</option>
+            <option value="Review">Review Internal</option>
             <option value="Approved">Approved</option>
             <option value="Rejected">Rejected</option>
           </select>

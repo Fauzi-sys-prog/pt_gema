@@ -11,8 +11,9 @@ import React, {
 import { toast } from "sonner@2.0.3";
 import api from "../services/api";
 import { subscribeDataSync } from "../services/dataSyncBus";
-import { isOwnerLike } from "../utils/roles";
+import { hasRoleAccess, isOwnerLike } from "../utils/roles";
 import { normalizeEntityRows } from "../utils/normalizeEntityRows";
+import { sanitizeRichHtml } from "../utils/sanitizeRichHtml";
 
 const AUTH_STATE_CHANGE_EVENT = "app-auth-state-changed";
 
@@ -40,6 +41,22 @@ const safeRemoveLocalStorageItem = (key: string) => {
   }
 };
 
+const sanitizeSuratKeluarRecord = <T extends Partial<SuratKeluar>>(record: T): T => {
+  if (typeof record.isiSurat !== "string") return record;
+  return {
+    ...record,
+    isiSurat: sanitizeRichHtml(record.isiSurat),
+  } as T;
+};
+
+const sanitizeBeritaAcaraRecord = <T extends Partial<BeritaAcara>>(record: T): T => {
+  if (typeof record.contentHTML !== "string") return record;
+  return {
+    ...record,
+    contentHTML: sanitizeRichHtml(record.contentHTML),
+  } as T;
+};
+
 const normalizeAuthUser = (raw: any): User => {
   const displayName = raw?.fullName || raw?.name || raw?.username || "User";
 
@@ -51,6 +68,12 @@ const normalizeAuthUser = (raw: any): User => {
   } as User;
 };
 
+const canReadQuotations = (role?: UserRole | null): boolean =>
+  hasRoleAccess(role, QUOTATION_READ_ROLES);
+
+const canReadDataCollections = (role?: UserRole | null): boolean =>
+  hasRoleAccess(role, DATA_COLLECTION_READ_ROLES);
+
 const persistAuthUser = (user: User | null) => {
   if (!user) {
     safeRemoveLocalStorageItem("user");
@@ -61,10 +84,6 @@ const persistAuthUser = (user: User | null) => {
 
 const readPersistedAuthUser = (): User | null => {
   try {
-    if (!safeGetLocalStorageItem("token")) {
-      safeRemoveLocalStorageItem("user");
-      return null;
-    }
     const raw = safeGetLocalStorageItem("user");
     if (!raw) return null;
     return normalizeAuthUser(JSON.parse(raw));
@@ -105,6 +124,24 @@ export type InvoiceStatus =
   | "Cancelled";
 
 export type PaymentMethod = "Cash" | "Transfer" | "Cheque" | "Giro";
+
+const QUOTATION_READ_ROLES: UserRole[] = [
+  "OWNER",
+  "SPV",
+  "ADMIN",
+  "MANAGER",
+  "SALES",
+  "FINANCE",
+];
+
+const DATA_COLLECTION_READ_ROLES: UserRole[] = [
+  "OWNER",
+  "SPV",
+  "ADMIN",
+  "MANAGER",
+  "SALES",
+  "HR",
+];
 export type StockDirection = "IN" | "OUT";
 
 export interface User {
@@ -1529,7 +1566,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
    * =========================
    */
   useEffect(() => {
-    syncCurrentUserFromAuthState();
+    syncCurrentUserFromAuthState({ allowBackendProbe: true });
   }, []);
 
   useEffect(() => {
@@ -1538,7 +1575,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     };
 
     const handleStorage = (event: StorageEvent) => {
-      if (event.key !== "token" && event.key !== "user") return;
+      if (event.key !== "user") return;
       syncCurrentUserFromAuthState();
     };
 
@@ -1669,12 +1706,22 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   const loadDataCollections = async () => {
+    if (!canReadDataCollections(currentUser?.role)) {
+      setDataCollectionList([]);
+      return;
+    }
+
     const res = await api.get("/data-collections");
     const items = Array.isArray(res.data) ? (res.data as DataCollection[]) : [];
     setDataCollectionList(items);
   };
 
   const loadQuotations = async () => {
+    if (!canReadQuotations(currentUser?.role)) {
+      setQuotationList([]);
+      return;
+    }
+
     const res = await api.get("/quotations");
     const items = Array.isArray(res.data)
       ? (res.data as unknown[]).map((item) => normalizeQuotationForUi(item))
@@ -1683,8 +1730,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   const refreshCoreLinkedData = async () => {
-    const token = safeGetLocalStorageItem("token");
-    if (!token) return;
+    if (!currentUser) return;
     if (coreLinkedRefreshInFlightRef.current) return;
 
     const now = Date.now();
@@ -1707,8 +1753,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   const refreshRealtimeCoreData = async () => {
-    const token = safeGetLocalStorageItem("token");
-    if (!token) return;
+    if (!currentUser) return;
     if (realtimeRefreshInFlightRef.current) return;
     realtimeRefreshInFlightRef.current = true;
 
@@ -1882,8 +1927,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   useEffect(() => {
-    const token = safeGetLocalStorageItem("token");
-    if (!token || !currentUser) return;
+    if (!currentUser) return;
 
     let cancelled = false;
     hasInitializedAutoSyncSnapshot.current = false;
@@ -1982,8 +2026,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   }, [currentUser?.id]);
 
   useEffect(() => {
-    const token = safeGetLocalStorageItem("token");
-    if (!token || !currentUser || !hasHydratedFromBackend.current || !canPersistToBackend.current || isSyncingToBackend.current) return;
+    if (!currentUser || !hasHydratedFromBackend.current || !canPersistToBackend.current || isSyncingToBackend.current) return;
 
     const syncTasks = [
       { key: "invoices", run: () => saveResource("invoices", invoiceList) },
@@ -2168,7 +2211,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const login: AppContextType["login"] = async (username, password) => {
     try {
       const res = await api.post("/auth/login", { username, password });
-      safeSetLocalStorageItem("token", res.data.token);
+      safeRemoveLocalStorageItem("token");
       const meRes = await api.get("/auth/me");
       const user = normalizeAuthUser(meRes.data);
       setCurrentUser(user);
@@ -2667,11 +2710,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           previous = p;
           return {
             ...p,
-            approvalStatus: role === "SPV" ? "Review SPV" : "Approved",
-            approvedBy: role === "SPV" ? p.approvedBy : ownerName,
-            approvedAt: role === "SPV" ? p.approvedAt : now,
-            rejectedBy: role === "SPV" ? undefined : undefined,
-            rejectedAt: role === "SPV" ? undefined : undefined,
+            approvalStatus: "Approved",
+            approvedBy: ownerName,
+            approvedAt: now,
+            rejectedBy: undefined,
+            rejectedAt: undefined,
             spvApprovedBy: role === "SPV" ? ownerName : (p as any).spvApprovedBy,
             spvApprovedAt: role === "SPV" ? now : (p as any).spvApprovedAt,
           };
@@ -3671,10 +3714,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   const addSuratKeluar: AppContextType["addSuratKeluar"] = async (s) => {
-    setSuratKeluarList((prev) => [...prev, s]);
+    const sanitizedRecord = sanitizeSuratKeluarRecord(s);
+    setSuratKeluarList((prev) => [...prev, sanitizedRecord]);
     try {
-      const res = await api.post("/surat-keluar", s);
-      const saved = (res?.data || s) as SuratKeluar;
+      const res = await api.post("/surat-keluar", sanitizedRecord);
+      const saved = sanitizeSuratKeluarRecord((res?.data || sanitizedRecord) as SuratKeluar);
       setSuratKeluarList((prev) => {
         const exists = prev.some((item) => item.id === saved.id);
         if (exists) return prev.map((item) => (item.id === saved.id ? saved : item));
@@ -3683,7 +3727,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       return true;
     } catch (err: any) {
       console.error("Failed to sync create surat keluar:", err);
-      setSuratKeluarList((prev) => prev.filter((item) => item.id !== s.id));
+      setSuratKeluarList((prev) => prev.filter((item) => item.id !== sanitizedRecord.id));
       toast.error(err?.response?.data?.error || "Gagal simpan surat keluar ke server");
       return false;
     }
@@ -3691,11 +3735,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const updateSuratKeluar: AppContextType["updateSuratKeluar"] = async (id, updates) => {
     let prevSnapshot: SuratKeluar | undefined;
     let mergedPayload: SuratKeluar | undefined;
+    const sanitizedUpdates = sanitizeSuratKeluarRecord(updates);
     setSuratKeluarList((prev) =>
       prev.map((item) => {
         if (item.id === id) {
           prevSnapshot = item;
-          mergedPayload = { ...item, ...updates };
+          mergedPayload = sanitizeSuratKeluarRecord({ ...item, ...sanitizedUpdates });
           return mergedPayload;
         }
         return item;
@@ -3704,7 +3749,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     if (!mergedPayload) return false;
     try {
       const res = await api.patch(`/surat-keluar/${id}`, mergedPayload);
-      const saved = (res?.data || mergedPayload) as SuratKeluar;
+      const saved = sanitizeSuratKeluarRecord((res?.data || mergedPayload) as SuratKeluar);
       setSuratKeluarList((prev) => prev.map((item) => (item.id === id ? saved : item)));
       return true;
     } catch (err: any) {
@@ -3740,10 +3785,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   const addBeritaAcara: AppContextType["addBeritaAcara"] = async (ba) => {
-    setBeritaAcaraList((prev) => [...prev, ba]);
+    const sanitizedRecord = sanitizeBeritaAcaraRecord(ba);
+    setBeritaAcaraList((prev) => [...prev, sanitizedRecord]);
     try {
-      const res = await api.post("/berita-acara", ba);
-      const saved = (res?.data || ba) as BeritaAcara;
+      const res = await api.post("/berita-acara", sanitizedRecord);
+      const saved = sanitizeBeritaAcaraRecord((res?.data || sanitizedRecord) as BeritaAcara);
       setBeritaAcaraList((prev) => {
         const exists = prev.some((item) => item.id === saved.id);
         if (exists) return prev.map((item) => (item.id === saved.id ? saved : item));
@@ -3752,7 +3798,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       return true;
     } catch (err: any) {
       console.error("Failed to sync create berita acara:", err);
-      setBeritaAcaraList((prev) => prev.filter((item) => item.id !== ba.id));
+      setBeritaAcaraList((prev) => prev.filter((item) => item.id !== sanitizedRecord.id));
       toast.error(err?.response?.data?.error || "Gagal simpan berita acara ke server");
       return false;
     }
@@ -3760,11 +3806,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const updateBeritaAcara: AppContextType["updateBeritaAcara"] = async (id, updates) => {
     let prevSnapshot: BeritaAcara | undefined;
     let mergedPayload: BeritaAcara | undefined;
+    const sanitizedUpdates = sanitizeBeritaAcaraRecord(updates);
     setBeritaAcaraList((prev) =>
       prev.map((item) => {
         if (item.id === id) {
           prevSnapshot = item;
-          mergedPayload = { ...item, ...updates };
+          mergedPayload = sanitizeBeritaAcaraRecord({ ...item, ...sanitizedUpdates });
           return mergedPayload;
         }
         return item;
@@ -3773,7 +3820,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     if (!mergedPayload) return false;
     try {
       const res = await api.patch(`/berita-acara/${id}`, mergedPayload);
-      const saved = (res?.data || mergedPayload) as BeritaAcara;
+      const saved = sanitizeBeritaAcaraRecord((res?.data || mergedPayload) as BeritaAcara);
       setBeritaAcaraList((prev) => prev.map((item) => (item.id === id ? saved : item)));
       return true;
     } catch (err: any) {
@@ -4769,8 +4816,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   const refreshAll: AppContextType["refreshAll"] = async () => {
-    const token = safeGetLocalStorageItem("token");
-    if (!token || !currentUser) {
+    if (!currentUser) {
       toast.error("Silakan login ulang.");
       return;
     }
@@ -4832,19 +4878,17 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   useEffect(() => {
     const unsubscribe = subscribeDataSync(() => {
-      const token = safeGetLocalStorageItem("token");
-      if (!token) return;
+      if (!currentUser) return;
 
       void refreshCoreLinkedData().catch(() => {
         // Keep UI running; page-level fetchers can still recover.
       });
     });
     return unsubscribe;
-  }, []);
+  }, [currentUser]);
 
   useEffect(() => {
-    const token = safeGetLocalStorageItem("token");
-    if (!token || !currentUser) return;
+    if (!currentUser) return;
 
     const REALTIME_SYNC_INTERVAL_MS = 30000;
     let stopped = false;
@@ -4921,17 +4965,16 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     lastSyncedSignaturesRef.current = {};
   };
 
-  const syncCurrentUserFromAuthState = () => {
-    const token = safeGetLocalStorageItem("token");
-    if (!token) {
-      persistAuthUser(null);
-      setCurrentUser(null);
-      return;
-    }
-
+  const syncCurrentUserFromAuthState = (options?: { allowBackendProbe?: boolean }) => {
     const persistedUser = readPersistedAuthUser();
     if (persistedUser) {
       setCurrentUser(persistedUser);
+      return;
+    }
+
+    if (!options?.allowBackendProbe) {
+      persistAuthUser(null);
+      setCurrentUser(null);
       return;
     }
 
@@ -4943,7 +4986,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         persistAuthUser(user);
       })
       .catch(() => {
-        safeRemoveLocalStorageItem("token");
         persistAuthUser(null);
         setCurrentUser(null);
       });

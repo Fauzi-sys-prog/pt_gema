@@ -13,14 +13,17 @@ export const financeOpsRouter = Router();
 const CONFIG = {
   "customer-invoices": {
     basePath: "/finance/customer-invoices",
+    readRoles: ["OWNER", "SPV", "ADMIN", "MANAGER", "SALES", "FINANCE"] as Role[],
     writeRoles: ["OWNER", "ADMIN", "SALES", "FINANCE"] as Role[],
   },
   "vendor-expenses": {
     basePath: "/finance/vendor-expenses",
+    readRoles: ["OWNER", "SPV", "ADMIN", "MANAGER", "FINANCE"] as Role[],
     writeRoles: ["OWNER", "ADMIN", "FINANCE"] as Role[],
   },
   "vendor-invoices": {
     basePath: "/finance/vendor-invoices",
+    readRoles: ["OWNER", "SPV", "ADMIN", "MANAGER", "FINANCE", "SUPPLY_CHAIN"] as Role[],
     writeRoles: ["OWNER", "ADMIN", "FINANCE", "SUPPLY_CHAIN"] as Role[],
   },
 } as const;
@@ -32,6 +35,10 @@ const recordSchema = z.object({
 }).passthrough();
 
 const bulkSchema = z.array(recordSchema);
+
+function canRead(resource: FinanceOpsResource, role?: Role | null): boolean {
+  return hasRoleAccess(role, CONFIG[resource].readRoles);
+}
 
 function canWrite(resource: FinanceOpsResource, role?: Role | null): boolean {
   return hasRoleAccess(role, CONFIG[resource].writeRoles);
@@ -605,7 +612,10 @@ async function deleteResource(resource: FinanceOpsResource, id: string) {
 function registerRoutes(resource: FinanceOpsResource) {
   const { basePath } = CONFIG[resource];
 
-  financeOpsRouter.get(basePath, authenticate, async (_req: AuthRequest, res: Response) => {
+  financeOpsRouter.get(basePath, authenticate, async (req: AuthRequest, res: Response) => {
+    if (!canRead(resource, req.user?.role)) {
+      return sendError(res, 403, { code: "FORBIDDEN", message: "Forbidden", legacyError: "Forbidden" });
+    }
     try {
       return res.json(await listResource(resource));
     } catch {

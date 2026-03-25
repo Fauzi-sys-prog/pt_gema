@@ -47,21 +47,11 @@ const safeRemoveStorageItem = (storage: Storage | undefined, key: string) => {
 
 const api = axios.create({
   baseURL: API_BASE_URL,
+  withCredentials: true,
   timeout: 20000,
   headers: {
     "Content-Type": "application/json",
   },
-});
-
-// 🔥 AUTO ATTACH TOKEN
-api.interceptors.request.use((config) => {
-  const token = safeGetStorageItem(typeof localStorage !== "undefined" ? localStorage : undefined, "token");
-
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-
-  return config;
 });
 
 api.interceptors.response.use(
@@ -87,17 +77,21 @@ api.interceptors.response.use(
     if (status === 401) {
       const reqUrl = String(error?.config?.url || "");
       const isLoginRequest = reqUrl.startsWith("/auth/login");
+      const isAuthProbeRequest = reqUrl.startsWith("/auth/me");
       const hadAuthHeader = Boolean(error?.config?.headers?.Authorization);
       const local = typeof localStorage !== "undefined" ? localStorage : undefined;
       const session = typeof sessionStorage !== "undefined" ? sessionStorage : undefined;
       const hasStoredToken = Boolean(safeGetStorageItem(local, "token"));
+      const hasStoredUser = Boolean(safeGetStorageItem(local, "user"));
+      const hasStoredSession = hasStoredToken || hasStoredUser;
       // Prevent auth-loop on startup race: only force logout when request
       // actually carried auth header and still got 401.
-      if (hadAuthHeader && !isLoginRequest) {
+      const shouldForceRelogin =
+        !isLoginRequest && (hadAuthHeader || hasStoredSession || isAuthProbeRequest);
+      if (shouldForceRelogin) {
         safeRemoveStorageItem(local, "token");
         safeRemoveStorageItem(local, "user");
       }
-      const shouldForceRelogin = hadAuthHeader || !hasStoredToken;
       const onLoginPage = window.location.pathname === "/login";
       const alreadyNotified = safeGetStorageItem(session, "auth401_notified") === "1";
       if (shouldForceRelogin && !alreadyNotified) {

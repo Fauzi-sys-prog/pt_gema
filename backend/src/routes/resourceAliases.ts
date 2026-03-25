@@ -6,6 +6,7 @@ import { prisma } from "../prisma";
 import { authenticate } from "../middlewares/auth";
 import { AuthRequest } from "../types/auth";
 import { sendError } from "../utils/http";
+import { hasRoleAccess } from "../utils/roles";
 
 export const resourceAliasesRouter = Router();
 
@@ -30,6 +31,20 @@ const PRIVILEGED_WRITE_ROLES = new Set<Role>([
   "MANAGER",
 ]);
 
+const ALIAS_READ_ROLES: Record<(typeof ALIAS_RESOURCES)[number], Role[]> = {
+  "hr-shifts": ["OWNER", "SPV", "ADMIN", "MANAGER", "HR", "FINANCE"],
+  "hr-shift-schedules": ["OWNER", "SPV", "ADMIN", "MANAGER", "HR", "FINANCE"],
+  "hr-attendance-summaries": ["OWNER", "SPV", "ADMIN", "MANAGER", "HR", "FINANCE"],
+  "hr-performance-reviews": ["OWNER", "SPV", "ADMIN", "MANAGER", "HR", "FINANCE"],
+  "hr-thl-contracts": ["OWNER", "SPV", "ADMIN", "MANAGER", "HR", "FINANCE"],
+  "hr-resignations": ["OWNER", "SPV", "ADMIN", "MANAGER", "HR", "FINANCE"],
+  "finance-bpjs-payments": ["OWNER", "SPV", "ADMIN", "MANAGER", "FINANCE"],
+  "finance-pph21-filings": ["OWNER", "SPV", "ADMIN", "MANAGER", "FINANCE"],
+  "finance-thr-disbursements": ["OWNER", "SPV", "ADMIN", "MANAGER", "FINANCE"],
+  "finance-employee-allowances": ["OWNER", "SPV", "ADMIN", "MANAGER", "FINANCE"],
+  "finance-po-payments": ["OWNER", "SPV", "ADMIN", "MANAGER", "FINANCE", "SUPPLY_CHAIN"],
+};
+
 const createSchema = z.object({
   id: z.string().min(1),
 }).passthrough();
@@ -42,6 +57,10 @@ const bulkSchema = z.array(createSchema);
 
 function canWrite(role?: Role): boolean {
   return !!role && PRIVILEGED_WRITE_ROLES.has(role);
+}
+
+function canRead(resource: (typeof ALIAS_RESOURCES)[number], role?: Role): boolean {
+  return hasRoleAccess(role, ALIAS_READ_ROLES[resource]);
 }
 
 function ensurePayloadWithId(id: string, payload: unknown): Record<string, unknown> {
@@ -84,10 +103,18 @@ async function writeAuditLog(
   });
 }
 
-function registerAlias(resource: string) {
+function registerAlias(resource: (typeof ALIAS_RESOURCES)[number]) {
   const basePath = `/${resource}`;
 
   resourceAliasesRouter.get(basePath, authenticate, async (_req: AuthRequest, res: Response) => {
+    if (!canRead(resource, _req.user?.role)) {
+      return sendError(res, 403, {
+        code: "FORBIDDEN",
+        message: "Forbidden",
+        legacyError: "Forbidden",
+      });
+    }
+
     try {
       const rows = await prisma.appEntity.findMany({
         where: { resource },

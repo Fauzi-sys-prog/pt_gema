@@ -6,11 +6,40 @@ import { AuthRequest } from "../types/auth";
 import { verifyAccessToken } from "../utils/token";
 import { sendError } from "../utils/http";
 import { hasRoleAccess } from "../utils/roles";
+import { readAccessTokenCookie } from "../utils/authCookie";
 
-export async function authenticate(req: AuthRequest, res: Response, next: NextFunction) {
+function resolveAccessToken(req: AuthRequest): {
+  token: string | null;
+  formatInvalid: boolean;
+} {
   const authHeader = req.headers.authorization;
+  const cookieToken = readAccessTokenCookie(req);
 
   if (!authHeader) {
+    return {
+      token: cookieToken,
+      formatInvalid: false,
+    };
+  }
+
+  if (!authHeader.startsWith("Bearer ")) {
+    return {
+      token: cookieToken,
+      formatInvalid: !cookieToken,
+    };
+  }
+
+  const bearerToken = authHeader.slice("Bearer ".length).trim();
+  return {
+    token: bearerToken || cookieToken,
+    formatInvalid: !bearerToken && !cookieToken,
+  };
+}
+
+export async function authenticate(req: AuthRequest, res: Response, next: NextFunction) {
+  const { token, formatInvalid } = resolveAccessToken(req);
+
+  if (!token && !formatInvalid) {
     return sendError(res, 401, {
       code: "AUTH_REQUIRED",
       message: "Unauthorized",
@@ -18,7 +47,7 @@ export async function authenticate(req: AuthRequest, res: Response, next: NextFu
     });
   }
 
-  if (!authHeader.startsWith("Bearer ")) {
+  if (!token && formatInvalid) {
     return sendError(res, 401, {
       code: "AUTH_FORMAT_INVALID",
       message: "Invalid auth format",
@@ -26,7 +55,13 @@ export async function authenticate(req: AuthRequest, res: Response, next: NextFu
     });
   }
 
-  const token = authHeader.split(" ")[1];
+  if (!token) {
+    return sendError(res, 401, {
+      code: "AUTH_REQUIRED",
+      message: "Unauthorized",
+      legacyError: "Unauthorized",
+    });
+  }
 
   try {
     const decoded = verifyAccessToken(token) as JwtPayload & {
@@ -73,7 +108,10 @@ export async function authenticate(req: AuthRequest, res: Response, next: NextFu
 
     const activeUser = await prisma.user.findUnique({
       where: { id: decoded.id },
-      select: { isActive: true },
+      select: {
+        isActive: true,
+        role: true,
+      },
     });
     if (!activeUser?.isActive) {
       return sendError(res, 401, {
@@ -85,7 +123,7 @@ export async function authenticate(req: AuthRequest, res: Response, next: NextFu
 
     req.user = {
       id: decoded.id,
-      role: decoded.role,
+      role: activeUser.role,
       jti: decoded.jti,
     };
 
