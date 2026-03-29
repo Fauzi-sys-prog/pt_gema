@@ -101,7 +101,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, []);
 
-const clearAuthState = () => {
+  const clearAuthState = () => {
     authRequestVersionRef.current += 1;
     safeRemoveStorageItem("token");
     safeRemoveSessionStorageItem(CSRF_STORAGE_KEY);
@@ -118,6 +118,15 @@ const clearAuthState = () => {
     const persistedUser = readPersistedUser();
     if (persistedUser && isMountedRef.current) {
       setCurrentUser(persistedUser);
+    }
+
+    const onLoginPage =
+      typeof window !== "undefined" && window.location.pathname === "/login";
+    if (!persistedUser && onLoginPage) {
+      if (isMountedRef.current) {
+        setLoading(false);
+      }
+      return;
     }
 
     const requestVersion = ++authRequestVersionRef.current;

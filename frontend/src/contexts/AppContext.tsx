@@ -1699,11 +1699,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   /**
    * =========================
-   *  AUTH: /auth/me bootstrap
+   *  AUTH: bootstrap from AuthContext state
    * =========================
    */
   useEffect(() => {
-    syncCurrentUserFromAuthState({ allowBackendProbe: true });
+    syncCurrentUserFromAuthState();
   }, []);
 
   useEffect(() => {
@@ -5144,30 +5144,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     lastSyncedSignaturesRef.current = {};
   };
 
-  const syncCurrentUserFromAuthState = (options?: { allowBackendProbe?: boolean }) => {
+  const syncCurrentUserFromAuthState = () => {
     const persistedUser = readPersistedAuthUser();
     if (persistedUser) {
       setCurrentUser(persistedUser);
       return;
     }
 
-    if (!options?.allowBackendProbe) {
-      persistAuthUser(null);
-      setCurrentUser(null);
-      return;
-    }
-
-    api
-      .get("/auth/me")
-      .then((res) => {
-        const user = normalizeAuthUser(res.data);
-        setCurrentUser(user);
-        persistAuthUser(user);
-      })
-      .catch(() => {
-        persistAuthUser(null);
-        setCurrentUser(null);
-      });
+    persistAuthUser(null);
+    setCurrentUser(null);
   };
 
   /**
