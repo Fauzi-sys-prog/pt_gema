@@ -115,7 +115,6 @@ const PATH_ACCESS_MAP: Record<string, readonly string[]> = {
   '/hr/attendance-recap': HUMAN_CAPITAL_ROLES,
   '/hr/payroll': HUMAN_CAPITAL_ROLES,
   '/data-collection': DATA_COLLECTION_ROLES,
-  '/settings/master': SETTINGS_ROLES,
   '/settings/user-management': SETTINGS_ROLES,
   '/settings/audit-trail': SETTINGS_ROLES,
 };
@@ -285,7 +284,6 @@ export default function Layout({ children }: LayoutProps) {
       title: 'Settings',
       icon: <Settings size={20} />,
       submenu: [
-        { title: 'Settings Master', path: '/settings/master' },
         { title: 'User Management', path: '/settings/user-management' },
         { title: 'Audit Trail (Forensic)', path: '/settings/audit-trail' }
       ]

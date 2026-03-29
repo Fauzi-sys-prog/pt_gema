@@ -71,7 +71,6 @@ import ExecutiveDashboardPage from "./pages/finance/ExecutiveDashboardPage";
 import YearEndClosingPage from "./pages/finance/YearEndClosingPage";
 import UserManagementPage from "./pages/settings/UserManagementPage";
 import AuditTrailPage from "./pages/settings/AuditTrailPage";
-import AppSettingsPage from "./pages/settings/AppSettingsPage";
 import WorkingExpensePage from "./pages/finance/WorkingExpensePage";
 import VendorPaymentPage from "./pages/finance/VendorPaymentPage";
 import AccountsReceivablePage from "./pages/finance/AccountsReceivablePage";
@@ -203,7 +202,7 @@ export default function App() {
               element={
                 <ProtectedRoute>
                   <Layout>
-                    <AppSettingsPage />
+                    <Navigate to="/settings/user-management" replace />
                   </Layout>
                 </ProtectedRoute>
               }
