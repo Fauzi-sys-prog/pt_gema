@@ -5,7 +5,7 @@ import { z } from "zod";
 import { prisma } from "./prisma";
 
 dotenv.config();
-dotenv.config({ path: ".env.seed", override: true });
+dotenv.config({ path: ".env.seed" });
 
 const roleValues = Object.values(Role) as [Role, ...Role[]];
 

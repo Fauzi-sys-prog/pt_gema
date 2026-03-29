@@ -28,6 +28,17 @@ const PROCUREMENT_WRITE_ROLES: Record<ProcurementResource, Role[]> = {
   receivings: ["OWNER", "SPV", "ADMIN", "MANAGER", "WAREHOUSE", "PRODUKSI"],
 };
 
+const PURCHASE_ORDER_STATUSES = new Set([
+  "Draft",
+  "Pending",
+  "Sent",
+  "Approved",
+  "Partial",
+  "Received",
+  "Rejected",
+  "Cancelled",
+]);
+
 function canWrite(resource: ProcurementResource, role?: Role | null): boolean {
   return hasRoleAccess(role, PROCUREMENT_WRITE_ROLES[resource]);
 }
@@ -62,6 +73,14 @@ function inventoryDateString(value: string | Date | null | undefined): string {
   if (value instanceof Date) return value.toISOString().slice(0, 10);
   const parsed = new Date(value);
   return Number.isNaN(parsed.getTime()) ? String(value) : parsed.toISOString().slice(0, 10);
+}
+
+function normalizePurchaseOrderStatus(value: unknown): string {
+  const status = asTrimmedString(value) || "Draft";
+  if (!PURCHASE_ORDER_STATUSES.has(status)) {
+    throw new Error("purchase-orders: status tidak valid");
+  }
+  return status;
 }
 
 function mapPurchaseOrder(row: {
@@ -544,6 +563,7 @@ async function syncInventoryFromReceiving(receivingId: string) {
 async function createResource(resource: ProcurementResource, payload: Record<string, unknown>) {
   const id = String(payload.id);
   if (resource === "purchase-orders") {
+    const status = normalizePurchaseOrderStatus(payload.status);
     await prisma.procurementPurchaseOrder.create({
       data: {
         id,
@@ -565,7 +585,7 @@ async function createResource(resource: ProcurementResource, payload: Record<str
         deliveryDate: asTrimmedString(payload.deliveryDate) ? new Date(String(payload.deliveryDate)) : undefined,
         signatoryName: asTrimmedString(payload.signatoryName) || undefined,
         totalAmount: toFiniteNumber(payload.total, 0),
-        status: asTrimmedString(payload.status) || "Draft",
+        status,
         items: {
           create: (Array.isArray(payload.items) ? payload.items : [])
             .map((raw, index) => {
@@ -637,6 +657,7 @@ async function createResource(resource: ProcurementResource, payload: Record<str
 
 async function updateResource(resource: ProcurementResource, id: string, payload: Record<string, unknown>) {
   if (resource === "purchase-orders") {
+    const status = normalizePurchaseOrderStatus(payload.status);
     await prisma.procurementPurchaseOrder.update({
       where: { id },
       data: {
@@ -658,7 +679,7 @@ async function updateResource(resource: ProcurementResource, id: string, payload
         deliveryDate: asTrimmedString(payload.deliveryDate) ? new Date(String(payload.deliveryDate)) : null,
         signatoryName: asTrimmedString(payload.signatoryName) || null,
         totalAmount: toFiniteNumber(payload.total, 0),
-        status: asTrimmedString(payload.status) || "Draft",
+        status,
         items: {
           deleteMany: {},
           create: (Array.isArray(payload.items) ? payload.items : [])

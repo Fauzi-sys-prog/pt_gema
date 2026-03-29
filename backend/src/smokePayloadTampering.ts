@@ -74,93 +74,101 @@ async function main() {
   const owner = await login(OWNER_USER, OWNER_PASS, OWNER_TOKEN_OVERRIDE);
   const sales = await login(SALES_USER, SALES_PASS, SALES_TOKEN_OVERRIDE);
   const finance = await login(FIN_USER, FIN_PASS, FIN_TOKEN_OVERRIDE);
+  let customerInvoiceIdToCleanup: string | null = null;
 
-  // 1) Unknown field should be rejected by strict payload schema.
-  const tamperVendorExpense = await api("POST", "/finance/vendor-expenses", {
-    token: finance,
-    body: {
-      id: `tamper-vexp-${Date.now()}`,
-      noExpense: `EXP-TAMPER-${Date.now()}`,
-      tanggal: new Date().toISOString().slice(0, 10),
-      vendorId: "V-TAMPER",
-      vendorName: "Tamper Vendor",
-      kategori: "Material",
-      keterangan: "tamper test",
-      nominal: 100000,
-      ppn: 11000,
-      totalNominal: 1,
-      metodeBayar: "Transfer",
-      status: "Draft",
-      hackedFlag: "EVIL_FIELD",
-    },
-  });
-  assertStatus("reject unknown field vendor-expenses", tamperVendorExpense.status, 400);
+  try {
+    // 1) Unknown field should be rejected by strict payload schema.
+    const tamperVendorExpense = await api("POST", "/finance/vendor-expenses", {
+      token: finance,
+      body: {
+        id: `tamper-vexp-${Date.now()}`,
+        noExpense: `EXP-TAMPER-${Date.now()}`,
+        tanggal: new Date().toISOString().slice(0, 10),
+        vendorId: "V-TAMPER",
+        vendorName: "Tamper Vendor",
+        kategori: "Material",
+        keterangan: "tamper test",
+        nominal: 100000,
+        ppn: 11000,
+        totalNominal: 1,
+        metodeBayar: "Transfer",
+        status: "Draft",
+        hackedFlag: "EVIL_FIELD",
+      },
+    });
+    assertStatus("reject unknown field vendor-expenses", tamperVendorExpense.status, 400);
 
-  // 2) Invalid status enum should be rejected.
-  const tamperPoStatus = await api("POST", "/purchase-orders", {
-    token: finance,
-    body: {
-      id: `tamper-po-${Date.now()}`,
-      noPO: `PO-TAMPER-${Date.now()}`,
-      tanggal: new Date().toISOString().slice(0, 10),
-      supplier: "Tamper Supplier",
-      total: 999999999,
-      status: "HACKED_APPROVED",
-      items: [],
-    },
-  });
-  assertStatus("reject invalid status purchase-orders", tamperPoStatus.status, 400);
+    // 2) Invalid status enum should be rejected.
+    const tamperPoStatus = await api("POST", "/purchase-orders", {
+      token: owner,
+      body: {
+        id: `tamper-po-${Date.now()}`,
+        noPO: `PO-TAMPER-${Date.now()}`,
+        tanggal: new Date().toISOString().slice(0, 10),
+        supplier: "Tamper Supplier",
+        total: 999999999,
+        status: "HACKED_APPROVED",
+        items: [],
+      },
+    });
+    assertStatus("reject invalid status purchase-orders", tamperPoStatus.status, 400);
 
-  // 3) Role bypass should still fail.
-  const salesCreateVendorExpense = await api("POST", "/finance/vendor-expenses", {
-    token: sales,
-    body: {
-      id: `sales-vexp-${Date.now()}`,
-      noExpense: `EXP-SALES-${Date.now()}`,
-      tanggal: new Date().toISOString().slice(0, 10),
-      vendorId: "V-SALES",
-      vendorName: "Sales Vendor",
-      kategori: "Material",
-      keterangan: "role bypass test",
-      nominal: 1000,
-      ppn: 0,
-      totalNominal: 1000,
-      metodeBayar: "Cash",
-      status: "Draft",
-    },
-  });
-  assertStatus("sales cannot create vendor-expenses", salesCreateVendorExpense.status, 403);
+    // 3) Role bypass should still fail.
+    const salesCreateVendorExpense = await api("POST", "/finance/vendor-expenses", {
+      token: sales,
+      body: {
+        id: `sales-vexp-${Date.now()}`,
+        noExpense: `EXP-SALES-${Date.now()}`,
+        tanggal: new Date().toISOString().slice(0, 10),
+        vendorId: "V-SALES",
+        vendorName: "Sales Vendor",
+        kategori: "Material",
+        keterangan: "role bypass test",
+        nominal: 1000,
+        ppn: 0,
+        totalNominal: 1000,
+        metodeBayar: "Cash",
+        status: "Draft",
+      },
+    });
+    assertStatus("sales cannot create vendor-expenses", salesCreateVendorExpense.status, 403);
 
-  // 4) Ensure calculation tampering is sanitized (server recompute).
-  const ciEntityId = `tamper-ci-${Date.now()}`;
-  const createCustomerInvoice = await api("POST", "/finance/customer-invoices", {
-    token: owner,
-    body: {
-      id: ciEntityId,
-      noInvoice: `INV-TAMPER-${Date.now()}`,
-      tanggal: new Date().toISOString().slice(0, 10),
-      dueDate: new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10),
-      customerName: "Tamper Customer",
-      perihal: "tamper calc",
-      items: [{ id: "it-1", deskripsi: "item", qty: 2, satuan: "pcs", hargaSatuan: 1000, jumlah: 1 }],
-      ppn: 0,
-      pph: 0,
-      totalNominal: 1,
-      paidAmount: 0,
-      outstandingAmount: 1,
-      status: "Draft",
-      paymentHistory: [],
-    },
-  });
-  assertStatus("create customer invoice tamper calc", createCustomerInvoice.status, 201);
-  const payload = createCustomerInvoice.json || {};
-  const totalNominal = Number(payload.totalNominal || 0);
-  if (totalNominal !== 2000) {
-    throw new Error(`customer-invoices sanitize failed: expected totalNominal=2000, got ${totalNominal}`);
+    // 4) Ensure calculation tampering is sanitized (server recompute).
+    const ciEntityId = `tamper-ci-${Date.now()}`;
+    customerInvoiceIdToCleanup = ciEntityId;
+    const createCustomerInvoice = await api("POST", "/finance/customer-invoices", {
+      token: owner,
+      body: {
+        id: ciEntityId,
+        noInvoice: `INV-TAMPER-${Date.now()}`,
+        tanggal: new Date().toISOString().slice(0, 10),
+        dueDate: new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10),
+        customerName: "Tamper Customer",
+        perihal: "tamper calc",
+        items: [{ id: `it-${Date.now()}`, deskripsi: "item", qty: 2, satuan: "pcs", hargaSatuan: 1000, jumlah: 1 }],
+        ppn: 0,
+        pph: 0,
+        totalNominal: 1,
+        paidAmount: 0,
+        outstandingAmount: 1,
+        status: "Draft",
+        paymentHistory: [],
+      },
+    });
+    assertStatus("create customer invoice tamper calc", createCustomerInvoice.status, 201);
+    const payload = createCustomerInvoice.json || {};
+    const totalNominal = Number(payload.totalNominal || 0);
+    if (totalNominal !== 2000) {
+      throw new Error(`customer-invoices sanitize failed: expected totalNominal=2000, got ${totalNominal}`);
+    }
+    console.log("OK sanitize customer-invoices totalNominal -> 2000");
+
+    console.log("\nAll payload tampering smoke checks passed.");
+  } finally {
+    if (customerInvoiceIdToCleanup) {
+      await api("DELETE", `/finance/customer-invoices/${customerInvoiceIdToCleanup}`, { token: owner });
+    }
   }
-  console.log("OK sanitize customer-invoices totalNominal -> 2000");
-
-  console.log("\nAll payload tampering smoke checks passed.");
 }
 
 main().catch((err) => {

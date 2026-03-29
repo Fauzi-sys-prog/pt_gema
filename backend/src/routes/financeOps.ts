@@ -72,6 +72,73 @@ function inventoryDateString(value: string | Date | null | undefined): string {
   return Number.isNaN(parsed.getTime()) ? String(value) : parsed.toISOString().slice(0, 10);
 }
 
+function sanitizeCustomerInvoiceInput(payload: Record<string, unknown>, id: string) {
+  const items = (Array.isArray(payload.items) ? payload.items : [])
+    .map((raw, index) => {
+      const item = asRecord(raw);
+      const qty = Math.max(0, toFiniteNumber(item.qty, 0));
+      const unitPrice = Math.max(0, toFiniteNumber(item.hargaSatuan || item.unitPrice, 0));
+      const amount = Math.max(0, qty * unitPrice);
+
+      return {
+        id: asTrimmedString(item.id) || `${id}-ITEM-${String(index + 1).padStart(3, "0")}`,
+        description: asTrimmedString(item.deskripsi || item.description) || "",
+        qty,
+        unit: asTrimmedString(item.satuan || item.unit) || "pcs",
+        unitPrice,
+        amount,
+      };
+    })
+    .filter((item) => item.description);
+
+  const payments = (Array.isArray(payload.paymentHistory) ? payload.paymentHistory : []).map((raw, index) => {
+    const item = asRecord(raw);
+    return {
+      id: asTrimmedString(item.id) || `${id}-PAY-${String(index + 1).padStart(3, "0")}`,
+      tanggal: new Date(inventoryDateString(asTrimmedString(item.tanggal))),
+      nominal: Math.max(0, toFiniteNumber(item.nominal, 0)),
+      method: asTrimmedString(item.metodeBayar || item.method) || "Transfer",
+      proofNo: asTrimmedString(item.noBukti) || undefined,
+      bankName: asTrimmedString(item.bankName) || undefined,
+      remark: asTrimmedString(item.remark) || undefined,
+      createdBy: asTrimmedString(item.createdBy) || undefined,
+      paidAt: asTrimmedString(item.createdAt) ? new Date(String(item.createdAt)) : undefined,
+    };
+  });
+
+  const subtotalComputed = items.reduce((sum, item) => sum + item.amount, 0);
+  const subtotalProvided = Math.max(0, toFiniteNumber(payload.subtotal, 0));
+  const subtotal = subtotalComputed > 0 ? subtotalComputed : subtotalProvided;
+  const ppn = Math.max(0, toFiniteNumber(payload.ppn, 0));
+  const pph = Math.max(0, toFiniteNumber(payload.pph, 0));
+  const totalAmount = Math.max(0, subtotal + ppn - pph);
+  const paidAmountRaw = Math.max(
+    0,
+    payments.reduce((sum, payment) => sum + payment.nominal, 0) || toFiniteNumber(payload.paidAmount, 0)
+  );
+  const paidAmount = Math.min(totalAmount, paidAmountRaw);
+  const outstandingAmount = Math.max(0, totalAmount - paidAmount);
+  const statusInput = asTrimmedString(payload.status) || "Draft";
+  const status =
+    totalAmount > 0 && outstandingAmount <= 0
+      ? "Paid"
+      : paidAmount > 0
+        ? "Partial"
+        : statusInput;
+
+  return {
+    items,
+    payments,
+    subtotal,
+    ppn,
+    pph,
+    totalAmount,
+    paidAmount,
+    outstandingAmount,
+    status,
+  };
+}
+
 function mapCustomerInvoice(row: {
   id: string;
   customerId: string | null;
@@ -350,6 +417,7 @@ async function createResource(resource: FinanceOpsResource, payload: Record<stri
   const id = String(payload.id);
   switch (resource) {
     case "customer-invoices": {
+      const normalized = sanitizeCustomerInvoiceInput(payload, id);
       await prisma.financeCustomerInvoice.create({
         data: {
           id,
@@ -361,13 +429,13 @@ async function createResource(resource: FinanceOpsResource, payload: Record<stri
           customerName: asTrimmedString(payload.customerName || payload.customer) || "",
           projectName: asTrimmedString(payload.projectName) || undefined,
           perihal: asTrimmedString(payload.perihal) || undefined,
-          subtotal: toFiniteNumber(payload.subtotal, 0),
-          ppn: toFiniteNumber(payload.ppn, 0),
-          pph: toFiniteNumber(payload.pph, 0),
-          totalAmount: toFiniteNumber(payload.totalNominal ?? payload.totalAmount ?? payload.totalBayar, 0),
-          paidAmount: toFiniteNumber(payload.paidAmount, 0),
-          outstandingAmount: toFiniteNumber(payload.outstandingAmount, 0),
-          status: asTrimmedString(payload.status) || "Draft",
+          subtotal: normalized.subtotal,
+          ppn: normalized.ppn,
+          pph: normalized.pph,
+          totalAmount: normalized.totalAmount,
+          paidAmount: normalized.paidAmount,
+          outstandingAmount: normalized.outstandingAmount,
+          status: normalized.status,
           noKontrak: asTrimmedString(payload.noKontrak) || undefined,
           noPO: asTrimmedString(payload.noPO) || undefined,
           termin: asTrimmedString(payload.termin) || undefined,
@@ -378,35 +446,10 @@ async function createResource(resource: FinanceOpsResource, payload: Record<stri
           createdBy: asTrimmedString(payload.createdBy) || undefined,
           sentAt: asTrimmedString(payload.sentAt) ? new Date(String(payload.sentAt)) : undefined,
           items: {
-            create: (Array.isArray(payload.items) ? payload.items : [])
-              .map((raw, index) => {
-                const item = asRecord(raw);
-                return {
-                  id: asTrimmedString(item.id) || `${id}-ITEM-${String(index + 1).padStart(3, "0")}`,
-                  description: asTrimmedString(item.deskripsi || item.description) || "",
-                  qty: toFiniteNumber(item.qty, 0),
-                  unit: asTrimmedString(item.satuan || item.unit) || "pcs",
-                  unitPrice: toFiniteNumber(item.hargaSatuan || item.unitPrice, 0),
-                  amount: toFiniteNumber(item.jumlah || item.total, toFiniteNumber(item.qty, 0) * toFiniteNumber(item.hargaSatuan || item.unitPrice, 0)),
-                };
-              })
-              .filter((item) => item.description),
+            create: normalized.items,
           },
           payments: {
-            create: (Array.isArray(payload.paymentHistory) ? payload.paymentHistory : []).map((raw, index) => {
-              const item = asRecord(raw);
-              return {
-                id: asTrimmedString(item.id) || `${id}-PAY-${String(index + 1).padStart(3, "0")}`,
-                tanggal: new Date(inventoryDateString(asTrimmedString(item.tanggal))),
-                nominal: toFiniteNumber(item.nominal, 0),
-                method: asTrimmedString(item.metodeBayar || item.method) || "Transfer",
-                proofNo: asTrimmedString(item.noBukti) || undefined,
-                bankName: asTrimmedString(item.bankName) || undefined,
-                remark: asTrimmedString(item.remark) || undefined,
-                createdBy: asTrimmedString(item.createdBy) || undefined,
-                paidAt: asTrimmedString(item.createdAt) ? new Date(String(item.createdAt)) : undefined,
-              };
-            }),
+            create: normalized.payments,
           },
         },
       });
@@ -473,6 +516,7 @@ async function createResource(resource: FinanceOpsResource, payload: Record<stri
 async function updateResource(resource: FinanceOpsResource, id: string, payload: Record<string, unknown>) {
   switch (resource) {
     case "customer-invoices": {
+      const normalized = sanitizeCustomerInvoiceInput(payload, id);
       await prisma.financeCustomerInvoice.update({
         where: { id },
         data: {
@@ -484,13 +528,13 @@ async function updateResource(resource: FinanceOpsResource, id: string, payload:
           customerName: asTrimmedString(payload.customerName || payload.customer) || "",
           projectName: asTrimmedString(payload.projectName) || null,
           perihal: asTrimmedString(payload.perihal) || null,
-          subtotal: toFiniteNumber(payload.subtotal, 0),
-          ppn: toFiniteNumber(payload.ppn, 0),
-          pph: toFiniteNumber(payload.pph, 0),
-          totalAmount: toFiniteNumber(payload.totalNominal ?? payload.totalAmount ?? payload.totalBayar, 0),
-          paidAmount: toFiniteNumber(payload.paidAmount, 0),
-          outstandingAmount: toFiniteNumber(payload.outstandingAmount, 0),
-          status: asTrimmedString(payload.status) || "Draft",
+          subtotal: normalized.subtotal,
+          ppn: normalized.ppn,
+          pph: normalized.pph,
+          totalAmount: normalized.totalAmount,
+          paidAmount: normalized.paidAmount,
+          outstandingAmount: normalized.outstandingAmount,
+          status: normalized.status,
           noKontrak: asTrimmedString(payload.noKontrak) || null,
           noPO: asTrimmedString(payload.noPO) || null,
           termin: asTrimmedString(payload.termin) || null,
@@ -502,36 +546,11 @@ async function updateResource(resource: FinanceOpsResource, id: string, payload:
           sentAt: asTrimmedString(payload.sentAt) ? new Date(String(payload.sentAt)) : null,
           items: {
             deleteMany: {},
-            create: (Array.isArray(payload.items) ? payload.items : [])
-              .map((raw, index) => {
-                const item = asRecord(raw);
-                return {
-                  id: asTrimmedString(item.id) || `${id}-ITEM-${String(index + 1).padStart(3, "0")}`,
-                  description: asTrimmedString(item.deskripsi || item.description) || "",
-                  qty: toFiniteNumber(item.qty, 0),
-                  unit: asTrimmedString(item.satuan || item.unit) || "pcs",
-                  unitPrice: toFiniteNumber(item.hargaSatuan || item.unitPrice, 0),
-                  amount: toFiniteNumber(item.jumlah || item.total, toFiniteNumber(item.qty, 0) * toFiniteNumber(item.hargaSatuan || item.unitPrice, 0)),
-                };
-              })
-              .filter((item) => item.description),
+            create: normalized.items,
           },
           payments: {
             deleteMany: {},
-            create: (Array.isArray(payload.paymentHistory) ? payload.paymentHistory : []).map((raw, index) => {
-              const item = asRecord(raw);
-              return {
-                id: asTrimmedString(item.id) || `${id}-PAY-${String(index + 1).padStart(3, "0")}`,
-                tanggal: new Date(inventoryDateString(asTrimmedString(item.tanggal))),
-                nominal: toFiniteNumber(item.nominal, 0),
-                method: asTrimmedString(item.metodeBayar || item.method) || "Transfer",
-                proofNo: asTrimmedString(item.noBukti) || undefined,
-                bankName: asTrimmedString(item.bankName) || undefined,
-                remark: asTrimmedString(item.remark) || undefined,
-                createdBy: asTrimmedString(item.createdBy) || undefined,
-                paidAt: asTrimmedString(item.createdAt) ? new Date(String(item.createdAt)) : undefined,
-              };
-            }),
+            create: normalized.payments,
           },
         },
       });

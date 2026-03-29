@@ -92,6 +92,21 @@ async function login(role: RoleKey): Promise<Session> {
   throw new Error(`${role} login failed after retries`);
 }
 
+async function pollProjectIdByQuotationId(quotationId: string, token: string): Promise<string> {
+  for (let attempt = 1; attempt <= 10; attempt += 1) {
+    const res = await api("GET", "/projects", { token });
+    if (res.status !== 200) {
+      throw new Error(`poll project for quotation ${quotationId}: expected 200, got ${res.status}`);
+    }
+    const rows = Array.isArray(res.json) ? res.json : [];
+    const found = rows.find((row: any) => row?.quotationId === quotationId && typeof row?.id === "string");
+    if (found) return String(found.id);
+    await sleep(500);
+  }
+
+  throw new Error(`linked project for quotation ${quotationId} not found`);
+}
+
 async function run() {
   console.log("Smoke Finance Role Matrix");
   console.log(`Base URL: ${BASE_URL}`);
@@ -130,14 +145,16 @@ async function run() {
   assertStatus("SALES approval queue", qSales.status, 200);
 
   const stamp = Date.now();
-  const quoId = `QUO-RM-${stamp}`;
+  const ownerQuoId = `QUO-RM-OWNER-${stamp}`;
+  const spvQuoId = `QUO-RM-SPV-${stamp}`;
   const today = new Date().toISOString().slice(0, 10);
+  const linkedProjectIds = new Set<string>();
 
   try {
-    const created = await api("POST", "/quotations", {
+    const createdOwnerQuote = await api("POST", "/quotations", {
       token: sales.token,
       body: {
-        id: quoId,
+        id: ownerQuoId,
         status: "Draft",
         tanggal: today,
         kepada: "PT Role Matrix",
@@ -146,45 +163,65 @@ async function run() {
         grandTotal: 15000000,
       },
     });
-    assertStatus("create quotation fixture", created.status, 201);
+    assertStatus("create owner quotation fixture", createdOwnerQuote.status, 201);
 
     const salesSend = await api("POST", "/dashboard/finance-approval-action", {
       token: sales.token,
-      body: { documentType: "QUOTATION", documentId: quoId, action: "SEND" },
+      body: { documentType: "QUOTATION", documentId: ownerQuoId, action: "SEND" },
     });
     assertStatus("SALES send quotation", salesSend.status, 200);
 
     const salesApprove = await api("POST", "/dashboard/finance-approval-action", {
       token: sales.token,
-      body: { documentType: "QUOTATION", documentId: quoId, action: "APPROVE" },
+      body: { documentType: "QUOTATION", documentId: ownerQuoId, action: "APPROVE" },
     });
     assertStatus("SALES cannot approve quotation", salesApprove.status, 403);
 
     const financeApprove = await api("POST", "/dashboard/finance-approval-action", {
       token: finance.token,
-      body: { documentType: "QUOTATION", documentId: quoId, action: "APPROVE" },
+      body: { documentType: "QUOTATION", documentId: ownerQuoId, action: "APPROVE" },
     });
     assertStatus("FINANCE cannot approve quotation", financeApprove.status, 403);
 
-    const ownerApproveTooEarly = await api("POST", "/dashboard/finance-approval-action", {
+    const ownerApproveDirect = await api("POST", "/dashboard/finance-approval-action", {
       token: owner.token,
-      body: { documentType: "QUOTATION", documentId: quoId, action: "APPROVE" },
+      body: { documentType: "QUOTATION", documentId: ownerQuoId, action: "APPROVE" },
     });
-    assertStatus("OWNER cannot skip SPV quotation review", ownerApproveTooEarly.status, 400);
+    assertStatus("OWNER approve quotation directly", ownerApproveDirect.status, 200);
+    linkedProjectIds.add(await pollProjectIdByQuotationId(ownerQuoId, owner.token));
 
-    const spvApprove = await api("POST", "/dashboard/finance-approval-action", {
+    const createdSpvQuote = await api("POST", "/quotations", {
+      token: sales.token,
+      body: {
+        id: spvQuoId,
+        status: "Draft",
+        tanggal: today,
+        kepada: "PT Role Matrix",
+        perusahaan: "PT Role Matrix",
+        perihal: `Role Matrix SPV ${stamp}`,
+        grandTotal: 15000000,
+      },
+    });
+    assertStatus("create spv quotation fixture", createdSpvQuote.status, 201);
+
+    const salesSendSpv = await api("POST", "/dashboard/finance-approval-action", {
+      token: sales.token,
+      body: { documentType: "QUOTATION", documentId: spvQuoId, action: "SEND" },
+    });
+    assertStatus("SALES send spv quotation", salesSendSpv.status, 200);
+
+    const spvApproveDirect = await api("POST", "/dashboard/finance-approval-action", {
       token: spv.token,
-      body: { documentType: "QUOTATION", documentId: quoId, action: "APPROVE" },
+      body: { documentType: "QUOTATION", documentId: spvQuoId, action: "APPROVE" },
     });
-    assertStatus("SPV approve quotation to review", spvApprove.status, 200);
-
-    const ownerApprove = await api("POST", "/dashboard/finance-approval-action", {
-      token: owner.token,
-      body: { documentType: "QUOTATION", documentId: quoId, action: "APPROVE" },
-    });
-    assertStatus("OWNER final approve quotation", ownerApprove.status, 200);
+    assertStatus("SPV approve quotation directly", spvApproveDirect.status, 200);
+    linkedProjectIds.add(await pollProjectIdByQuotationId(spvQuoId, owner.token));
   } finally {
-    await api("DELETE", `/quotations/${quoId}`, { token: owner.token });
+    for (const projectId of linkedProjectIds) {
+      await api("DELETE", `/projects/${projectId}`, { token: owner.token });
+    }
+    await api("DELETE", `/quotations/${ownerQuoId}`, { token: owner.token });
+    await api("DELETE", `/quotations/${spvQuoId}`, { token: owner.token });
   }
 
   console.log("\nAll finance role matrix checks passed.");

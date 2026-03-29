@@ -1,0 +1,165 @@
+name: CI Regression Gate
+
+on:
+  pull_request:
+    paths:
+      - "backend/**"
+      - "frontend/**"
+      - "scripts/**"
+      - ".github/workflows/ci-regression.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "backend/**"
+      - "frontend/**"
+      - "scripts/**"
+      - ".github/workflows/ci-regression.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-regression-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Build frontend
+        run: npm run build
+
+  backend-regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: gemadb
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d gemadb"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    defaults:
+      run:
+        working-directory: backend
+
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/gemadb
+      JWT_SECRET: ci_jwt_secret_32_chars_minimum_value
+      JWT_ISSUER: ptgema-api
+      JWT_AUDIENCE: ptgema-client
+      JWT_EXPIRES_IN: 8h
+      NODE_ENV: test
+      PORT: 3000
+      SMOKE_BASE_URL: http://localhost:3000
+      SMOKE_ALLOW_LIVE_WRITE: "false"
+      SMOKE_KEEP_DATA: "false"
+      SMOKE_COOLDOWN_SECONDS: "1"
+      SMOKE_OWNER_USERNAME: syamsudin
+      SMOKE_OWNER_PASSWORD: changeMeOwner123
+      SMOKE_ADMIN_USERNAME: admin
+      SMOKE_ADMIN_PASSWORD: changeMeAdmin123
+      SMOKE_SPV_USERNAME: aji
+      SMOKE_SPV_PASSWORD: changeMeAji123
+      SMOKE_FINANCE_USERNAME: ening
+      SMOKE_FINANCE_PASSWORD: changeMeFinance123
+      SMOKE_SALES_USERNAME: angesti
+      SMOKE_SALES_PASSWORD: changeMeAngesti123
+      SMOKE_SUPPLY_USERNAME: ering
+      SMOKE_SUPPLY_PASSWORD: changeMeSupply123
+      SMOKE_PURCHASING_USERNAME: purchasing
+      SMOKE_PURCHASING_PASSWORD: changeMePurchasing123
+      SMOKE_WAREHOUSE_USERNAME: dewi
+      SMOKE_WAREHOUSE_PASSWORD: changeMeWarehouse123
+      SMOKE_PRODUKSI_USERNAME: produksi
+      SMOKE_PRODUKSI_PASSWORD: changeMeProduksi123
+      SEED_USERS_JSON: >-
+        [{"username":"syamsudin","email":"owner@example.com","name":"Syamsudin","role":"OWNER","password":"changeMeOwner123"},{"username":"admin","email":"admin@example.com","name":"Admin","role":"ADMIN","password":"changeMeAdmin123"},{"username":"aji","email":"aji@example.com","name":"Aji","role":"SPV","password":"changeMeAji123"},{"username":"angesti","email":"angesti@example.com","name":"Angesti","role":"SALES","password":"changeMeAngesti123"},{"username":"ening","email":"ening@example.com","name":"Ening","role":"FINANCE","password":"changeMeFinance123"},{"username":"ering","email":"ering@example.com","name":"Ering","role":"SUPPLY_CHAIN","password":"changeMeSupply123"},{"username":"purchasing","email":"purchasing@example.com","name":"Purchasing","role":"PURCHASING","password":"changeMePurchasing123"},{"username":"dewi","email":"dewi@example.com","name":"Dewi","role":"WAREHOUSE","password":"changeMeWarehouse123"},{"username":"produksi","email":"produksi@example.com","name":"Produksi","role":"PRODUKSI","password":"changeMeProduksi123"}]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install backend dependencies
+        run: npm ci
+
+      - name: Sync database schema
+        run: npm run push
+
+      - name: Seed CI accounts
+        run: npm run seed:accounts
+
+      - name: Build backend
+        run: npm run build
+
+      - name: Start backend
+        run: |
+          npm run start > /tmp/backend.log 2>&1 &
+          echo $! > /tmp/backend.pid
+
+      - name: Wait for backend
+        run: |
+          for i in {1..60}; do
+            code=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3000/health || true)
+            if [ "$code" = "200" ]; then
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "Backend did not become ready in time"
+          cat /tmp/backend.log || true
+          exit 1
+
+      - name: Run security fast smoke
+        run: npm run smoke:security-fast
+
+      - name: Run core business flow regression
+        run: npm run smoke:core-business-flow
+
+      - name: Print backend log on failure
+        if: failure()
+        run: cat /tmp/backend.log || true
+
+      - name: Stop backend
+        if: always()
+        run: |
+          if [ -f /tmp/backend.pid ]; then
+            kill "$(cat /tmp/backend.pid)" || true
+          fi

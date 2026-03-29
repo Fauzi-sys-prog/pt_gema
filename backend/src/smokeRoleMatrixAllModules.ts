@@ -115,7 +115,9 @@ async function runReadCheck(
 
 async function runDataWriteCheck(opts: {
   sessions: Record<RoleKey, Session>;
-  resource: string;
+  name: string;
+  createEndpoint: string;
+  deleteEndpoint: (id: string) => string;
   idPrefix: string;
   buildPayload: (id: string) => Record<string, unknown>;
   expectedByRole: Record<RoleKey, number>;
@@ -125,20 +127,42 @@ async function runDataWriteCheck(opts: {
   try {
     for (const role of Object.keys(opts.expectedByRole) as RoleKey[]) {
       const id = `${opts.idPrefix}-${role}-${Date.now()}`;
-      const res = await api("POST", `/data/${opts.resource}`, {
+      const res = await api("POST", opts.createEndpoint, {
         token: opts.sessions[role].token,
-        body: { entityId: id, payload: opts.buildPayload(id) },
+        body: opts.buildPayload(id),
       });
-      assertStatus(`POST /data/${opts.resource} [${role}]`, res.status, opts.expectedByRole[role]);
+      assertStatus(`${opts.name} [${role}]`, res.status, opts.expectedByRole[role]);
       if (res.status === 201) cleanupIds.push(id);
     }
   } finally {
     for (const id of cleanupIds) {
-      await api("DELETE", `/data/${opts.resource}/${id}`, {
+      await api("DELETE", opts.deleteEndpoint(id), {
         token: opts.sessions.owner.token,
       });
     }
   }
+}
+
+async function createProjectFixture(
+  owner: Session,
+  id: string,
+  projectName: string,
+  endDate: string
+): Promise<void> {
+  const res = await api("POST", "/projects", {
+    token: owner.token,
+    body: {
+      id,
+      namaProject: projectName,
+      customer: "PT Matrix Customer",
+      nilaiKontrak: 1_000_000,
+      status: "Planning",
+      progress: 0,
+      endDate,
+      approvalStatus: "Pending",
+    },
+  });
+  assertStatus(`create project fixture ${id}`, res.status, 201);
 }
 
 async function run() {
@@ -181,7 +205,9 @@ async function run() {
 
   await runDataWriteCheck({
     sessions,
-    resource: "payrolls",
+    name: "POST /payrolls",
+    createEndpoint: "/payrolls",
+    deleteEndpoint: (id) => `/payrolls/${id}`,
     idPrefix: "PAY-RM",
     buildPayload: (id) => ({
       id,
@@ -202,7 +228,9 @@ async function run() {
 
   await runDataWriteCheck({
     sessions,
-    resource: "vendor-expenses",
+    name: "POST /finance/vendor-expenses",
+    createEndpoint: "/finance/vendor-expenses",
+    deleteEndpoint: (id) => `/finance/vendor-expenses/${id}`,
     idPrefix: "VEXP-RM",
     buildPayload: (id) => ({
       id,
@@ -228,31 +256,51 @@ async function run() {
     },
   });
 
-  await runDataWriteCheck({
-    sessions,
-    resource: "material-requests",
-    idPrefix: "MR-RM",
-    buildPayload: (id) => ({
-      id,
-      noRequest: id,
-      projectName: "Project Matrix",
-      requestedBy: "smoke",
-      requestedAt: new Date().toISOString(),
-      status: "Pending",
-      items: [],
-    }),
-    expectedByRole: {
-      owner: 201,
-      finance: 403,
-      sales: 403,
-      supply: 201,
-      produksi: 201,
-    },
-  });
+  const materialRequestProjectId = `PRJ-RM-${Date.now()}`;
+  const materialRequestProjectName = `Project Matrix ${Date.now()}`;
+  await createProjectFixture(
+    sessions.owner,
+    materialRequestProjectId,
+    materialRequestProjectName,
+    today
+  );
+
+  try {
+    await runDataWriteCheck({
+      sessions,
+      name: "POST /material-requests",
+      createEndpoint: "/material-requests",
+      deleteEndpoint: (id) => `/material-requests/${id}`,
+      idPrefix: "MR-RM",
+      buildPayload: (id) => ({
+        id,
+        noRequest: id,
+        projectId: materialRequestProjectId,
+        projectName: materialRequestProjectName,
+        requestedBy: "smoke",
+        requestedAt: new Date().toISOString(),
+        status: "Pending",
+        items: [],
+      }),
+      expectedByRole: {
+        owner: 201,
+        finance: 403,
+        sales: 403,
+        supply: 400,
+        produksi: 201,
+      },
+    });
+  } finally {
+    await api("DELETE", `/projects/${materialRequestProjectId}`, {
+      token: sessions.owner.token,
+    });
+  }
 
   await runDataWriteCheck({
     sessions,
-    resource: "stock-items",
+    name: "POST /inventory/items",
+    createEndpoint: "/inventory/items",
+    deleteEndpoint: (id) => `/inventory/items/${id}`,
     idPrefix: "STK-RM",
     buildPayload: (id) => ({
       id,
