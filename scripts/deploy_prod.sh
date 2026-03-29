@@ -6,9 +6,11 @@ set -euo pipefail
 # Optional env:
 #   COMPOSE_FILE=docker-compose.prod.yml
 #   RUN_SMOKE=1
+#   RUN_FLOW_SMOKE=0
 
 COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.prod.yml}"
 RUN_SMOKE="${RUN_SMOKE:-1}"
+RUN_FLOW_SMOKE="${RUN_FLOW_SMOKE:-0}"
 
 echo "[deploy] 1/6 Backup database before deploy"
 ./scripts/backup_postgres.sh
@@ -32,6 +34,11 @@ echo "[deploy] backend health OK"
 if [[ "$RUN_SMOKE" == "1" ]]; then
   echo "[deploy] post-check Run smoke checks"
   ./scripts/smoke_prod.sh
+fi
+
+if [[ "$RUN_FLOW_SMOKE" == "1" ]]; then
+  echo "[deploy] post-check Run core business flow regression"
+  SMOKE_BASE_URL="${SMOKE_BASE_URL:-http://localhost:3000}" ./scripts/run-flow-regression.sh
 fi
 
 echo "[deploy] done"

@@ -41,6 +41,7 @@
     "smoke:role-matrix-all": "tsx src/smokeRoleMatrixAllModules.ts",
     "smoke:payload-tampering": "tsx src/smokePayloadTampering.ts",
     "smoke:module-relations": "tsx src/smokeModuleRelations.ts",
+    "smoke:core-business-flow": "tsx src/smokeCoreBusinessFlow.ts",
     "smoke:security-fast": "tsx src/smokeSecurityFast.ts",
     "smoke:hr-endpoints": "tsx src/smokeHrEndpoints.ts",
     "import:penawaran": "tsx src/importPenawaranExcel.ts",
