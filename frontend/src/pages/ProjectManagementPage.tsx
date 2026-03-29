@@ -37,6 +37,7 @@ import logoGTP from "figma:asset/661f558dc14c79fa090b7039a885f26b843f5c04.png";
 import api from "../services/api";
 import FlowHintBar from "../components/ui/FlowHintBar";
 import { subscribeDataSync } from "../services/dataSyncBus";
+import { hasRoleAccess } from "../utils/roles";
 
 type ProjectTab = "overview" | "boq" | "milestones" | "work-order" | "mutation" | "field-records" | "procurement" | "financials";
 type ProjectFilter = "All" | "Planning" | "In Progress" | "Completed" | "Approved" | "Rejected";
@@ -77,6 +78,22 @@ const createInitialVoFormData = (category: VoCategory = "Material") => ({
   itemKode: createVoItemCode(category),
   category,
 });
+
+const PROJECT_RESOURCE_READ_ROLES = {
+  projects: ["OWNER", "SPV", "ADMIN", "MANAGER", "SALES", "FINANCE", "SUPPLY_CHAIN", "PRODUKSI", "OPERATIONS", "WAREHOUSE", "PURCHASING", "HR"],
+  quotations: ["OWNER", "SPV", "ADMIN", "MANAGER", "SALES", "FINANCE"],
+  "purchase-orders": ["OWNER", "SPV", "ADMIN", "MANAGER", "PURCHASING", "WAREHOUSE", "FINANCE", "PRODUKSI"],
+  attendances: ["OWNER", "SPV", "ADMIN", "MANAGER", "HR", "FINANCE", "PRODUKSI", "SUPPLY_CHAIN", "SALES"],
+  employees: ["OWNER", "SPV", "ADMIN", "MANAGER", "HR", "FINANCE", "PRODUKSI", "SUPPLY_CHAIN", "SALES"],
+  "stock-outs": ["OWNER", "ADMIN", "SUPPLY_CHAIN", "PRODUKSI"],
+  "work-orders": ["OWNER", "SPV", "ADMIN", "MANAGER", "PRODUKSI", "OPERATIONS", "SUPPLY_CHAIN", "PURCHASING", "WAREHOUSE", "FINANCE", "SALES"],
+  "material-requests": ["OWNER", "SPV", "ADMIN", "MANAGER", "PRODUKSI", "OPERATIONS", "SUPPLY_CHAIN", "PURCHASING", "WAREHOUSE", "FINANCE", "SALES"],
+  "production-reports": ["OWNER", "SPV", "ADMIN", "MANAGER", "PRODUKSI", "OPERATIONS", "SUPPLY_CHAIN", "PURCHASING", "WAREHOUSE", "FINANCE", "SALES"],
+  "fleet-health": ["OWNER", "SPV", "ADMIN", "MANAGER", "WAREHOUSE", "PRODUKSI"],
+} as const;
+
+const isAccessDeniedError = (error: unknown): boolean =>
+  Number((error as any)?.response?.status) === 403;
 
 const formatApprovalActor = (record: any, kind: "approved" | "spvApproved" | "rejected" = "approved") => {
   const label = String(record?.[`${kind}By`] || "").trim();
@@ -181,6 +198,7 @@ export default function ProjectManagementPage() {
   const materialRequestList = serverMaterialRequestList ?? ctxMaterialRequestList;
   const productionReportList = serverProductionReportList ?? ctxProductionReportList;
   const fleetHealthList = serverFleetHealthList ?? [];
+  const currentRole = String(currentUser?.role || "").trim().toUpperCase();
 
   const linkedQuotationIds = new Set(
     projectList
@@ -209,31 +227,69 @@ export default function ProjectManagementPage() {
     projectSourceFetchInFlightRef.current = true;
     try {
       setIsRefreshing(true);
-      const [projectRes, quotationRes, poRes, attendanceRes, employeeRes, stockOutRes, workOrderRes, materialRequestRes, productionReportRes, fleetHealthRes, summaryRes] = await Promise.all([
-        api.get("/projects"),
-        api.get("/quotations"),
-        api.get("/purchase-orders"),
-        api.get("/attendances"),
-        api.get("/employees"),
-        api.get("/inventory/stock-outs"),
-        api.get("/work-orders"),
-        api.get("/material-requests"),
-        api.get("/production-reports"),
-        api.get("/fleet-health"),
-        api.get<{ metrics?: any }>("/projects/metrics/summary"),
+      const canReadProjectResource = (resource: keyof typeof PROJECT_RESOURCE_READ_ROLES | "projects-summary") => {
+        if (resource === "projects-summary") {
+          return hasRoleAccess(currentRole, PROJECT_RESOURCE_READ_ROLES.projects);
+        }
+        return hasRoleAccess(currentRole, PROJECT_RESOURCE_READ_ROLES[resource]);
+      };
+
+      const fetchIfAllowed = async <T,>(
+        resource: keyof typeof PROJECT_RESOURCE_READ_ROLES | "projects-summary",
+        request: () => Promise<{ data: T }>
+      ): Promise<T | null> => {
+        if (!canReadProjectResource(resource)) {
+          return null;
+        }
+
+        try {
+          const res = await request();
+          return res.data;
+        } catch (error) {
+          if (isAccessDeniedError(error)) {
+            return null;
+          }
+          throw error;
+        }
+      };
+
+      const [
+        projectRows,
+        quotationRows,
+        poRows,
+        attendanceRows,
+        employeeRows,
+        stockOutRows,
+        workOrderRows,
+        materialRequestRows,
+        productionReportRows,
+        fleetHealthRows,
+        summaryData,
+      ] = await Promise.all([
+        fetchIfAllowed<Project[]>("projects", () => api.get("/projects")),
+        fetchIfAllowed<any[]>("quotations", () => api.get("/quotations")),
+        fetchIfAllowed<any[]>("purchase-orders", () => api.get("/purchase-orders")),
+        fetchIfAllowed<any[]>("attendances", () => api.get("/attendances")),
+        fetchIfAllowed<any[]>("employees", () => api.get("/employees")),
+        fetchIfAllowed<any[]>("stock-outs", () => api.get("/inventory/stock-outs")),
+        fetchIfAllowed<any[]>("work-orders", () => api.get("/work-orders")),
+        fetchIfAllowed<any[]>("material-requests", () => api.get("/material-requests")),
+        fetchIfAllowed<any[]>("production-reports", () => api.get("/production-reports")),
+        fetchIfAllowed<any[]>("fleet-health", () => api.get("/fleet-health")),
+        fetchIfAllowed<{ metrics?: any }>("projects-summary", () => api.get("/projects/metrics/summary")),
       ]);
 
-      setServerProjectList(Array.isArray(projectRes.data) ? (projectRes.data as Project[]) : []);
-      setServerQuotationList(Array.isArray(quotationRes.data) ? (quotationRes.data as any[]) : []);
-      setServerPoList(Array.isArray(poRes.data) ? (poRes.data as any[]) : []);
-      setServerAttendanceList(normalizeEntityRows<any>(Array.isArray(attendanceRes.data) ? attendanceRes.data : []));
-      setServerEmployeeList(normalizeEntityRows<any>(Array.isArray(employeeRes.data) ? employeeRes.data : []));
-      setServerStockOutList(normalizeEntityRows<any>(Array.isArray(stockOutRes.data) ? stockOutRes.data : []));
-      setServerWorkOrderList(normalizeEntityRows<any>(Array.isArray(workOrderRes.data) ? workOrderRes.data : []));
-      setServerMaterialRequestList(normalizeEntityRows<any>(Array.isArray(materialRequestRes.data) ? materialRequestRes.data : []));
-      setServerProductionReportList(normalizeEntityRows<any>(Array.isArray(productionReportRes.data) ? productionReportRes.data : []));
-      setServerFleetHealthList(normalizeEntityRows<any>(Array.isArray(fleetHealthRes.data) ? fleetHealthRes.data : []));
-      setProjectSummaryMetrics(summaryRes.data?.metrics || null);
+      setServerProjectList(Array.isArray(projectRows) ? projectRows : null);
+      setServerQuotationList(Array.isArray(quotationRows) ? quotationRows : null);
+      setServerPoList(Array.isArray(poRows) ? poRows : null);
+      setServerAttendanceList(Array.isArray(attendanceRows) ? normalizeEntityRows<any>(attendanceRows) : null);
+      setServerEmployeeList(Array.isArray(employeeRows) ? normalizeEntityRows<any>(employeeRows) : null);
+      setServerStockOutList(Array.isArray(stockOutRows) ? normalizeEntityRows<any>(stockOutRows) : null);
+      setServerWorkOrderList(Array.isArray(workOrderRows) ? normalizeEntityRows<any>(workOrderRows) : null);
+      setServerMaterialRequestList(Array.isArray(materialRequestRows) ? normalizeEntityRows<any>(materialRequestRows) : null);
+      setServerProductionReportList(Array.isArray(productionReportRows) ? normalizeEntityRows<any>(productionReportRows) : null);
+      setServerFleetHealthList(Array.isArray(fleetHealthRows) ? normalizeEntityRows<any>(fleetHealthRows) : null);
+      setProjectSummaryMetrics(summaryData?.metrics || null);
     } catch {
       setServerProjectList(null);
       setServerQuotationList(null);

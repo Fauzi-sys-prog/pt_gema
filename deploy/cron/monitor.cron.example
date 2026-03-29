@@ -1,0 +1,6 @@
+# Production health monitor every 5 minutes
+*/5 * * * * cd /opt/ptgema-main2 && COMPOSE_FILE=docker-compose.prod.yml ./scripts/monitor_prod.sh >> /var/log/ptgema-monitor.log 2>&1
+
+# Optional: source alert env before monitor if using webhook / Telegram
+# */5 * * * * cd /opt/ptgema-main2 && set -a && . /opt/ptgema-main2/deploy/monitor/alert.env && set +a && COMPOSE_FILE=docker-compose.prod.yml ./scripts/monitor_prod.sh >> /var/log/ptgema-monitor.log 2>&1
+

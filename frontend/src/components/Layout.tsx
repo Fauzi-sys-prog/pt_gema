@@ -52,6 +52,74 @@ interface MenuItem {
   submenu?: { title: string; path: string }[];
 }
 
+const GUIDE_BOOK_ROLES = ['SALES', 'FINANCE', 'HR', 'SUPPLY_CHAIN', 'PRODUKSI', 'USER'] as const;
+const DASHBOARD_ROLES = ['FINANCE', 'HR', 'SALES', 'SUPPLY_CHAIN', 'PRODUKSI', 'USER'] as const;
+const PROJECT_ROLES = ['SALES', 'FINANCE', 'HR', 'SUPPLY_CHAIN', 'PRODUKSI'] as const;
+const PRODUCTION_ROLES = ['PRODUKSI'] as const;
+const INVENTORY_ROLES = ['SUPPLY_CHAIN', 'PRODUKSI', 'FINANCE'] as const;
+const PROCUREMENT_ROLES = ['PURCHASING', 'WAREHOUSE', 'FINANCE', 'PRODUKSI'] as const;
+const SALES_ROLES = ['SALES', 'FINANCE'] as const;
+const FINANCE_ROLES = ['FINANCE'] as const;
+const CORRESPONDENCE_ROLES = ['HR', 'SALES', 'WAREHOUSE', 'FINANCE', 'PRODUKSI'] as const;
+const SURAT_JALAN_ROLES = ['WAREHOUSE', 'SALES', 'PRODUKSI'] as const;
+const SPK_ROLES = ['HR', 'SALES', 'WAREHOUSE', 'PRODUKSI'] as const;
+const LOGISTICS_HUB_ROLES = ['WAREHOUSE', 'SALES', 'PRODUKSI'] as const;
+const ASSET_ROLES = ['FINANCE', 'WAREHOUSE', 'PRODUKSI'] as const;
+const MAINTENANCE_ROLES = ['WAREHOUSE', 'PRODUKSI'] as const;
+const HUMAN_CAPITAL_ROLES = ['HR', 'FINANCE'] as const;
+const DATA_COLLECTION_ROLES = ['HR', 'SALES'] as const;
+const SETTINGS_ROLES = ['OWNER', 'ADMIN', 'MANAGER'] as const;
+
+const PATH_ACCESS_MAP: Record<string, readonly string[]> = {
+  '/guide-book': GUIDE_BOOK_ROLES,
+  '/dashboard': DASHBOARD_ROLES,
+  '/project': PROJECT_ROLES,
+  '/produksi/dashboard': PRODUCTION_ROLES,
+  '/produksi/report': PRODUCTION_ROLES,
+  '/produksi/timeline': PRODUCTION_ROLES,
+  '/produksi/qc': PRODUCTION_ROLES,
+  '/purchasing/purchase-order': PROCUREMENT_ROLES,
+  '/inventory/stock-in': INVENTORY_ROLES,
+  '/inventory/stock-out': INVENTORY_ROLES,
+  '/inventory/center': INVENTORY_ROLES,
+  '/inventory/aging': INVENTORY_ROLES,
+  '/inventory/stock-report': INVENTORY_ROLES,
+  '/sales/quotation': SALES_ROLES,
+  '/sales/invoice': SALES_ROLES,
+  '/sales/analytics': SALES_ROLES,
+  '/finance/executive-dashboard': FINANCE_ROLES,
+  '/finance/approvals': FINANCE_ROLES,
+  '/finance/cashflow-command': FINANCE_ROLES,
+  '/finance/project-analysis': FINANCE_ROLES,
+  '/finance/cashflow': FINANCE_ROLES,
+  '/finance/ledger': FINANCE_ROLES,
+  '/finance/ppn': FINANCE_ROLES,
+  '/finance/accounts-receivable': FINANCE_ROLES,
+  '/finance/accounts-payable': FINANCE_ROLES,
+  '/finance/bank-reconciliation': FINANCE_ROLES,
+  '/finance/petty-cash': FINANCE_ROLES,
+  '/finance/working-expense': FINANCE_ROLES,
+  '/finance/vendor-payment': FINANCE_ROLES,
+  '/finance/year-end': FINANCE_ROLES,
+  '/finance/archive': FINANCE_ROLES,
+  '/surat-menyurat/dashboard': CORRESPONDENCE_ROLES,
+  '/surat-menyurat/berita-acara': CORRESPONDENCE_ROLES,
+  '/surat-menyurat/surat-jalan': SURAT_JALAN_ROLES,
+  '/surat-menyurat/spk': SPK_ROLES,
+  '/logistics/hub': LOGISTICS_HUB_ROLES,
+  '/asset/equipment': ASSET_ROLES,
+  '/asset/maintenance': MAINTENANCE_ROLES,
+  '/hr/karyawan': HUMAN_CAPITAL_ROLES,
+  '/hr/absensi': HUMAN_CAPITAL_ROLES,
+  '/hr/field-record': HUMAN_CAPITAL_ROLES,
+  '/hr/attendance-recap': HUMAN_CAPITAL_ROLES,
+  '/hr/payroll': HUMAN_CAPITAL_ROLES,
+  '/data-collection': DATA_COLLECTION_ROLES,
+  '/settings/master': SETTINGS_ROLES,
+  '/settings/user-management': SETTINGS_ROLES,
+  '/settings/audit-trail': SETTINGS_ROLES,
+};
+
 export default function Layout({ children }: LayoutProps) {
   const location = useLocation();
   const navigate = useNavigate();
@@ -87,37 +155,21 @@ export default function Layout({ children }: LayoutProps) {
     }
   }, [location.pathname, isMobile]);
 
-  // Role-based menu access control
-  const hasAccessToMenu = (menuTitle: string): boolean => {
-    if (!currentUser) return false;
-    
-    const role = String(currentUser.role || '').toUpperCase();
-    
-    // Privileged roles have access to everything
-    if (
-      role === 'ADMIN' ||
-      role === 'MANAGER' ||
-      isOwnerLike(role) ) return true;
-    
-    // Role-based access mapping aligned with the current sidebar titles
-    const accessMap: Record<string, string[]> = {
-      'Guide Book': ['SALES', 'SUPPLY_CHAIN', 'FINANCE', 'HR', 'PRODUKSI', 'OPERATIONS', 'USER', 'PURCHASING', 'WAREHOUSE'],
-      'Dashboard': ['FINANCE', 'HR', 'SUPPLY_CHAIN', 'SALES', 'PRODUKSI', 'OPERATIONS', 'USER', 'PURCHASING', 'WAREHOUSE'],
-      'Project': ['SALES', 'SUPPLY_CHAIN', 'PRODUKSI', 'OPERATIONS', 'FINANCE'],
-      'Production': ['PRODUKSI', 'OPERATIONS', 'SUPPLY_CHAIN', 'WAREHOUSE'],
-      'Supply Chain Hub': ['SUPPLY_CHAIN', 'PURCHASING', 'WAREHOUSE', 'PRODUKSI', 'OPERATIONS'],
-      'Commercial & Sales': ['SALES'],
-      'Finance & Ledger': ['FINANCE'],
-      'Correspondence': ['HR', 'SALES', 'SUPPLY_CHAIN', 'FINANCE', 'PRODUKSI', 'OPERATIONS'],
-      'Logistics Control': ['SUPPLY_CHAIN', 'PRODUKSI', 'OPERATIONS', 'SALES'],
-      'Assets': ['SUPPLY_CHAIN', 'PRODUKSI', 'OPERATIONS', 'WAREHOUSE'],
-      'Human Capital': ['HR', 'FINANCE'],
-      'Data Collection': ['HR', 'SALES'],
-      'Settings': []
-    };
-    
-    return hasRoleAccess(role, accessMap[menuTitle] || []);
+  const role = String(currentUser?.role || '').toUpperCase();
+  const hasPrivilegedAccess = role === 'ADMIN' || role === 'MANAGER' || isOwnerLike(role);
+
+  const hasAccessToPath = (path?: string): boolean => {
+    if (!currentUser || !path) return false;
+    if (hasPrivilegedAccess) return true;
+    const allowedRoles = PATH_ACCESS_MAP[path];
+    return Array.isArray(allowedRoles) ? hasRoleAccess(role, allowedRoles) : false;
   };
+
+  const getVisibleSubmenu = (submenu?: MenuItem['submenu']) =>
+    (submenu || []).filter((subItem) => hasAccessToPath(subItem.path));
+
+  const canRenderMenuItem = (item: MenuItem): boolean =>
+    item.path ? hasAccessToPath(item.path) : getVisibleSubmenu(item.submenu).length > 0;
 
   const menuItems: MenuItem[] = [
     {
@@ -256,6 +308,7 @@ export default function Layout({ children }: LayoutProps) {
     { icon: <Users size={24} />, label: 'HR', path: '/hr/absensi' },
     { icon: <Grid size={24} />, label: 'Menu', action: () => setShowMobileMenu(!showMobileMenu) }
   ];
+  const visibleQuickAccessItems = quickAccessItems.filter((item) => !item.path || hasAccessToPath(item.path));
 
   return (
     <div className="flex h-screen bg-gray-50 overflow-hidden">
@@ -308,8 +361,10 @@ export default function Layout({ children }: LayoutProps) {
 
           {/* Navigation */}
           <nav className="flex-1 overflow-y-auto p-3 lg:p-4">
-            {menuItems.map((item) => (
-              hasAccessToMenu(item.title) && (
+            {menuItems.map((item) => {
+              const visibleSubmenu = getVisibleSubmenu(item.submenu);
+              if (!canRenderMenuItem(item)) return null;
+              return (
                 <div key={item.title} className="mb-1">
                   {item.path ? (
                     <Link
@@ -339,9 +394,9 @@ export default function Layout({ children }: LayoutProps) {
                           <ChevronRight className="w-4 h-4 flex-shrink-0" />
                         )}
                       </button>
-                      {openMenus.includes(item.title) && item.submenu && (
+                      {openMenus.includes(item.title) && visibleSubmenu.length > 0 && (
                         <div className="ml-3 lg:ml-4 mt-1 space-y-1 border-l-2 border-gray-200 pl-2">
-                          {item.submenu.map((subItem) => (
+                          {visibleSubmenu.map((subItem) => (
                             <Link
                               key={subItem.path}
                               to={subItem.path}
@@ -358,8 +413,8 @@ export default function Layout({ children }: LayoutProps) {
                     </>
                   )}
                 </div>
-              )
-            ))}
+              );
+            })}
           </nav>
 
           {/* Logout Button */}
@@ -451,7 +506,7 @@ export default function Layout({ children }: LayoutProps) {
         {isMobile && (
           <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-30 lg:hidden safe-area-bottom">
             <div className="grid grid-cols-5 gap-1">
-              {quickAccessItems.map((item, index) => (
+              {visibleQuickAccessItems.map((item, index) => (
                 item.path ? (
                   <Link
                     key={index}

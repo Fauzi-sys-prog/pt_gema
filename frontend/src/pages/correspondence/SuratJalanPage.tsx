@@ -28,6 +28,16 @@ import { toast } from 'sonner@2.0.3';
 import { motion, AnimatePresence } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
 import api from '../../services/api';
+import { hasRoleAccess } from '../../utils/roles';
+
+const SURAT_JALAN_PAGE_READ_ROLES = {
+  'surat-jalan': ['OWNER', 'ADMIN', 'WAREHOUSE', 'SALES', 'PRODUKSI'],
+  projects: ['OWNER', 'SPV', 'ADMIN', 'MANAGER', 'SALES', 'FINANCE', 'SUPPLY_CHAIN', 'PRODUKSI', 'HR'],
+  assets: ['OWNER', 'ADMIN', 'FINANCE', 'WAREHOUSE', 'PRODUKSI'],
+} as const;
+
+const isAccessDeniedError = (error: unknown): boolean =>
+  Number((error as any)?.response?.status) === 403;
 
 export default function SuratJalanPage() {
   const navigate = useNavigate();
@@ -50,6 +60,8 @@ export default function SuratJalanPage() {
   const [serverSuratJalanList, setServerSuratJalanList] = useState<SuratJalan[] | null>(null);
   const [serverProjectList, setServerProjectList] = useState<any[] | null>(null);
   const [serverAssetList, setServerAssetList] = useState<any[] | null>(null);
+  const currentRole = String(currentUser?.role || '').trim().toUpperCase();
+  const hasPrivilegedAccess = currentRole === 'ADMIN' || currentRole === 'MANAGER' || hasRoleAccess(currentRole, ['OWNER']);
   const effectiveSuratJalanList = useMemo(() => {
     const byId = new Map<string, SuratJalan>();
     for (const sj of suratJalanList) byId.set(sj.id, sj);
@@ -92,6 +104,28 @@ export default function SuratJalanPage() {
   };
 
   const fetchSuratJalan = async () => {
+    const canRead = (resource: keyof typeof SURAT_JALAN_PAGE_READ_ROLES) =>
+      hasPrivilegedAccess || hasRoleAccess(currentRole, SURAT_JALAN_PAGE_READ_ROLES[resource]);
+
+    const fetchIfAllowed = async <T,>(
+      resource: keyof typeof SURAT_JALAN_PAGE_READ_ROLES,
+      request: () => Promise<{ data: T }>
+    ): Promise<T | []> => {
+      if (!canRead(resource)) {
+        return [];
+      }
+
+      try {
+        const res = await request();
+        return res.data;
+      } catch (error) {
+        if (isAccessDeniedError(error)) {
+          return [];
+        }
+        throw error;
+      }
+    };
+
     try {
       setIsRefreshing(true);
       const normalizeEntityRows = <T,>(rows: unknown): T[] => {
@@ -104,14 +138,14 @@ export default function SuratJalanPage() {
           return row as T;
         });
       };
-      const [sjRes, projectRes] = await Promise.all([
-        api.get('/surat-jalan'),
-        api.get('/projects'),
+      const [sjRows, projectRows, assetRows] = await Promise.all([
+        fetchIfAllowed('surat-jalan', () => api.get('/surat-jalan')),
+        fetchIfAllowed('projects', () => api.get('/projects')),
+        fetchIfAllowed('assets', () => api.get('/assets')),
       ]);
-      const assetsRes = await api.get('/assets');
-      const mapped = normalizeEntityRows<SuratJalan>(sjRes.data);
-      const projects = Array.isArray(projectRes.data) ? projectRes.data : [];
-      const assets = normalizeEntityRows<any>(assetsRes.data);
+      const mapped = normalizeEntityRows<SuratJalan>(sjRows);
+      const projects = Array.isArray(projectRows) ? projectRows : [];
+      const assets = normalizeEntityRows<any>(assetRows);
       setServerSuratJalanList(mapped);
       setServerProjectList(projects);
       setServerAssetList(assets);
@@ -126,7 +160,7 @@ export default function SuratJalanPage() {
 
   useEffect(() => {
     fetchSuratJalan();
-  }, []);
+  }, [currentRole, hasPrivilegedAccess]);
 
   const handleProjectChange = (projectId: string) => {
     const project = effectiveProjectList.find(p => p.id === projectId);

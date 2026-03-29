@@ -5262,7 +5262,7 @@ function canApproveMaterialRequestByRole(role: Role | undefined): boolean {
 }
 
 function canIssueMaterialRequestByRole(role: Role | undefined): boolean {
-  return hasRoleAccess(role, ["OWNER", "ADMIN", "SUPPLY_CHAIN", "WAREHOUSE", "PRODUKSI"]);
+  return hasRoleAccess(role, ["OWNER", "ADMIN", "WAREHOUSE", "PRODUKSI"]);
 }
 
 function toProjectIdFromQuotation(quotationId: string): string {
@@ -5808,16 +5808,16 @@ dashboardRouter.get("/dashboard/finance-approval-queue", authenticate, async (re
                 ? `Rejected by ${rejectedActor?.name || readString(payload, "rejectedBy") || "Reviewer"}${rejectedActor?.role || readString(payload, "rejectedByRole") ? ` (${rejectedActor?.role || readString(payload, "rejectedByRole")})` : ""}`
                 : effectiveStatus === "SENT"
                   ? sentActor?.name || readString(payload, "sentBy")
-                    ? `Sent by ${sentActor?.name || readString(payload, "sentBy")}`
+                  ? `Sent by ${sentActor?.name || readString(payload, "sentBy")}`
                     : "Waiting management approval"
                   : "Draft quotation";
         const role = req.user?.role;
         const owner = isOwnerLike(role);
+        const canManageQuotationApproval = role === "SPV" || owner;
         const availableActions = toActionList(
           (effectiveStatus === "DRAFT" || effectiveStatus === "REJECTED") && canSendQuotationByRole(role) && "SEND",
-          (effectiveStatus === "SENT" || effectiveStatus === "REVIEW") && "REVIEW",
-          (effectiveStatus === "SENT" || effectiveStatus === "REVIEW") && owner && "APPROVE",
-          (effectiveStatus === "SENT" || effectiveStatus === "REVIEW") && owner && "REJECT",
+          (effectiveStatus === "SENT" || effectiveStatus === "REVIEW") && canManageQuotationApproval && "APPROVE",
+          (effectiveStatus === "SENT" || effectiveStatus === "REVIEW") && canManageQuotationApproval && "REJECT",
           "VIEW"
         );
         return {

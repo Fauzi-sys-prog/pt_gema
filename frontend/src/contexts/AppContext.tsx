@@ -125,6 +125,59 @@ export type InvoiceStatus =
 
 export type PaymentMethod = "Cash" | "Transfer" | "Cheque" | "Giro";
 
+const PRIVILEGED_DATA_READ_ROLES: UserRole[] = [
+  "OWNER",
+  "SPV",
+  "ADMIN",
+  "MANAGER",
+];
+
+const PROJECT_READ_ROLES: UserRole[] = [
+  "OWNER",
+  "SPV",
+  "ADMIN",
+  "MANAGER",
+  "SALES",
+  "FINANCE",
+  "SUPPLY_CHAIN",
+  "PRODUKSI",
+  "OPERATIONS",
+  "WAREHOUSE",
+  "PURCHASING",
+  "HR",
+];
+
+const PROCUREMENT_READ_ROLES: Record<"purchase-orders" | "receivings", UserRole[]> = {
+  "purchase-orders": ["OWNER", "SPV", "ADMIN", "MANAGER", "PURCHASING", "WAREHOUSE", "FINANCE", "PRODUKSI"],
+  receivings: ["OWNER", "SPV", "ADMIN", "MANAGER", "PURCHASING", "WAREHOUSE", "FINANCE", "PRODUKSI"],
+};
+
+const OPERATION_READ_ROLES: UserRole[] = [
+  "OWNER",
+  "SPV",
+  "ADMIN",
+  "MANAGER",
+  "PRODUKSI",
+  "OPERATIONS",
+  "SUPPLY_CHAIN",
+  "PURCHASING",
+  "WAREHOUSE",
+  "FINANCE",
+  "SALES",
+];
+
+const HR_READ_ROLES: UserRole[] = [
+  "OWNER",
+  "SPV",
+  "ADMIN",
+  "MANAGER",
+  "HR",
+  "FINANCE",
+  "PRODUKSI",
+  "SUPPLY_CHAIN",
+  "SALES",
+];
+
 const QUOTATION_READ_ROLES: UserRole[] = [
   "OWNER",
   "SPV",
@@ -142,6 +195,90 @@ const DATA_COLLECTION_READ_ROLES: UserRole[] = [
   "SALES",
   "HR",
 ];
+
+const INVENTORY_READ_ROLES: Record<
+  "stock-items" | "stock-ins" | "stock-outs" | "stock-movements" | "stock-opnames",
+  UserRole[]
+> = {
+  "stock-items": ["OWNER", "ADMIN", "SUPPLY_CHAIN", "PRODUKSI", "FINANCE"],
+  "stock-ins": ["OWNER", "ADMIN", "SUPPLY_CHAIN", "PRODUKSI"],
+  "stock-outs": ["OWNER", "ADMIN", "SUPPLY_CHAIN", "PRODUKSI"],
+  "stock-movements": ["OWNER", "ADMIN", "SUPPLY_CHAIN", "PRODUKSI", "FINANCE"],
+  "stock-opnames": ["OWNER", "ADMIN", "SUPPLY_CHAIN", "PRODUKSI", "FINANCE"],
+};
+
+const FINANCE_OPS_READ_ROLES: Record<
+  "customer-invoices" | "vendor-expenses" | "vendor-invoices",
+  UserRole[]
+> = {
+  "customer-invoices": ["OWNER", "SPV", "ADMIN", "MANAGER", "SALES", "FINANCE"],
+  "vendor-expenses": ["OWNER", "SPV", "ADMIN", "MANAGER", "FINANCE"],
+  "vendor-invoices": ["OWNER", "SPV", "ADMIN", "MANAGER", "FINANCE", "SUPPLY_CHAIN"],
+};
+
+const GENERIC_DATA_READ_ROLES: Partial<Record<string, UserRole[]>> = {
+  invoices: ["OWNER", "ADMIN", "FINANCE", "SALES"],
+  "surat-jalan": ["OWNER", "ADMIN", "WAREHOUSE", "SALES", "PRODUKSI"],
+  "berita-acara": ["OWNER", "ADMIN", "HR", "SALES", "WAREHOUSE", "FINANCE", "PRODUKSI"],
+  "surat-masuk": ["OWNER", "ADMIN", "HR", "SALES", "WAREHOUSE", "FINANCE", "PRODUKSI"],
+  "surat-keluar": ["OWNER", "ADMIN", "HR", "SALES", "WAREHOUSE", "FINANCE", "PRODUKSI"],
+  "template-surat": ["OWNER", "ADMIN", "HR", "SALES", "WAREHOUSE", "FINANCE", "PRODUKSI"],
+  assets: ["OWNER", "ADMIN", "FINANCE", "WAREHOUSE", "PRODUKSI"],
+  maintenances: ["OWNER", "ADMIN", "PRODUKSI", "WAREHOUSE"],
+  payrolls: ["OWNER", "ADMIN", "FINANCE"],
+  "archive-registry": ["OWNER", "ADMIN", "FINANCE", "SALES", "SUPPLY_CHAIN", "PRODUKSI"],
+  "audit-logs": ["OWNER", "ADMIN", "FINANCE", "SALES", "SUPPLY_CHAIN", "PRODUKSI"],
+  vendors: ["OWNER", "ADMIN", "FINANCE", "SUPPLY_CHAIN"],
+  customers: ["OWNER", "ADMIN", "SALES", "FINANCE"],
+};
+
+const SPECIAL_RESOURCE_READ_ROLES: Partial<Record<string, UserRole[]>> = {
+  projects: PROJECT_READ_ROLES,
+  "purchase-orders": PROCUREMENT_READ_ROLES["purchase-orders"],
+  receivings: PROCUREMENT_READ_ROLES.receivings,
+  "work-orders": OPERATION_READ_ROLES,
+  "material-requests": OPERATION_READ_ROLES,
+  "production-reports": OPERATION_READ_ROLES,
+  "production-trackers": OPERATION_READ_ROLES,
+  "qc-inspections": OPERATION_READ_ROLES,
+  employees: HR_READ_ROLES,
+  attendances: HR_READ_ROLES,
+  "stock-items": INVENTORY_READ_ROLES["stock-items"],
+  "stock-ins": INVENTORY_READ_ROLES["stock-ins"],
+  "stock-outs": INVENTORY_READ_ROLES["stock-outs"],
+  "stock-movements": INVENTORY_READ_ROLES["stock-movements"],
+  "stock-opnames": INVENTORY_READ_ROLES["stock-opnames"],
+  "customer-invoices": FINANCE_OPS_READ_ROLES["customer-invoices"],
+  "vendor-expenses": FINANCE_OPS_READ_ROLES["vendor-expenses"],
+  "vendor-invoices": FINANCE_OPS_READ_ROLES["vendor-invoices"],
+  quotations: QUOTATION_READ_ROLES,
+  "data-collections": DATA_COLLECTION_READ_ROLES,
+};
+
+const isAccessDeniedError = (error: unknown): boolean =>
+  Number((error as any)?.response?.status) === 403;
+
+const canReadGenericDataResource = (resource: string, role?: UserRole | null): boolean => {
+  if (hasRoleAccess(role, PRIVILEGED_DATA_READ_ROLES)) {
+    return true;
+  }
+
+  const allowedRoles = GENERIC_DATA_READ_ROLES[resource];
+  return Array.isArray(allowedRoles) ? hasRoleAccess(role, allowedRoles) : false;
+};
+
+const canReadAppResource = (resource: string, role?: UserRole | null): boolean => {
+  const specialAllowedRoles = SPECIAL_RESOURCE_READ_ROLES[resource];
+  if (Array.isArray(specialAllowedRoles)) {
+    return hasRoleAccess(role, specialAllowedRoles);
+  }
+
+  if (Object.prototype.hasOwnProperty.call(GENERIC_DATA_READ_ROLES, resource)) {
+    return canReadGenericDataResource(resource, role);
+  }
+
+  return true;
+};
 export type StockDirection = "IN" | "OUT";
 
 export interface User {
@@ -1591,6 +1728,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     resource: string,
     setter: React.Dispatch<React.SetStateAction<T[]>>
   ) => {
+    if (!canReadAppResource(resource, currentUser?.role)) {
+      setter([]);
+      return;
+    }
+
     const resourceEndpoints: Record<string, string> = {
       "stock-items": "/inventory/items",
       "stock-ins": "/inventory/stock-ins",
@@ -1642,27 +1784,48 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       kasbons: "/hr/kasbons",
       "fleet-health": "/fleet-health",
     };
-    const res = await api.get(resourceEndpoints[resource] || `/data/${resource}`);
-    const rows = Array.isArray(res.data) ? res.data : [];
+    try {
+      const res = await api.get(resourceEndpoints[resource] || `/data/${resource}`);
+      const rows = Array.isArray(res.data) ? res.data : [];
 
-    const items = rows.map((row: any) => {
-      const payload = row?.payload ?? row ?? {};
-      if (payload && typeof payload === "object" && !Array.isArray(payload)) {
-        const payloadId = typeof payload.id === "string" && payload.id.trim() ? payload.id : null;
-        const entityId = typeof row?.entityId === "string" && row.entityId.trim() ? row.entityId : null;
-        const rowId = typeof row?.id === "string" && row.id.trim() ? row.id : null;
-        return { ...(payload as Record<string, unknown>), id: payloadId || entityId || rowId } as T;
+      const items = rows.map((row: any) => {
+        const payload = row?.payload ?? row ?? {};
+        if (payload && typeof payload === "object" && !Array.isArray(payload)) {
+          const payloadId = typeof payload.id === "string" && payload.id.trim() ? payload.id : null;
+          const entityId = typeof row?.entityId === "string" && row.entityId.trim() ? row.entityId : null;
+          const rowId = typeof row?.id === "string" && row.id.trim() ? row.id : null;
+          return { ...(payload as Record<string, unknown>), id: payloadId || entityId || rowId } as T;
+        }
+        return payload as T;
+      });
+
+      setter(items);
+    } catch (error) {
+      if (isAccessDeniedError(error)) {
+        setter([]);
+        return;
       }
-      return payload as T;
-    });
-
-    setter(items);
+      throw error;
+    }
   };
 
   const loadProjects = async () => {
-    const res = await api.get("/projects");
-    const items = Array.isArray(res.data) ? (res.data as Project[]) : [];
-    setProjectList(items);
+    if (!canReadAppResource("projects", currentUser?.role)) {
+      setProjectList([]);
+      return;
+    }
+
+    try {
+      const res = await api.get("/projects");
+      const items = Array.isArray(res.data) ? (res.data as Project[]) : [];
+      setProjectList(items);
+    } catch (error) {
+      if (isAccessDeniedError(error)) {
+        setProjectList([]);
+        return;
+      }
+      throw error;
+    }
   };
 
   const loadPurchaseOrders = async () => {
@@ -1711,9 +1874,17 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       return;
     }
 
-    const res = await api.get("/data-collections");
-    const items = Array.isArray(res.data) ? (res.data as DataCollection[]) : [];
-    setDataCollectionList(items);
+    try {
+      const res = await api.get("/data-collections");
+      const items = Array.isArray(res.data) ? (res.data as DataCollection[]) : [];
+      setDataCollectionList(items);
+    } catch (error) {
+      if (isAccessDeniedError(error)) {
+        setDataCollectionList([]);
+        return;
+      }
+      throw error;
+    }
   };
 
   const loadQuotations = async () => {
@@ -1722,11 +1893,19 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       return;
     }
 
-    const res = await api.get("/quotations");
-    const items = Array.isArray(res.data)
-      ? (res.data as unknown[]).map((item) => normalizeQuotationForUi(item))
-      : [];
-    setQuotationList(items);
+    try {
+      const res = await api.get("/quotations");
+      const items = Array.isArray(res.data)
+        ? (res.data as unknown[]).map((item) => normalizeQuotationForUi(item))
+        : [];
+      setQuotationList(items);
+    } catch (error) {
+      if (isAccessDeniedError(error)) {
+        setQuotationList([]);
+        return;
+      }
+      throw error;
+    }
   };
 
   const refreshCoreLinkedData = async () => {

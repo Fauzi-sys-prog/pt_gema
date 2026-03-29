@@ -42,7 +42,21 @@ const ALIAS_READ_ROLES: Record<(typeof ALIAS_RESOURCES)[number], Role[]> = {
   "finance-pph21-filings": ["OWNER", "SPV", "ADMIN", "MANAGER", "FINANCE"],
   "finance-thr-disbursements": ["OWNER", "SPV", "ADMIN", "MANAGER", "FINANCE"],
   "finance-employee-allowances": ["OWNER", "SPV", "ADMIN", "MANAGER", "FINANCE"],
-  "finance-po-payments": ["OWNER", "SPV", "ADMIN", "MANAGER", "FINANCE", "SUPPLY_CHAIN"],
+  "finance-po-payments": ["OWNER", "SPV", "ADMIN", "MANAGER", "FINANCE", "PURCHASING"],
+};
+
+const ALIAS_WRITE_ROLES: Record<(typeof ALIAS_RESOURCES)[number], Role[]> = {
+  "hr-shifts": ["OWNER", "SPV", "ADMIN", "MANAGER", "HR", "FINANCE"],
+  "hr-shift-schedules": ["OWNER", "SPV", "ADMIN", "MANAGER", "HR", "FINANCE"],
+  "hr-attendance-summaries": ["OWNER", "SPV", "ADMIN", "MANAGER", "HR", "FINANCE"],
+  "hr-performance-reviews": ["OWNER", "SPV", "ADMIN", "MANAGER", "HR", "FINANCE"],
+  "hr-thl-contracts": ["OWNER", "SPV", "ADMIN", "MANAGER", "HR", "FINANCE"],
+  "hr-resignations": ["OWNER", "SPV", "ADMIN", "MANAGER", "HR", "FINANCE"],
+  "finance-bpjs-payments": ["OWNER", "SPV", "ADMIN", "MANAGER", "FINANCE"],
+  "finance-pph21-filings": ["OWNER", "SPV", "ADMIN", "MANAGER", "FINANCE"],
+  "finance-thr-disbursements": ["OWNER", "SPV", "ADMIN", "MANAGER", "FINANCE"],
+  "finance-employee-allowances": ["OWNER", "SPV", "ADMIN", "MANAGER", "FINANCE"],
+  "finance-po-payments": ["OWNER", "SPV", "ADMIN", "MANAGER", "FINANCE", "PURCHASING"],
 };
 
 const createSchema = z.object({
@@ -55,8 +69,12 @@ const updateSchema = z.object({
 
 const bulkSchema = z.array(createSchema);
 
-function canWrite(role?: Role): boolean {
-  return !!role && PRIVILEGED_WRITE_ROLES.has(role);
+function canWrite(resource: (typeof ALIAS_RESOURCES)[number], role?: Role): boolean {
+  if (!role) return false;
+  return (
+    PRIVILEGED_WRITE_ROLES.has(role) ||
+    hasRoleAccess(role, ALIAS_WRITE_ROLES[resource])
+  );
 }
 
 function canRead(resource: (typeof ALIAS_RESOURCES)[number], role?: Role): boolean {
@@ -131,7 +149,7 @@ function registerAlias(resource: (typeof ALIAS_RESOURCES)[number]) {
   });
 
   resourceAliasesRouter.post(basePath, authenticate, async (req: AuthRequest, res: Response) => {
-    if (!canWrite(req.user?.role)) return sendError(res, 403, { code: "FORBIDDEN", message: "Forbidden", legacyError: "Forbidden" });
+    if (!canWrite(resource, req.user?.role)) return sendError(res, 403, { code: "FORBIDDEN", message: "Forbidden", legacyError: "Forbidden" });
     const parsed = createSchema.safeParse(req.body);
     if (!parsed.success) return sendError(res, 400, { code: "VALIDATION_ERROR", message: "Validation failed", details: parsed.error.flatten(), legacyError: parsed.error.flatten() });
 
@@ -155,7 +173,7 @@ function registerAlias(resource: (typeof ALIAS_RESOURCES)[number]) {
   });
 
   resourceAliasesRouter.patch(`${basePath}/:id`, authenticate, async (req: AuthRequest, res: Response) => {
-    if (!canWrite(req.user?.role)) return sendError(res, 403, { code: "FORBIDDEN", message: "Forbidden", legacyError: "Forbidden" });
+    if (!canWrite(resource, req.user?.role)) return sendError(res, 403, { code: "FORBIDDEN", message: "Forbidden", legacyError: "Forbidden" });
     const parsed = updateSchema.safeParse(req.body);
     if (!parsed.success) return sendError(res, 400, { code: "VALIDATION_ERROR", message: "Validation failed", details: parsed.error.flatten(), legacyError: parsed.error.flatten() });
 
@@ -190,7 +208,7 @@ function registerAlias(resource: (typeof ALIAS_RESOURCES)[number]) {
   });
 
   resourceAliasesRouter.delete(`${basePath}/:id`, authenticate, async (req: AuthRequest, res: Response) => {
-    if (!canWrite(req.user?.role)) return sendError(res, 403, { code: "FORBIDDEN", message: "Forbidden", legacyError: "Forbidden" });
+    if (!canWrite(resource, req.user?.role)) return sendError(res, 403, { code: "FORBIDDEN", message: "Forbidden", legacyError: "Forbidden" });
     const id = String(req.params.id || "");
     if (!id) return sendError(res, 400, { code: "INVALID_ID", message: "Invalid id", legacyError: "Invalid id" });
 
@@ -211,7 +229,7 @@ function registerAlias(resource: (typeof ALIAS_RESOURCES)[number]) {
   });
 
   resourceAliasesRouter.put(`${basePath}/bulk`, authenticate, async (req: AuthRequest, res: Response) => {
-    if (!canWrite(req.user?.role)) return sendError(res, 403, { code: "FORBIDDEN", message: "Forbidden", legacyError: "Forbidden" });
+    if (!canWrite(resource, req.user?.role)) return sendError(res, 403, { code: "FORBIDDEN", message: "Forbidden", legacyError: "Forbidden" });
     const parsed = bulkSchema.safeParse(req.body);
     if (!parsed.success) return sendError(res, 400, { code: "VALIDATION_ERROR", message: "Validation failed", details: parsed.error.flatten(), legacyError: parsed.error.flatten() });
 

@@ -108,8 +108,8 @@ const DATA_WRITE_ROLES_BY_RESOURCE: Record<string, Role[]> = {
   employees: ["OWNER", "ADMIN", "HR", "FINANCE", "PRODUKSI", "SUPPLY_CHAIN", "SALES"],
   attendances: ["OWNER", "ADMIN", "HR", "FINANCE", "PRODUKSI", "SUPPLY_CHAIN", "SALES"],
   invoices: ["OWNER", "ADMIN", "FINANCE", "SALES"],
-  "purchase-orders": ["OWNER", "ADMIN", "SUPPLY_CHAIN", "FINANCE"],
-  receivings: ["OWNER", "ADMIN", "SUPPLY_CHAIN", "PRODUKSI"],
+  "purchase-orders": ["OWNER", "ADMIN", "PURCHASING", "FINANCE"],
+  receivings: ["OWNER", "ADMIN", "WAREHOUSE", "PRODUKSI"],
   "work-orders": ["OWNER", "ADMIN", "PRODUKSI", "SUPPLY_CHAIN"],
   "stock-ins": ["OWNER", "ADMIN", "SUPPLY_CHAIN", "PRODUKSI"],
   "stock-outs": ["OWNER", "ADMIN", "SUPPLY_CHAIN", "PRODUKSI"],
@@ -120,14 +120,14 @@ const DATA_WRITE_ROLES_BY_RESOURCE: Record<string, Role[]> = {
   "production-trackers": ["OWNER", "ADMIN", "PRODUKSI", "SUPPLY_CHAIN"],
   "qc-inspections": ["OWNER", "ADMIN", "PRODUKSI"],
   "material-requests": ["OWNER", "ADMIN", "SUPPLY_CHAIN", "PRODUKSI"],
-  "surat-jalan": ["OWNER", "ADMIN", "SUPPLY_CHAIN", "SALES", "PRODUKSI"],
-  "spk-records": ["OWNER", "ADMIN", "SUPPLY_CHAIN", "SALES", "PRODUKSI", "HR"],
-  "berita-acara": ["OWNER", "ADMIN", "HR", "SALES", "SUPPLY_CHAIN", "FINANCE", "PRODUKSI"],
-  "surat-masuk": ["OWNER", "ADMIN", "HR", "SALES", "SUPPLY_CHAIN", "FINANCE", "PRODUKSI"],
-  "surat-keluar": ["OWNER", "ADMIN", "HR", "SALES", "SUPPLY_CHAIN", "FINANCE", "PRODUKSI"],
-  "template-surat": ["OWNER", "ADMIN", "HR", "SALES", "SUPPLY_CHAIN", "FINANCE", "PRODUKSI"],
-  assets: ["OWNER", "ADMIN", "FINANCE", "SUPPLY_CHAIN", "PRODUKSI"],
-  maintenances: ["OWNER", "ADMIN", "PRODUKSI", "SUPPLY_CHAIN"],
+  "surat-jalan": ["OWNER", "ADMIN", "WAREHOUSE", "SALES", "PRODUKSI"],
+  "spk-records": ["OWNER", "ADMIN", "WAREHOUSE", "SALES", "PRODUKSI", "HR"],
+  "berita-acara": ["OWNER", "ADMIN", "HR", "SALES", "WAREHOUSE", "FINANCE", "PRODUKSI"],
+  "surat-masuk": ["OWNER", "ADMIN", "HR", "SALES", "WAREHOUSE", "FINANCE", "PRODUKSI"],
+  "surat-keluar": ["OWNER", "ADMIN", "HR", "SALES", "WAREHOUSE", "FINANCE", "PRODUKSI"],
+  "template-surat": ["OWNER", "ADMIN", "HR", "SALES", "WAREHOUSE", "FINANCE", "PRODUKSI"],
+  assets: ["OWNER", "ADMIN", "FINANCE", "WAREHOUSE", "PRODUKSI"],
+  maintenances: ["OWNER", "ADMIN", "PRODUKSI", "WAREHOUSE"],
   payrolls: ["OWNER", "ADMIN", "FINANCE"],
   "archive-registry": ["OWNER", "ADMIN", "FINANCE", "SALES", "SUPPLY_CHAIN", "PRODUKSI"],
   "audit-logs": ["OWNER", "ADMIN", "FINANCE", "SALES", "SUPPLY_CHAIN", "PRODUKSI"],
@@ -144,12 +144,12 @@ const DATA_WRITE_ROLES_BY_RESOURCE: Record<string, Role[]> = {
   "finance-pph21-filings": ["OWNER", "ADMIN", "FINANCE"],
   "finance-thr-disbursements": ["OWNER", "ADMIN", "FINANCE"],
   "finance-employee-allowances": ["OWNER", "ADMIN", "FINANCE"],
-  "finance-po-payments": ["OWNER", "ADMIN", "FINANCE", "SUPPLY_CHAIN"],
+  "finance-po-payments": ["OWNER", "ADMIN", "FINANCE", "PURCHASING"],
   "finance-bank-reconciliations": ["OWNER", "ADMIN", "FINANCE"],
   "finance-petty-cash-transactions": ["OWNER", "ADMIN", "FINANCE"],
   kasbons: ["OWNER", "ADMIN", "HR", "FINANCE"],
-  "fleet-health": ["OWNER", "ADMIN", "SUPPLY_CHAIN", "PRODUKSI"],
-  "proof-of-delivery": ["OWNER", "ADMIN", "SUPPLY_CHAIN", "PRODUKSI", "SALES"],
+  "fleet-health": ["OWNER", "ADMIN", "WAREHOUSE", "PRODUKSI"],
+  "proof-of-delivery": ["OWNER", "ADMIN", "WAREHOUSE", "PRODUKSI", "SALES"],
   "project-labor-entries": ["OWNER", "ADMIN", "HR", "FINANCE", "PRODUKSI", "SUPPLY_CHAIN", "SALES"],
   "app-settings": ["OWNER", "ADMIN", "MANAGER"],
   vendors: ["OWNER", "ADMIN", "FINANCE", "SUPPLY_CHAIN"],
@@ -395,19 +395,111 @@ async function findProjectNameById(projectId: string | null | undefined): Promis
   return projectNameFromPayload(project);
 }
 
+type WorkOrderRelationContext = {
+  relationId?: string;
+  projectId?: string;
+  projectName?: string;
+  number?: string;
+};
+
+function mapLegacyWorkOrderRelationContext(row: {
+  id: string;
+  projectId: string | null;
+  payload: unknown;
+}): WorkOrderRelationContext {
+  const payload = asRecord(row.payload);
+  return {
+    relationId: row.id,
+    projectId: row.projectId ?? undefined,
+    projectName:
+      asTrimmedString(payload.projectName ?? payload.namaProject) ||
+      undefined,
+    number: asTrimmedString(payload.woNumber ?? payload.number) || row.id,
+  };
+}
+
+async function findLegacyWorkOrderRelationByNumber(
+  numberRef: string
+): Promise<WorkOrderRelationContext | null> {
+  const rows = await prisma.workOrderRecord.findMany({
+    select: { id: true, projectId: true, payload: true },
+  });
+  const match = rows.find((row) => {
+    const payload = asRecord(row.payload);
+    return (
+      asTrimmedString(payload.woNumber) === numberRef ||
+      asTrimmedString(payload.number) === numberRef
+    );
+  });
+  return match ? mapLegacyWorkOrderRelationContext(match) : null;
+}
+
+async function findWorkOrderRelationContext(
+  workOrderRef: string | null | undefined
+): Promise<WorkOrderRelationContext | null> {
+  const key = asTrimmedString(workOrderRef);
+  if (!key) return null;
+
+  const legacyById = await prisma.workOrderRecord.findUnique({
+    where: { id: key },
+    select: { id: true, projectId: true, payload: true },
+  });
+  if (legacyById) return mapLegacyWorkOrderRelationContext(legacyById);
+
+  const legacyByNumber = await findLegacyWorkOrderRelationByNumber(key);
+  if (legacyByNumber) return legacyByNumber;
+
+  const relationalById = await prisma.productionWorkOrder.findUnique({
+    where: { id: key },
+    select: { id: true, projectId: true, projectName: true, number: true },
+  });
+  if (relationalById) {
+    return (
+      (await prisma.workOrderRecord.findUnique({
+        where: { id: relationalById.id },
+        select: { id: true, projectId: true, payload: true },
+      }).then((row) => (row ? mapLegacyWorkOrderRelationContext(row) : null))) ||
+      (relationalById.number
+        ? await findLegacyWorkOrderRelationByNumber(relationalById.number)
+        : null) || {
+        projectId: relationalById.projectId || undefined,
+        projectName: asTrimmedString(relationalById.projectName) || undefined,
+        number: asTrimmedString(relationalById.number) || undefined,
+      }
+    );
+  }
+
+  const relationalByNumber = await prisma.productionWorkOrder.findUnique({
+    where: { number: key },
+    select: { id: true, projectId: true, projectName: true, number: true },
+  });
+  if (relationalByNumber) {
+    return (
+      (await prisma.workOrderRecord.findUnique({
+        where: { id: relationalByNumber.id },
+        select: { id: true, projectId: true, payload: true },
+      }).then((row) => (row ? mapLegacyWorkOrderRelationContext(row) : null))) ||
+      (relationalByNumber.number
+        ? await findLegacyWorkOrderRelationByNumber(relationalByNumber.number)
+        : null) || {
+        projectId: relationalByNumber.projectId || undefined,
+        projectName: asTrimmedString(relationalByNumber.projectName) || undefined,
+        number: asTrimmedString(relationalByNumber.number) || undefined,
+      }
+    );
+  }
+
+  return null;
+}
+
 async function findProductionWorkOrderProjectContext(
   workOrderId: string | null | undefined
 ): Promise<{ projectId?: string; projectName?: string }> {
-  const id = asTrimmedString(workOrderId);
-  if (!id) return {};
-  const workOrder = await prisma.productionWorkOrder.findUnique({
-    where: { id },
-    select: { projectId: true, projectName: true },
-  });
+  const workOrder = await findWorkOrderRelationContext(workOrderId);
   if (!workOrder) return {};
   return {
     projectId: workOrder.projectId,
-    projectName: asTrimmedString(workOrder.projectName) || undefined,
+    projectName: workOrder.projectName,
   };
 }
 
@@ -1027,6 +1119,46 @@ function mapProductionWorkOrderToLegacyPayload(row: {
       unit: item.unit,
     })),
   };
+}
+
+async function syncLegacyWorkOrderRecordFromProduction(row: {
+  id: string;
+  number: string;
+  projectId: string;
+  projectName: string;
+  itemToProduce: string;
+  targetQty: number;
+  completedQty: number;
+  status: string;
+  priority: string;
+  deadline: Date | null;
+  leadTechnician: string;
+  machineId: string | null;
+  startDate: Date | null;
+  endDate: Date | null;
+  workflowStatus: string | null;
+  bomItems: Array<{
+    id: string;
+    itemCode: string | null;
+    itemName: string;
+    qty: number;
+    completedQty: number;
+    unit: string;
+  }>;
+}) {
+  const legacyPayload = mapProductionWorkOrderToLegacyPayload(row);
+  await prisma.workOrderRecord.upsert({
+    where: { id: row.id },
+    update: {
+      projectId: row.projectId,
+      payload: legacyPayload as Prisma.InputJsonValue,
+    },
+    create: {
+      id: row.id,
+      projectId: row.projectId,
+      payload: legacyPayload as Prisma.InputJsonValue,
+    },
+  });
 }
 
 function mapProductionExecutionReportToLegacyPayload(row: {
@@ -1802,6 +1934,9 @@ async function relationalInventoryCreate(resource: string, entityId: string, pay
       return relationalInventoryFindUnique(resource, entityId);
     }
     case "stock-outs": {
+      const workOrderContext = await findWorkOrderRelationContext(
+        asTrimmedString(record.workOrderId) || asTrimmedString(record.noWorkOrder)
+      );
       await prisma.inventoryStockOut.create({
         data: {
           id: entityId,
@@ -1812,9 +1947,8 @@ async function relationalInventoryCreate(resource: string, entityId: string, pay
           recipientName: asTrimmedString(record.penerima) || undefined,
           notes: asTrimmedString(record.notes) || undefined,
           createdByName: asTrimmedString(record.createdBy) || undefined,
-          projectId: asTrimmedString(record.projectId) || undefined,
-          workOrderId:
-            asTrimmedString(record.workOrderId) || asTrimmedString(record.noWorkOrder) || undefined,
+          projectId: asTrimmedString(record.projectId) || workOrderContext?.projectId || undefined,
+          workOrderId: workOrderContext?.relationId || undefined,
           productionReportId: asTrimmedString(record.productionReportId) || undefined,
           legacyPayload: payload,
           items: {
@@ -1978,6 +2112,9 @@ async function relationalInventoryUpdate(resource: string, entityId: string, pay
       return relationalInventoryFindUnique(resource, entityId);
     }
     case "stock-outs": {
+      const workOrderContext = await findWorkOrderRelationContext(
+        asTrimmedString(record.workOrderId) || asTrimmedString(record.noWorkOrder)
+      );
       await prisma.inventoryStockOut.update({
         where: { id: entityId },
         data: {
@@ -1988,9 +2125,8 @@ async function relationalInventoryUpdate(resource: string, entityId: string, pay
           recipientName: asTrimmedString(record.penerima) || null,
           notes: asTrimmedString(record.notes) || null,
           createdByName: asTrimmedString(record.createdBy) || null,
-          projectId: asTrimmedString(record.projectId) || null,
-          workOrderId:
-            asTrimmedString(record.workOrderId) || asTrimmedString(record.noWorkOrder) || null,
+          projectId: asTrimmedString(record.projectId) || workOrderContext?.projectId || null,
+          workOrderId: workOrderContext?.relationId || null,
           productionReportId: asTrimmedString(record.productionReportId) || null,
           legacyPayload: payload,
           items: {
@@ -2233,19 +2369,19 @@ async function relationalLogisticsDocsCreate(resource: string, entityId: string,
     }
     case "proof-of-delivery": {
       const suratJalanContext = await findSuratJalanProjectContext(asTrimmedString(record.suratJalanId));
-      const workOrderContext = await findProductionWorkOrderProjectContext(
+      const workOrderContext = await findWorkOrderRelationContext(
         asTrimmedString(record.workOrderId)
       );
       const resolvedProjectId =
         asTrimmedString(record.projectId) ||
         suratJalanContext.projectId ||
-        workOrderContext.projectId;
+        workOrderContext?.projectId;
       await prisma.logisticsProofOfDelivery.create({
         data: {
           id: entityId,
           suratJalanId: asTrimmedString(record.suratJalanId) || "",
           projectId: resolvedProjectId || undefined,
-          workOrderId: asTrimmedString(record.workOrderId) || undefined,
+          workOrderId: workOrderContext?.relationId || undefined,
           status: asTrimmedString(record.status) || "Delivered",
           receiverName: asTrimmedString(record.receiverName || record.receiver) || "",
           deliveredAt: asTrimmedString(record.deliveredAt || record.podTime) ? new Date(String(record.deliveredAt || record.podTime)) : new Date(),
@@ -2316,16 +2452,16 @@ async function relationalLogisticsDocsCreate(resource: string, entityId: string,
       return relationalLogisticsDocsFindUnique(resource, entityId);
     }
     case "spk-records": {
-      const workOrderContext = await findProductionWorkOrderProjectContext(
+      const workOrderContext = await findWorkOrderRelationContext(
         asTrimmedString(record.workOrderId)
       );
       const resolvedProjectId =
-        asTrimmedString(record.projectId) || workOrderContext.projectId;
+        asTrimmedString(record.projectId) || workOrderContext?.projectId;
       await prisma.projectSpkRecord.create({
         data: {
           id: entityId,
           projectId: resolvedProjectId || undefined,
-          workOrderId: asTrimmedString(record.workOrderId) || undefined,
+          workOrderId: workOrderContext?.relationId || undefined,
           spkNumber: asTrimmedString(record.noSPK || record.spkNumber) || entityId,
           title: asTrimmedString(record.title || record.pekerjaan) || "SPK",
           pekerjaan: asTrimmedString(record.pekerjaan) || undefined,
@@ -2405,19 +2541,19 @@ async function relationalLogisticsDocsUpdate(resource: string, entityId: string,
     }
     case "proof-of-delivery": {
       const suratJalanContext = await findSuratJalanProjectContext(asTrimmedString(record.suratJalanId));
-      const workOrderContext = await findProductionWorkOrderProjectContext(
+      const workOrderContext = await findWorkOrderRelationContext(
         asTrimmedString(record.workOrderId)
       );
       const resolvedProjectId =
         asTrimmedString(record.projectId) ||
         suratJalanContext.projectId ||
-        workOrderContext.projectId;
+        workOrderContext?.projectId;
       await prisma.logisticsProofOfDelivery.update({
         where: { id: entityId },
         data: {
           suratJalanId: asTrimmedString(record.suratJalanId) || "",
           projectId: resolvedProjectId || null,
-          workOrderId: asTrimmedString(record.workOrderId) || null,
+          workOrderId: workOrderContext?.relationId || null,
           status: asTrimmedString(record.status) || "Delivered",
           receiverName: asTrimmedString(record.receiverName || record.receiver) || "",
           deliveredAt: asTrimmedString(record.deliveredAt || record.podTime) ? new Date(String(record.deliveredAt || record.podTime)) : new Date(),
@@ -2489,16 +2625,16 @@ async function relationalLogisticsDocsUpdate(resource: string, entityId: string,
       return relationalLogisticsDocsFindUnique(resource, entityId);
     }
     case "spk-records": {
-      const workOrderContext = await findProductionWorkOrderProjectContext(
+      const workOrderContext = await findWorkOrderRelationContext(
         asTrimmedString(record.workOrderId)
       );
       const resolvedProjectId =
-        asTrimmedString(record.projectId) || workOrderContext.projectId;
+        asTrimmedString(record.projectId) || workOrderContext?.projectId;
       await prisma.projectSpkRecord.update({
         where: { id: entityId },
         data: {
           projectId: resolvedProjectId || null,
-          workOrderId: asTrimmedString(record.workOrderId) || null,
+          workOrderId: workOrderContext?.relationId || null,
           spkNumber: asTrimmedString(record.noSPK || record.spkNumber) || entityId,
           title: asTrimmedString(record.title || record.pekerjaan) || "SPK",
           pekerjaan: asTrimmedString(record.pekerjaan) || null,
@@ -2655,7 +2791,7 @@ async function relationalProductionCreate(resource: string, entityId: string, pa
   switch (resource) {
     case "work-orders": {
       const resolvedMachineId = await resolveMachineAssetIdOrThrow(resource, asTrimmedString(record.machineId));
-      await prisma.productionWorkOrder.create({
+      const workOrder = await prisma.productionWorkOrder.create({
         data: {
           id: entityId,
           number: asTrimmedString(record.woNumber || record.number) || entityId,
@@ -2688,7 +2824,9 @@ async function relationalProductionCreate(resource: string, entityId: string, pa
             }).filter((item) => item.itemName && item.qty > 0),
           },
         },
+        include: { bomItems: true },
       });
+      await syncLegacyWorkOrderRecordFromProduction(workOrder);
       await syncProductionTrackerForWorkOrder(entityId, record);
       return relationalProductionFindUnique(resource, entityId);
     }
@@ -2818,7 +2956,7 @@ async function relationalProductionUpdate(resource: string, entityId: string, pa
   switch (resource) {
     case "work-orders": {
       const resolvedMachineId = await resolveMachineAssetIdOrThrow(resource, asTrimmedString(record.machineId));
-      await prisma.productionWorkOrder.update({
+      const workOrder = await prisma.productionWorkOrder.update({
         where: { id: entityId },
         data: {
           number: asTrimmedString(record.woNumber || record.number) || entityId,
@@ -2852,7 +2990,9 @@ async function relationalProductionUpdate(resource: string, entityId: string, pa
             }).filter((item) => item.itemName && item.qty > 0),
           },
         },
+        include: { bomItems: true },
       });
+      await syncLegacyWorkOrderRecordFromProduction(workOrder);
       await syncProductionTrackerForWorkOrder(entityId, record);
       return relationalProductionFindUnique(resource, entityId);
     }
@@ -2988,6 +3128,7 @@ async function relationalProductionDelete(resource: string, entityId: string) {
         },
       });
       await prisma.productionWorkOrder.delete({ where: { id: entityId } });
+      await prisma.workOrderRecord.deleteMany({ where: { id: entityId } });
       return;
     case "production-reports":
       await prisma.productionExecutionReport.delete({ where: { id: entityId } });
@@ -7209,7 +7350,7 @@ function extractWorkflowStatus(resource: string, payload: unknown): string | nul
 
 const WORKFLOW_STATUS_RULES: Record<string, Record<string, Role[]>> = {
   "work-orders": {
-    REVIEW_SPV: ["OWNER", "ADMIN"],
+    REVIEW_SPV: ["OWNER", "ADMIN", "PRODUKSI", "SUPPLY_CHAIN"],
     READY_EXECUTION: ["OWNER", "ADMIN", "SALES"],
     IN_PROGRESS: ["OWNER", "ADMIN", "PRODUKSI"],
     FOLLOW_UP: ["OWNER", "ADMIN", "PRODUKSI"],
@@ -7217,17 +7358,17 @@ const WORKFLOW_STATUS_RULES: Record<string, Record<string, Role[]>> = {
     ON_HOLD: ["OWNER", "ADMIN", "PRODUKSI"],
   },
   "material-requests": {
-    DRAFT: ["OWNER", "ADMIN", "PRODUKSI", "SALES", "SUPPLY_CHAIN"],
+    DRAFT: ["OWNER", "ADMIN", "PRODUKSI", "SALES", "WAREHOUSE"],
     PRICING_REVIEW: ["OWNER", "ADMIN", "FINANCE"],
-    PO_SUPPLIER: ["OWNER", "ADMIN", "FINANCE", "SUPPLY_CHAIN"],
-    READY_DELIVERY: ["OWNER", "ADMIN", "SUPPLY_CHAIN"],
-    CLOSED: ["OWNER", "ADMIN", "SUPPLY_CHAIN", "FINANCE"],
+    PO_SUPPLIER: ["OWNER", "ADMIN", "FINANCE", "PURCHASING"],
+    READY_DELIVERY: ["OWNER", "ADMIN", "WAREHOUSE"],
+    CLOSED: ["OWNER", "ADMIN", "WAREHOUSE", "FINANCE"],
   },
   "surat-jalan": {
-    PREPARED: ["OWNER", "ADMIN", "SUPPLY_CHAIN"],
-    ISSUED: ["OWNER", "ADMIN", "SUPPLY_CHAIN"],
-    DELIVERED: ["OWNER", "ADMIN", "SUPPLY_CHAIN", "PRODUKSI"],
-    CLOSED: ["OWNER", "ADMIN", "SUPPLY_CHAIN"],
+    PREPARED: ["OWNER", "ADMIN", "WAREHOUSE"],
+    ISSUED: ["OWNER", "ADMIN", "WAREHOUSE"],
+    DELIVERED: ["OWNER", "ADMIN", "WAREHOUSE", "PRODUKSI"],
+    CLOSED: ["OWNER", "ADMIN", "WAREHOUSE"],
   },
   "production-reports": {
     DRAFT: ["OWNER", "ADMIN", "PRODUKSI"],
@@ -7831,6 +7972,9 @@ dataRouter.post("/audit-logs", authenticate, async (req: AuthRequest, res: Respo
       updatedAt: created.updatedAt.toISOString(),
     });
   } catch (err) {
+    if (err instanceof PayloadValidationError) {
+      return sendError(res, 400, { code: err.code, message: err.message, legacyError: err.message });
+    }
     if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
       return sendError(res, 409, { code: "ENTITY_EXISTS", message: "Entity already exists", legacyError: "Entity already exists" });
     }
@@ -7919,6 +8063,9 @@ dataRouter.post("/archive-registry", authenticate, async (req: AuthRequest, res:
       updatedAt: created.updatedAt.toISOString(),
     });
   } catch (err) {
+    if (err instanceof PayloadValidationError) {
+      return sendError(res, 400, { code: err.code, message: err.message, legacyError: err.message });
+    }
     if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
       return sendError(res, 409, { code: "ENTITY_EXISTS", message: "Entity already exists", legacyError: "Entity already exists" });
     }
@@ -8341,6 +8488,9 @@ dataRouter.post("/invoices", authenticate, async (req: AuthRequest, res: Respons
     await writeDataAuditLog(req, "create", "invoices", created.id);
     return res.status(201).json(mapInvoiceRecord(created));
   } catch (err) {
+    if (err instanceof PayloadValidationError) {
+      return sendError(res, 400, { code: err.code, message: err.message, legacyError: err.message });
+    }
     if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
       return sendError(res, 409, { code: "ENTITY_EXISTS", message: "Entity already exists", legacyError: "Entity already exists" });
     }

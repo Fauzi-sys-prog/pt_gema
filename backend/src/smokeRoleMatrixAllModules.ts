@@ -23,7 +23,7 @@ const tokenOverrides: Partial<Record<RoleKey, string>> = {
 
 const credentials: Record<RoleKey, { username: string; password: string }> = {
   owner: {
-    username: process.env.SMOKE_OWNER_USERNAME || "owner",
+    username: process.env.SMOKE_OWNER_USERNAME || "syamsudin",
     password: process.env.SMOKE_OWNER_PASSWORD || "owner",
   },
   finance: {
@@ -35,8 +35,8 @@ const credentials: Record<RoleKey, { username: string; password: string }> = {
     password: process.env.SMOKE_SALES_PASSWORD || "changeMeAngesti123",
   },
   supply: {
-    username: process.env.SMOKE_SUPPLY_USERNAME || "dewi",
-    password: process.env.SMOKE_SUPPLY_PASSWORD || "changeMeDewi123",
+    username: process.env.SMOKE_SUPPLY_USERNAME || "ering",
+    password: process.env.SMOKE_SUPPLY_PASSWORD || "changeMeEring123",
   },
   produksi: {
     username: process.env.SMOKE_PRODUKSI_USERNAME || "produksi",

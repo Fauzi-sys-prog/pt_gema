@@ -289,19 +289,18 @@ export default function ApprovalCenterPage() {
   const canApproveQuotationItem = (q: ApprovalQuotationItem) => {
     if (Array.isArray(q.availableActions)) return q.availableActions.includes("APPROVE");
     const status = normalizeStatus(q.status);
-    if (status === "SENT" || status === "REVIEW") return isOwner;
+    if (status === "SENT" || status === "REVIEW") return isOwner || isSpv;
     return false;
   };
   const canRejectQuotationItem = (q: ApprovalQuotationItem) => {
     if (Array.isArray(q.availableActions)) return q.availableActions.includes("REJECT");
     const status = normalizeStatus(q.status);
-    if (status === "SENT" || status === "REVIEW") return isOwner;
+    if (status === "SENT" || status === "REVIEW") return isOwner || isSpv;
     return false;
   };
   const canReviewQuotationItem = (q: ApprovalQuotationItem) => {
     if (Array.isArray(q.availableActions)) return q.availableActions.includes("REVIEW");
-    const status = normalizeStatus(q.status);
-    return status === "SENT" || status === "REVIEW";
+    return false;
   };
   const getQuotationAuditLabel = (q: ApprovalQuotationItem) => {
     if (q.auditStatus) return q.auditStatus;
@@ -800,7 +799,7 @@ export default function ApprovalCenterPage() {
                             )}
                             {!canApproveQuotationItem(q) && !canRejectQuotationItem(q) && normalizeStatus(q.status) !== 'DRAFT' && !canResendRejectedQuotation(q) && (
                               <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400">
-                                {normalizeStatus(q.status) === 'SENT' ? 'Menunggu Approval' : normalizeStatus(q.status) === 'REVIEW' ? 'Menunggu Finalisasi' : 'Read Only'}
+                                {normalizeStatus(q.status) === 'SENT' || normalizeStatus(q.status) === 'REVIEW' ? 'Menunggu Approval' : 'Read Only'}
                               </span>
                             )}
                           </div>

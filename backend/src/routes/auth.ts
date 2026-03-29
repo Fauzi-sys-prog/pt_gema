@@ -14,6 +14,10 @@ import {
   readAccessTokenCookie,
   setAccessTokenCookie,
 } from "../utils/authCookie";
+import {
+  clearCsrfTokenCookie,
+  ensureCsrfTokenCookie,
+} from "../utils/csrf";
 
 export const authRouter = Router();
 const BCRYPT_ROUNDS = 12;
@@ -28,6 +32,12 @@ function readRequestAccessToken(req: AuthRequest): string | null {
 
   return readAccessTokenCookie(req);
 }
+
+authRouter.get("/auth/csrf", (req, res) => {
+  const csrfToken = ensureCsrfTokenCookie(req, res);
+  res.setHeader("Cache-Control", "no-store");
+  return res.json({ csrfToken });
+});
 
 authRouter.post("/auth/bootstrap-owner", authWriteLimiter, async (req, res) => {
   const parsed = bootstrapOwnerSchema.safeParse(req.body);
@@ -70,6 +80,7 @@ authRouter.post("/auth/bootstrap-owner", authWriteLimiter, async (req, res) => {
     setAccessTokenCookie(res, token);
 
     return res.status(201).json({
+      csrfToken: ensureCsrfTokenCookie(req, res),
       token,
       user: {
         id: user.id,
@@ -137,6 +148,7 @@ authRouter.post("/auth/login", loginLimiter, async (req, res) => {
   setAccessTokenCookie(res, token);
 
   return res.json({
+    csrfToken: ensureCsrfTokenCookie(req, res),
     token,
     user: {
       id: userWithLastLogin.id,
@@ -170,6 +182,7 @@ authRouter.get("/auth/me", authenticate, async (req: AuthRequest, res: Response)
     }
 
     return res.json({
+      csrfToken: ensureCsrfTokenCookie(req, res),
       ...user,
       lastLogin: user.lastLoginAt,
     });
@@ -184,6 +197,7 @@ authRouter.post("/auth/logout", authWriteLimiter, async (req: AuthRequest, res: 
 
     if (!token) {
       clearAccessTokenCookie(res);
+      clearCsrfTokenCookie(res);
       return res.json({ message: "Logged out successfully" });
     }
 
@@ -197,6 +211,7 @@ authRouter.post("/auth/logout", authWriteLimiter, async (req: AuthRequest, res: 
 
     if (!decoded?.id || !decoded?.jti || !decoded?.exp) {
       clearAccessTokenCookie(res);
+      clearCsrfTokenCookie(res);
       return res.json({ message: "Logged out successfully" });
     }
 
@@ -222,9 +237,11 @@ authRouter.post("/auth/logout", authWriteLimiter, async (req: AuthRequest, res: 
     });
 
     clearAccessTokenCookie(res);
+    clearCsrfTokenCookie(res);
     return res.json({ message: "Logged out successfully" });
   } catch {
     clearAccessTokenCookie(res);
+    clearCsrfTokenCookie(res);
     return res.json({ message: "Logged out successfully" });
   }
 });
@@ -259,10 +276,11 @@ authRouter.post("/auth/logout-all", authenticate, authWriteLimiter, async (req: 
     });
 
     clearAccessTokenCookie(res);
-    clearAccessTokenCookie(res);
+    clearCsrfTokenCookie(res);
     return res.json({ message: "All sessions have been logged out successfully" });
   } catch {
     clearAccessTokenCookie(res);
+    clearCsrfTokenCookie(res);
     return res.status(500).json({ error: "Failed to logout all sessions" });
   }
 });

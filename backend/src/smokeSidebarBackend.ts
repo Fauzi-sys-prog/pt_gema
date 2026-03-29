@@ -11,7 +11,7 @@ type ApiResult = {
 };
 
 const BASE_URL = process.env.SMOKE_BASE_URL || "http://localhost:3000";
-const USERNAME = process.env.SMOKE_OWNER_USERNAME || "owner";
+const USERNAME = process.env.SMOKE_OWNER_USERNAME || "syamsudin";
 const PASSWORD = process.env.SMOKE_OWNER_PASSWORD || "owner";
 const OWNER_TOKEN_OVERRIDE = process.env.SMOKE_OWNER_TOKEN;
 

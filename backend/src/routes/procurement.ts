@@ -10,20 +10,6 @@ import { hasRoleAccess } from "../utils/roles";
 
 export const procurementRouter = Router();
 
-const PROCUREMENT_WRITE_ROLES: Role[] = [
-  "OWNER",
-  "SPV",
-  "ADMIN",
-  "MANAGER",
-  "SALES",
-  "SUPPLY_CHAIN",
-  "PURCHASING",
-  "WAREHOUSE",
-  "OPERATIONS",
-  "FINANCE",
-  "PRODUKSI",
-];
-
 const recordSchema = z.object({
   id: z.string().min(1),
 }).passthrough();
@@ -32,12 +18,22 @@ const bulkSchema = z.array(recordSchema);
 
 type ProcurementResource = "purchase-orders" | "receivings";
 
-function canWrite(role?: Role | null): boolean {
-  return hasRoleAccess(role, PROCUREMENT_WRITE_ROLES);
+const PROCUREMENT_READ_ROLES: Record<ProcurementResource, Role[]> = {
+  "purchase-orders": ["OWNER", "SPV", "ADMIN", "MANAGER", "PURCHASING", "WAREHOUSE", "FINANCE", "PRODUKSI"],
+  receivings: ["OWNER", "SPV", "ADMIN", "MANAGER", "PURCHASING", "WAREHOUSE", "FINANCE", "PRODUKSI"],
+};
+
+const PROCUREMENT_WRITE_ROLES: Record<ProcurementResource, Role[]> = {
+  "purchase-orders": ["OWNER", "SPV", "ADMIN", "MANAGER", "PURCHASING"],
+  receivings: ["OWNER", "SPV", "ADMIN", "MANAGER", "WAREHOUSE", "PRODUKSI"],
+};
+
+function canWrite(resource: ProcurementResource, role?: Role | null): boolean {
+  return hasRoleAccess(role, PROCUREMENT_WRITE_ROLES[resource]);
 }
 
-function canRead(role?: Role | null): boolean {
-  return hasRoleAccess(role, PROCUREMENT_WRITE_ROLES);
+function canRead(resource: ProcurementResource, role?: Role | null): boolean {
+  return hasRoleAccess(role, PROCUREMENT_READ_ROLES[resource]);
 }
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -746,7 +742,7 @@ async function deleteResource(resource: ProcurementResource, id: string) {
 
 function registerRoutes(resource: ProcurementResource, basePath: string) {
   procurementRouter.get(basePath, authenticate, async (req: AuthRequest, res: Response) => {
-    if (!canRead(req.user?.role)) {
+    if (!canRead(resource, req.user?.role)) {
       return sendError(res, 403, { code: "FORBIDDEN", message: "Forbidden", legacyError: "Forbidden" });
     }
     try {
@@ -757,7 +753,7 @@ function registerRoutes(resource: ProcurementResource, basePath: string) {
   });
 
   procurementRouter.put(`${basePath}/bulk`, authenticate, async (req: AuthRequest, res: Response) => {
-    if (!canWrite(req.user?.role)) {
+    if (!canWrite(resource, req.user?.role)) {
       return sendError(res, 403, { code: "FORBIDDEN", message: "Forbidden", legacyError: "Forbidden" });
     }
     const parsed = bulkSchema.safeParse(req.body);
@@ -787,7 +783,7 @@ function registerRoutes(resource: ProcurementResource, basePath: string) {
   });
 
   procurementRouter.post(basePath, authenticate, async (req: AuthRequest, res: Response) => {
-    if (!canWrite(req.user?.role)) {
+    if (!canWrite(resource, req.user?.role)) {
       return sendError(res, 403, { code: "FORBIDDEN", message: "Forbidden", legacyError: "Forbidden" });
     }
     const parsed = recordSchema.safeParse(req.body);
@@ -811,7 +807,7 @@ function registerRoutes(resource: ProcurementResource, basePath: string) {
   });
 
   procurementRouter.patch(`${basePath}/:id`, authenticate, async (req: AuthRequest, res: Response) => {
-    if (!canWrite(req.user?.role)) {
+    if (!canWrite(resource, req.user?.role)) {
       return sendError(res, 403, { code: "FORBIDDEN", message: "Forbidden", legacyError: "Forbidden" });
     }
     if (!req.body || typeof req.body !== "object" || Array.isArray(req.body)) {
@@ -840,7 +836,7 @@ function registerRoutes(resource: ProcurementResource, basePath: string) {
   });
 
   procurementRouter.delete(`${basePath}/:id`, authenticate, async (req: AuthRequest, res: Response) => {
-    if (!canWrite(req.user?.role)) {
+    if (!canWrite(resource, req.user?.role)) {
       return sendError(res, 403, { code: "FORBIDDEN", message: "Forbidden", legacyError: "Forbidden" });
     }
     try {

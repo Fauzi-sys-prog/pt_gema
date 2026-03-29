@@ -229,14 +229,14 @@ async function run() {
       documentId: quoId,
       action: "APPROVE",
     });
-    assertStatus("spv approve quotation to review", spvQuoApprove.status, 200);
+    assertStatus("spv approve quotation", spvQuoApprove.status, 200);
 
     const ownerQuoApprove = await api("POST", "/dashboard/finance-approval-action", owner.token, {
       documentType: "QUOTATION",
       documentId: quoId,
       action: "APPROVE",
     });
-    assertStatus("owner approve quotation", ownerQuoApprove.status, 200);
+    assertStatus("owner cannot re-approve approved quotation", ownerQuoApprove.status, 403);
 
     // Verify project sync from quotation approval.
     const projects = await api("GET", "/projects", owner.token);

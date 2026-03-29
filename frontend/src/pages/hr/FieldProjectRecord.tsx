@@ -5,6 +5,7 @@ import { toast } from 'sonner@2.0.3';
 import { motion, AnimatePresence } from 'motion/react';
 import type { Asset, Employee, Project } from '../../contexts/AppContext';
 import api from '../../services/api';
+import { hasRoleAccess } from '../../utils/roles';
 
 interface ProjectWorker {
   id: string;
@@ -14,6 +15,19 @@ interface ProjectWorker {
   role: string;
   rate: number;
 }
+
+const FIELD_RECORD_READ_ROLES = {
+  projects: ['OWNER', 'SPV', 'ADMIN', 'MANAGER', 'SALES', 'FINANCE', 'SUPPLY_CHAIN', 'PRODUKSI', 'OPERATIONS', 'WAREHOUSE', 'PURCHASING', 'HR'],
+  employees: ['OWNER', 'SPV', 'ADMIN', 'MANAGER', 'HR', 'FINANCE', 'PRODUKSI', 'SUPPLY_CHAIN', 'SALES', 'WAREHOUSE'],
+  assets: ['OWNER', 'SPV', 'ADMIN', 'MANAGER', 'FINANCE', 'WAREHOUSE', 'PRODUKSI'],
+  'project-labor-entries': ['OWNER', 'SPV', 'ADMIN', 'MANAGER', 'HR', 'FINANCE', 'WAREHOUSE', 'PRODUKSI', 'PURCHASING', 'SALES', 'SUPPLY_CHAIN'],
+  'hr/kasbons': ['OWNER', 'SPV', 'ADMIN', 'MANAGER', 'HR'],
+  'material-requests': ['OWNER', 'SPV', 'ADMIN', 'MANAGER', 'PRODUKSI', 'OPERATIONS', 'SUPPLY_CHAIN', 'PURCHASING', 'WAREHOUSE', 'FINANCE', 'SALES'],
+  'fleet-health': ['OWNER', 'SPV', 'ADMIN', 'MANAGER', 'WAREHOUSE', 'PRODUKSI'],
+} as const;
+
+const isAccessDeniedError = (error: unknown): boolean =>
+  Number((error as any)?.response?.status) === 403;
 
 export default function FieldProjectRecord() {
   const { projectList = [], employeeList = [], assetList = [], updateProject, materialRequestList = [], addAuditLog } = useApp();
@@ -39,6 +53,8 @@ export default function FieldProjectRecord() {
   const [attendanceData, setAttendanceData] = useState<Record<string, string>>({});
   const [kasbonAmount, setKasbonAmount] = useState('');
   const [kasbonDate, setKasbonDate] = useState(new Date().toISOString().split('T')[0]);
+  const currentRole = String(currentUser?.role || '').trim().toUpperCase();
+  const hasPrivilegedAccess = hasRoleAccess(currentRole, ['OWNER', 'SPV', 'ADMIN', 'MANAGER']);
 
   const normalizeList = <T,>(payload: unknown): T[] => {
     if (Array.isArray(payload)) {
@@ -61,24 +77,46 @@ export default function FieldProjectRecord() {
     let mounted = true;
 
     const loadPageData = async () => {
+      const canRead = (resource: keyof typeof FIELD_RECORD_READ_ROLES) =>
+        hasPrivilegedAccess || hasRoleAccess(currentRole, FIELD_RECORD_READ_ROLES[resource]);
+
+      const fetchIfAllowed = async <T,>(
+        resource: keyof typeof FIELD_RECORD_READ_ROLES,
+        request: () => Promise<{ data: T }>
+      ): Promise<T | []> => {
+        if (!canRead(resource)) {
+          return [];
+        }
+
+        try {
+          const res = await request();
+          return res.data;
+        } catch (error) {
+          if (isAccessDeniedError(error)) {
+            return [];
+          }
+          throw error;
+        }
+      };
+
       try {
-        const [projectsRes, employeesRes, assetsRes, projectLaborRes, kasbonsRes, materialRequestsRes, fleetHealthRes] = await Promise.all([
-          api.get('/projects'),
-          api.get('/employees'),
-          api.get('/assets'),
-          api.get('/project-labor-entries'),
-          api.get('/hr/kasbons'),
-          api.get('/material-requests'),
-          api.get('/fleet-health'),
+        const [projectRows, employeeRows, assetRows, projectLaborRows, kasbonRows, materialRequestRows, fleetHealthRows] = await Promise.all([
+          fetchIfAllowed('projects', () => api.get('/projects')),
+          fetchIfAllowed('employees', () => api.get('/employees')),
+          fetchIfAllowed('assets', () => api.get('/assets')),
+          fetchIfAllowed('project-labor-entries', () => api.get('/project-labor-entries')),
+          fetchIfAllowed('hr/kasbons', () => api.get('/hr/kasbons')),
+          fetchIfAllowed('material-requests', () => api.get('/material-requests')),
+          fetchIfAllowed('fleet-health', () => api.get('/fleet-health')),
         ]);
         if (!mounted) return;
-        setServerProjectList(normalizeList<Project>(projectsRes.data));
-        setServerEmployeeList(normalizeList<Employee>(employeesRes.data));
-        setServerAssetList(normalizeList<Asset>(assetsRes.data));
-        setServerProjectLaborList(normalizeList<any>(projectLaborRes.data));
-        setServerKasbonList(normalizeList<any>(kasbonsRes.data));
-        setServerMaterialRequestList(normalizeList<any>(materialRequestsRes.data));
-        setServerFleetHealthList(normalizeList<any>(fleetHealthRes.data));
+        setServerProjectList(normalizeList<Project>(projectRows));
+        setServerEmployeeList(normalizeList<Employee>(employeeRows));
+        setServerAssetList(normalizeList<Asset>(assetRows));
+        setServerProjectLaborList(normalizeList<any>(projectLaborRows));
+        setServerKasbonList(normalizeList<any>(kasbonRows));
+        setServerMaterialRequestList(normalizeList<any>(materialRequestRows));
+        setServerFleetHealthList(normalizeList<any>(fleetHealthRows));
       } catch {
         if (!mounted) return;
         setServerProjectList(null);
@@ -95,7 +133,7 @@ export default function FieldProjectRecord() {
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [currentRole, hasPrivilegedAccess]);
 
   const effectiveProjectList = serverProjectList ?? projectList;
   const effectiveEmployeeList = serverEmployeeList ?? employeeList;

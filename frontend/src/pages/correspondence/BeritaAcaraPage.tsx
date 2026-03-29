@@ -7,6 +7,15 @@ import { FileText, Plus, X, Printer, Save, Download, FileSignature, ChevronDown,
 import { toast } from 'sonner@2.0.3';
 import api from '../../services/api';
 import { sanitizeRichHtml } from '../../utils/sanitizeRichHtml';
+import { hasRoleAccess } from '../../utils/roles';
+
+const BERITA_ACARA_PAGE_READ_ROLES = {
+  'berita-acara': ['OWNER', 'ADMIN', 'HR', 'SALES', 'WAREHOUSE', 'FINANCE', 'PRODUKSI'],
+  'surat-jalan': ['OWNER', 'ADMIN', 'WAREHOUSE', 'SALES', 'PRODUKSI'],
+} as const;
+
+const isAccessDeniedError = (error: unknown): boolean =>
+  Number((error as any)?.response?.status) === 403;
 
 export default function BeritaAcaraPage() {
   const { beritaAcaraList, addBeritaAcara, updateBeritaAcara, deleteBeritaAcara, addAuditLog, suratJalanList, currentUser } = useApp();
@@ -23,6 +32,8 @@ export default function BeritaAcaraPage() {
   const [sjPickerQuery, setSjPickerQuery] = useState('');
   const [sjQuickFilter, setSjQuickFilter] = useState<'all' | 'today' | 'week' | 'unused'>('all');
   const contentRef = useRef<HTMLDivElement>(null);
+  const currentRole = String(currentUser?.role || '').trim().toUpperCase();
+  const hasPrivilegedAccess = currentRole === 'ADMIN' || currentRole === 'MANAGER' || hasRoleAccess(currentRole, ['OWNER']);
 
   const [formData, setFormData] = useState({
     noBA: `BA/${new Date().getFullYear()}/${(effectiveBeritaAcaraList.length + 1).toString().padStart(3, '0')}`,
@@ -45,14 +56,36 @@ export default function BeritaAcaraPage() {
   const sanitizedSelectedContent = sanitizeRichHtml(selectedBA?.contentHTML || '');
 
   const fetchBeritaAcaraSources = async () => {
+    const canRead = (resource: keyof typeof BERITA_ACARA_PAGE_READ_ROLES) =>
+      hasPrivilegedAccess || hasRoleAccess(currentRole, BERITA_ACARA_PAGE_READ_ROLES[resource]);
+
+    const fetchIfAllowed = async <T,>(
+      resource: keyof typeof BERITA_ACARA_PAGE_READ_ROLES,
+      request: () => Promise<{ data: T }>
+    ): Promise<T | []> => {
+      if (!canRead(resource)) {
+        return [];
+      }
+
+      try {
+        const res = await request();
+        return res.data;
+      } catch (error) {
+        if (isAccessDeniedError(error)) {
+          return [];
+        }
+        throw error;
+      }
+    };
+
     try {
       setIsRefreshing(true);
-      const [baRes, sjRes] = await Promise.all([
-        api.get('/berita-acara'),
-        api.get('/surat-jalan'),
+      const [baRows, sjRows] = await Promise.all([
+        fetchIfAllowed('berita-acara', () => api.get('/berita-acara')),
+        fetchIfAllowed('surat-jalan', () => api.get('/surat-jalan')),
       ]);
-      setServerBeritaAcaraList(Array.isArray(baRes.data) ? (baRes.data as BeritaAcara[]) : []);
-      setServerSuratJalanList(Array.isArray(sjRes.data) ? (sjRes.data as SuratJalan[]) : []);
+      setServerBeritaAcaraList(Array.isArray(baRows) ? (baRows as BeritaAcara[]) : []);
+      setServerSuratJalanList(Array.isArray(sjRows) ? (sjRows as SuratJalan[]) : []);
     } catch {
       setServerBeritaAcaraList(null);
       setServerSuratJalanList(null);
@@ -63,7 +96,7 @@ export default function BeritaAcaraPage() {
 
   useEffect(() => {
     fetchBeritaAcaraSources();
-  }, []);
+  }, [currentRole, hasPrivilegedAccess]);
 
   const usedSuratJalanSet = useMemo(() => {
     return new Set(

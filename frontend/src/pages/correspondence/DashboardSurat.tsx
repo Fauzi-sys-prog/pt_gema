@@ -3,6 +3,7 @@ import type { BeritaAcara, SuratJalan, SuratKeluar, SuratMasuk } from '../../con
 import { ImageWithFallback } from '../../components/figma/ImageWithFallback';
 import { toast } from 'sonner@2.0.3';
 import api from '../../services/api';
+import { hasRoleAccess } from '../../utils/roles';
 
 // Physical Archive Image from user
 import physicalArchiveImg from 'figma:asset/8a215f70fe30661dded39794b547f89ef79421a3.png';
@@ -26,6 +27,16 @@ const STAT_STYLES = {
   },
 } as const;
 
+const CORRESPONDENCE_READ_ROLES = {
+  'surat-masuk': ['OWNER', 'ADMIN', 'HR', 'SALES', 'WAREHOUSE', 'FINANCE', 'PRODUKSI'],
+  'surat-keluar': ['OWNER', 'ADMIN', 'HR', 'SALES', 'WAREHOUSE', 'FINANCE', 'PRODUKSI'],
+  'berita-acara': ['OWNER', 'ADMIN', 'HR', 'SALES', 'WAREHOUSE', 'FINANCE', 'PRODUKSI'],
+  'surat-jalan': ['OWNER', 'ADMIN', 'WAREHOUSE', 'SALES', 'PRODUKSI'],
+} as const;
+
+const isAccessDeniedError = (error: unknown): boolean =>
+  Number((error as any)?.response?.status) === 403;
+
 export default function DashboardSurat() {
   const navigate = useNavigate();
   const { 
@@ -45,6 +56,8 @@ export default function DashboardSurat() {
   const effectiveBeritaAcaraList = serverBeritaAcaraList ?? beritaAcaraList;
   const effectiveSuratJalanList = serverSuratJalanList ?? suratJalanList;
   const [showGallery, setShowGallery] = useState(false);
+  const currentRole = String(currentUser?.role || '').trim().toUpperCase();
+  const hasPrivilegedAccess = currentRole === 'ADMIN' || currentRole === 'MANAGER' || hasRoleAccess(currentRole, ['OWNER']);
 
   const mapEntityRows = <T,>(rows: any[]): T[] =>
     rows.map((row: any) => {
@@ -56,18 +69,36 @@ export default function DashboardSurat() {
     });
 
   const fetchDashboardSuratSources = async () => {
+    const canRead = (resource: keyof typeof CORRESPONDENCE_READ_ROLES) =>
+      hasPrivilegedAccess || hasRoleAccess(currentRole, CORRESPONDENCE_READ_ROLES[resource]);
+
+    const fetchIfAllowed = async <T,>(
+      resource: keyof typeof CORRESPONDENCE_READ_ROLES,
+      request: () => Promise<{ data: T }>
+    ): Promise<T | []> => {
+      if (!canRead(resource)) {
+        return [];
+      }
+
+      try {
+        const res = await request();
+        return res.data;
+      } catch (error) {
+        if (isAccessDeniedError(error)) {
+          return [];
+        }
+        throw error;
+      }
+    };
+
     try {
       setIsRefreshing(true);
-      const [masukRes, keluarRes, baRes, sjRes] = await Promise.all([
-        api.get('/surat-masuk'),
-        api.get('/surat-keluar'),
-        api.get('/berita-acara'),
-        api.get('/surat-jalan'),
+      const [masukRows, keluarRows, baRows, sjRowsRaw] = await Promise.all([
+        fetchIfAllowed('surat-masuk', () => api.get('/surat-masuk')),
+        fetchIfAllowed('surat-keluar', () => api.get('/surat-keluar')),
+        fetchIfAllowed('berita-acara', () => api.get('/berita-acara')),
+        fetchIfAllowed('surat-jalan', () => api.get('/surat-jalan')),
       ]);
-      const masukRows = Array.isArray(masukRes.data) ? masukRes.data : [];
-      const keluarRows = Array.isArray(keluarRes.data) ? keluarRes.data : [];
-      const baRows = Array.isArray(baRes.data) ? baRes.data : [];
-      const sjRowsRaw = Array.isArray(sjRes.data) ? sjRes.data : [];
       const sjRows = mapEntityRows<SuratJalan>(sjRowsRaw);
       setServerSuratMasukList(mapEntityRows<SuratMasuk>(masukRows));
       setServerSuratKeluarList(mapEntityRows<SuratKeluar>(keluarRows));
@@ -85,7 +116,7 @@ export default function DashboardSurat() {
 
   useEffect(() => {
     fetchDashboardSuratSources();
-  }, []);
+  }, [currentRole, hasPrivilegedAccess]);
 
   const formatDate = (dateStr: string) => {
     if (!dateStr) return '-';

@@ -169,7 +169,6 @@ async function createReceivingFromPo(page) {
   const receivingRows = await api("/receivings");
   state.receiving = asArray(receivingRows).find((row) => String(row?.noPO || "") === state.po.noPO && String(row?.noSuratJalan || "") === `SJ-UI-${suffix}`);
   if (!state.receiving?.id) throw new Error("Receiving created from frontend not found in API");
-  state.receiving.expectedNoReceiving = noReceiving;
 }
 
 async function openSupplyChainPages(page) {

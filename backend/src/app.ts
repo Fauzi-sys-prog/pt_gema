@@ -22,6 +22,7 @@ import { resourceAliasesRouter } from "./routes/resourceAliases";
 import { financeMiscRouter } from "./routes/financeMisc";
 import { mediaRouter } from "./routes/media";
 import { errorHandler } from "./middlewares/errorHandler";
+import { protectAgainstCsrf } from "./middlewares/csrf";
 import { apiLimiter, quotationPatchLimiter, writeLimiter } from "./middlewares/rateLimit";
 
 export const app = express();
@@ -58,6 +59,7 @@ app.use(
 // Keep container healthchecks alive even when API limiter is saturated.
 app.use(healthRouter);
 app.use(apiLimiter);
+app.use(protectAgainstCsrf);
 app.use((req, res, next) => {
   const method = req.method.toUpperCase();
   const isQuotationPatch =

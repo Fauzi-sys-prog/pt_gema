@@ -16,5 +16,6 @@ export const logout = () => {
   void api.post("/auth/logout").catch(() => undefined);
   safeRemoveStorageItem(typeof localStorage !== "undefined" ? localStorage : undefined, "token");
   safeRemoveStorageItem(typeof localStorage !== "undefined" ? localStorage : undefined, "user");
+  safeRemoveStorageItem(typeof sessionStorage !== "undefined" ? sessionStorage : undefined, "ptgema_csrf_token");
   safeRemoveStorageItem(typeof sessionStorage !== "undefined" ? sessionStorage : undefined, "auth401_notified");
 };

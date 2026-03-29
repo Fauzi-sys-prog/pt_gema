@@ -4,6 +4,7 @@ import api from "../services/api"; // axios instance kamu (yang auto attach toke
 import type { User } from "./AppContext"; // atau pindahin type User ke types biar clean
 
 const AUTH_STATE_CHANGE_EVENT = "app-auth-state-changed";
+const CSRF_STORAGE_KEY = "ptgema_csrf_token";
 
 interface AuthContextType {
   currentUser: User | null;
@@ -100,9 +101,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, []);
 
-  const clearAuthState = () => {
+const clearAuthState = () => {
     authRequestVersionRef.current += 1;
     safeRemoveStorageItem("token");
+    safeRemoveSessionStorageItem(CSRF_STORAGE_KEY);
     persistUser(null);
     safeRemoveSessionStorageItem("auth401_notified");
     notifyAuthStateChanged();
@@ -194,6 +196,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       authRequestVersionRef.current += 1;
       const res = await api.post("/auth/login", { username, password });
       safeRemoveStorageItem("token");
+      safeRemoveSessionStorageItem(CSRF_STORAGE_KEY);
 
       // hydrate user penuh dari /auth/me agar shape user konsisten
       const meRes = await api.get("/auth/me");

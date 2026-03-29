@@ -6,6 +6,17 @@ import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner@2.0.3';
 import api from '../../services/api';
+import { hasRoleAccess } from '../../utils/roles';
+
+const LOGISTICS_PATH_READ_ROLES = {
+  'surat-jalan': ['OWNER', 'ADMIN', 'WAREHOUSE', 'SALES', 'PRODUKSI'],
+  projects: ['OWNER', 'SPV', 'ADMIN', 'MANAGER', 'SALES', 'FINANCE', 'SUPPLY_CHAIN', 'PRODUKSI', 'HR'],
+  assets: ['OWNER', 'ADMIN', 'FINANCE', 'WAREHOUSE', 'PRODUKSI'],
+  'audit-logs': ['OWNER', 'ADMIN'],
+} as const;
+
+const isAccessDeniedError = (error: unknown): boolean =>
+  Number((error as any)?.response?.status) === 403;
 
 export default function LogisticsCommandCenter() {
   const { suratJalanList, projectList, addSuratJalan, updateSuratJalan, addAuditLog, assetList, auditLogs = [], currentUser } = useApp();
@@ -25,6 +36,8 @@ export default function LogisticsCommandCenter() {
     tanggal: new Date().toISOString().split('T')[0],
     deliveryStatus: 'Pending'
   });
+  const currentRole = String(currentUser?.role || '').trim().toUpperCase();
+  const hasPrivilegedAccess = currentRole === 'ADMIN' || currentRole === 'MANAGER' || hasRoleAccess(currentRole, ['OWNER']);
 
   const normalizeDeliveryStatus = (status?: SuratJalan['deliveryStatus']) =>
     status === 'On Delivery' ? 'In Transit' : (status || 'Pending');
@@ -43,18 +56,40 @@ export default function LogisticsCommandCenter() {
     };
 
     const loadPageData = async () => {
+      const canRead = (resource: keyof typeof LOGISTICS_PATH_READ_ROLES) =>
+        hasPrivilegedAccess || hasRoleAccess(currentRole, LOGISTICS_PATH_READ_ROLES[resource]);
+
+      const fetchIfAllowed = async <T,>(
+        resource: keyof typeof LOGISTICS_PATH_READ_ROLES,
+        request: () => Promise<{ data: T }>
+      ): Promise<T | []> => {
+        if (!canRead(resource)) {
+          return [];
+        }
+
+        try {
+          const res = await request();
+          return res.data;
+        } catch (error) {
+          if (isAccessDeniedError(error)) {
+            return [];
+          }
+          throw error;
+        }
+      };
+
       try {
-        const [sjRes, projectsRes, assetsRes, logsRes] = await Promise.all([
-          api.get('/surat-jalan'),
-          api.get('/projects'),
-          api.get('/assets'),
-          api.get('/audit-logs'),
+        const [sjRows, projectRows, assetRows, auditRows] = await Promise.all([
+          fetchIfAllowed('surat-jalan', () => api.get('/surat-jalan')),
+          fetchIfAllowed('projects', () => api.get('/projects')),
+          fetchIfAllowed('assets', () => api.get('/assets')),
+          fetchIfAllowed('audit-logs', () => api.get('/audit-logs')),
         ]);
         if (!mounted) return;
-        setServerSuratJalanList(normalizeEntityRows<SuratJalan>(sjRes.data));
-        setServerProjectList(normalizeEntityRows<Project>(projectsRes.data));
-        setServerAssetList(normalizeEntityRows<Asset>(assetsRes.data));
-        setServerAuditLogs(normalizeEntityRows<AuditLog>(logsRes.data));
+        setServerSuratJalanList(normalizeEntityRows<SuratJalan>(sjRows));
+        setServerProjectList(normalizeEntityRows<Project>(projectRows));
+        setServerAssetList(normalizeEntityRows<Asset>(assetRows));
+        setServerAuditLogs(normalizeEntityRows<AuditLog>(auditRows));
       } catch {
         if (!mounted) return;
         setServerSuratJalanList(null);
@@ -68,7 +103,7 @@ export default function LogisticsCommandCenter() {
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [currentRole, hasPrivilegedAccess]);
 
   const effectiveSuratJalanList = useMemo(() => {
     const byId = new Map<string, SuratJalan>();

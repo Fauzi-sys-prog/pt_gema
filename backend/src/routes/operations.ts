@@ -197,7 +197,7 @@ const WORKFLOW_STATUS_ALIASES: Record<string, Record<string, string>> = {
 
 const WORKFLOW_STATUS_RULES: Record<string, Record<string, Role[]>> = {
   "work-orders": {
-    REVIEW_SPV: ["OWNER", "ADMIN"],
+    REVIEW_SPV: ["OWNER", "ADMIN", "PRODUKSI", "SUPPLY_CHAIN"],
     READY_EXECUTION: ["OWNER", "ADMIN", "SALES"],
     IN_PROGRESS: ["OWNER", "ADMIN", "PRODUKSI"],
     FOLLOW_UP: ["OWNER", "ADMIN", "PRODUKSI"],

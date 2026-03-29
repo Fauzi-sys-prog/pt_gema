@@ -90,47 +90,83 @@ function inventoryPoNumber(po: { payload: unknown } | null | undefined): string 
   return asTrimmedString(payload.noPO ?? payload.number ?? payload.id) ?? undefined;
 }
 
-async function resolveInventoryWorkOrderRef(ref: string | null | undefined) {
-  const key = asTrimmedString(ref);
-  if (!key) return null;
+type InventoryWorkOrderRef = {
+  id: string;
+  projectId: string | null;
+  number: string | null;
+};
 
-  const relationalById = await prisma.productionWorkOrder.findUnique({
-    where: { id: key },
-    select: { id: true, projectId: true, number: true },
-  });
-  if (relationalById) return relationalById;
+function mapInventoryLegacyWorkOrder(row: {
+  id: string;
+  projectId: string | null;
+  payload: unknown;
+}): InventoryWorkOrderRef {
+  const payload = asRecord(row.payload);
+  return {
+    id: row.id,
+    projectId: row.projectId,
+    number: asTrimmedString(payload.woNumber ?? payload.number) || row.id,
+  };
+}
 
-  const relationalByNumber = await prisma.productionWorkOrder.findUnique({
-    where: { number: key },
-    select: { id: true, projectId: true, number: true },
-  });
-  if (relationalByNumber) return relationalByNumber;
-
-  const legacyById = await prisma.workOrderRecord.findUnique({
-    where: { id: key },
-    select: { id: true, projectId: true, payload: true },
-  });
-  if (legacyById) {
-    return {
-      id: legacyById.id,
-      projectId: legacyById.projectId,
-      number: asTrimmedString(asRecord(legacyById.payload).woNumber ?? asRecord(legacyById.payload).number) || key,
-    };
-  }
-
+async function findLegacyInventoryWorkOrderByNumber(
+  numberRef: string
+): Promise<InventoryWorkOrderRef | null> {
   const legacyRows = await prisma.workOrderRecord.findMany({
     select: { id: true, projectId: true, payload: true },
   });
   const legacyByNumber = legacyRows.find((row) => {
     const payload = asRecord(row.payload);
-    return asTrimmedString(payload.woNumber) === key || asTrimmedString(payload.number) === key;
+    return (
+      asTrimmedString(payload.woNumber) === numberRef ||
+      asTrimmedString(payload.number) === numberRef
+    );
   });
-  if (legacyByNumber) {
-    return {
-      id: legacyByNumber.id,
-      projectId: legacyByNumber.projectId,
-      number: asTrimmedString(asRecord(legacyByNumber.payload).woNumber ?? asRecord(legacyByNumber.payload).number) || key,
-    };
+  return legacyByNumber ? mapInventoryLegacyWorkOrder(legacyByNumber) : null;
+}
+
+async function findLinkedLegacyInventoryWorkOrder(
+  productionWorkOrderId: string,
+  productionWorkOrderNumber: string | null
+): Promise<InventoryWorkOrderRef | null> {
+  const legacyById = await prisma.workOrderRecord.findUnique({
+    where: { id: productionWorkOrderId },
+    select: { id: true, projectId: true, payload: true },
+  });
+  if (legacyById) return mapInventoryLegacyWorkOrder(legacyById);
+  if (productionWorkOrderNumber) {
+    return findLegacyInventoryWorkOrderByNumber(productionWorkOrderNumber);
+  }
+  return null;
+}
+
+async function resolveInventoryWorkOrderRef(ref: string | null | undefined) {
+  const key = asTrimmedString(ref);
+  if (!key) return null;
+
+  const legacyById = await prisma.workOrderRecord.findUnique({
+    where: { id: key },
+    select: { id: true, projectId: true, payload: true },
+  });
+  if (legacyById) return mapInventoryLegacyWorkOrder(legacyById);
+
+  const legacyByNumber = await findLegacyInventoryWorkOrderByNumber(key);
+  if (legacyByNumber) return legacyByNumber;
+
+  const relationalById = await prisma.productionWorkOrder.findUnique({
+    where: { id: key },
+    select: { id: true, projectId: true, number: true },
+  });
+  if (relationalById) {
+    return findLinkedLegacyInventoryWorkOrder(relationalById.id, relationalById.number);
+  }
+
+  const relationalByNumber = await prisma.productionWorkOrder.findUnique({
+    where: { number: key },
+    select: { id: true, projectId: true, number: true },
+  });
+  if (relationalByNumber) {
+    return findLinkedLegacyInventoryWorkOrder(relationalByNumber.id, relationalByNumber.number);
   }
 
   return null;
@@ -332,7 +368,11 @@ async function assertRefs(resource: InventoryResource, payload: Record<string, u
   }
   if (workOrderRef) {
     const row = await resolveInventoryWorkOrderRef(workOrderRef);
-    if (workOrderId && !row) throw new Error(`${resource}: workOrderId '${workOrderId}' tidak ditemukan`);
+    if (!row) {
+      throw new Error(
+        `${resource}: workOrderId '${workOrderId || workOrderRef}' tidak ditemukan`
+      );
+    }
     if (projectId && row?.projectId && row.projectId !== projectId) throw new Error(`${resource}: projectId '${projectId}' tidak match dengan projectId WO '${row.projectId}'`);
   }
 }
