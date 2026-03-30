@@ -4,7 +4,7 @@ services:
     container_name: ptgema_postgres_staging
     restart: unless-stopped
     env_file:
-      - ./backend/.env.staging
+      - ${APP_ENV_FILE:-./backend/.env.staging}
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
@@ -27,7 +27,7 @@ services:
       postgres:
         condition: service_healthy
     env_file:
-      - ./backend/.env.staging
+      - ${APP_ENV_FILE:-./backend/.env.staging}
     environment:
       DATABASE_URL: ${DATABASE_URL:-postgresql://postgres:postgres@postgres:5432/gemadb_staging}
     command: sh -c "npx prisma db push --accept-data-loss && npx prisma generate"
@@ -45,7 +45,7 @@ services:
       migrate:
         condition: service_completed_successfully
     env_file:
-      - ./backend/.env.staging
+      - ${APP_ENV_FILE:-./backend/.env.staging}
     environment:
       DATABASE_URL: ${DATABASE_URL:-postgresql://postgres:postgres@postgres:5432/gemadb_staging}
     volumes:

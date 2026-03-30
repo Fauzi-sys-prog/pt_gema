@@ -11,7 +11,7 @@ if [[ ! -f "$ENV_FILE" ]]; then
 fi
 
 compose() {
-  docker compose -p "$PROJECT_NAME" --env-file "$ENV_FILE" -f "$COMPOSE_FILE" "$@"
+  APP_ENV_FILE="$ENV_FILE" docker compose -p "$PROJECT_NAME" --env-file "$ENV_FILE" -f "$COMPOSE_FILE" "$@"
 }
 
 echo "[staging] 1/5 Start database"
