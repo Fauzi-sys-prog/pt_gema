@@ -11,27 +11,23 @@ import React, {
 import { toast } from "sonner@2.0.3";
 import api from "../services/api";
 import { subscribeDataSync } from "../services/dataSyncBus";
+import type {
+  ActiveStatus,
+  DocStatus,
+  InvoiceStatus,
+  PaymentMethod,
+  User,
+  UserRole,
+} from "../types/auth";
 import { hasRoleAccess, isOwnerLike } from "../utils/roles";
+import {
+  AUTH_STATE_CHANGE_EVENT,
+  normalizeAuthUser,
+  persistAuthUser,
+  readPersistedAuthUser,
+} from "../utils/authState";
 import { normalizeEntityRows } from "../utils/normalizeEntityRows";
 import { sanitizeRichHtml } from "../utils/sanitizeRichHtml";
-
-const AUTH_STATE_CHANGE_EVENT = "app-auth-state-changed";
-
-const safeGetLocalStorageItem = (key: string): string | null => {
-  try {
-    return localStorage.getItem(key);
-  } catch {
-    return null;
-  }
-};
-
-const safeSetLocalStorageItem = (key: string, value: string) => {
-  try {
-    localStorage.setItem(key, value);
-  } catch {
-    // Ignore storage access failures in app context.
-  }
-};
 
 const safeRemoveLocalStorageItem = (key: string) => {
   try {
@@ -57,73 +53,25 @@ const sanitizeBeritaAcaraRecord = <T extends Partial<BeritaAcara>>(record: T): T
   } as T;
 };
 
-const normalizeAuthUser = (raw: any): User => {
-  const displayName = raw?.fullName || raw?.name || raw?.username || "User";
-
-  return {
-    ...raw,
-    fullName: displayName,
-    role: raw?.role ?? "ADMIN",
-    isActive: raw?.isActive ?? true,
-  } as User;
-};
-
 const canReadQuotations = (role?: UserRole | null): boolean =>
   hasRoleAccess(role, QUOTATION_READ_ROLES);
 
 const canReadDataCollections = (role?: UserRole | null): boolean =>
   hasRoleAccess(role, DATA_COLLECTION_READ_ROLES);
 
-const persistAuthUser = (user: User | null) => {
-  if (!user) {
-    safeRemoveLocalStorageItem("user");
-    return;
-  }
-  safeSetLocalStorageItem("user", JSON.stringify(user));
-};
-
-const readPersistedAuthUser = (): User | null => {
-  try {
-    const raw = safeGetLocalStorageItem("user");
-    if (!raw) return null;
-    return normalizeAuthUser(JSON.parse(raw));
-  } catch {
-    safeRemoveLocalStorageItem("user");
-    return null;
-  }
-};
-
 /**
  * =========================
  *  TYPES (DEDUPED + CLEAN)
  * =========================
  */
-
-export type UserRole =
-  | "OWNER"
-  | "SPV"
-  | "ADMIN"
-  | "MANAGER"
-  | "HR"
-  | "PURCHASING"
-  | "USER"
-  | "PRODUKSI"
-  | "SALES"
-  | "FINANCE"
-  | "SUPPLY_CHAIN"
-  | "WAREHOUSE"
-  | "OPERATIONS";
-export type ActiveStatus = "Active" | "Inactive";
-export type DocStatus = "Draft" | "Sent" | "Approved" | "Rejected" | "Revised" | "Final" | "Review" | "Cancelled";
-export type InvoiceStatus =
-  | "Draft"
-  | "Sent"
-  | "Partial Paid"
-  | "Paid"
-  | "Overdue"
-  | "Cancelled";
-
-export type PaymentMethod = "Cash" | "Transfer" | "Cheque" | "Giro";
+export type {
+  ActiveStatus,
+  DocStatus,
+  InvoiceStatus,
+  PaymentMethod,
+  User,
+  UserRole,
+} from "../types/auth";
 
 const PRIVILEGED_DATA_READ_ROLES: UserRole[] = [
   "OWNER",
@@ -280,23 +228,6 @@ const canReadAppResource = (resource: string, role?: UserRole | null): boolean =
   return true;
 };
 export type StockDirection = "IN" | "OUT";
-
-export interface User {
-  id: string;
-  email: string;
-  username: string;
-  role: UserRole;
-  name?: string | null; // backend
-  isActive: boolean; // backend
-  createdAt?: string;
-
-  // UI-only
-  fullName?: string;
-  status?: ActiveStatus;
-  phone?: string;
-  department?: string;
-  lastLogin?: string | null;
-}
 
 export interface ProductionTracker {
   id: string;

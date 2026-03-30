@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'; import { Plus, Search, Edit2, Trash2, Shield, User as UserIcon, Mail, Phone, KeyRound } from 'lucide-react'; import { useApp } from '../../contexts/AppContext';
-import type { User } from '../../contexts/AppContext';
+import type { User } from '../../types/auth';
 import api from '../../services/api';
 import { toast } from 'sonner@2.0.3';
 import { ALL_ROLE_OPTIONS, getRoleLabel, isOwnerLike } from '../../utils/roles';

@@ -1,9 +1,14 @@
 import React, { createContext, useContext, useEffect, useRef, useState } from "react";
-import api from "../services/api"; // axios instance kamu (yang auto attach token)
+import type { User } from "../types/auth";
+import api from "../services/api";
+import {
+  AUTH_STATE_CHANGE_EVENT,
+  normalizeAuthUser,
+  notifyAuthStateChanged,
+  persistAuthUser,
+  readPersistedAuthUser,
+} from "../utils/authState";
 
-import type { User } from "./AppContext"; // atau pindahin type User ke types biar clean
-
-const AUTH_STATE_CHANGE_EVENT = "app-auth-state-changed";
 const CSRF_STORAGE_KEY = "ptgema_csrf_token";
 
 interface AuthContextType {
@@ -15,33 +20,6 @@ interface AuthContextType {
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
-
-const normalizeUser = (raw: any): User => {
-  const displayName = raw?.fullName || raw?.name || raw?.username || "User";
-
-  return {
-    ...raw,
-    fullName: displayName,
-    role: raw?.role ?? "ADMIN",
-    isActive: raw?.isActive ?? true,
-  } as User;
-};
-
-const safeGetStorageItem = (key: string): string | null => {
-  try {
-    return localStorage.getItem(key);
-  } catch {
-    return null;
-  }
-};
-
-const safeSetStorageItem = (key: string, value: string) => {
-  try {
-    localStorage.setItem(key, value);
-  } catch {
-    // ignore storage access failures
-  }
-};
 
 const safeRemoveStorageItem = (key: string) => {
   try {
@@ -59,30 +37,6 @@ const safeRemoveSessionStorageItem = (key: string) => {
   }
 };
 
-const persistUser = (user: User | null) => {
-  if (!user) {
-    safeRemoveStorageItem("user");
-    return;
-  }
-  safeSetStorageItem("user", JSON.stringify(user));
-};
-
-const notifyAuthStateChanged = () => {
-  if (typeof window === "undefined") return;
-  window.dispatchEvent(new CustomEvent(AUTH_STATE_CHANGE_EVENT));
-};
-
-const readPersistedUser = (): User | null => {
-  try {
-    const raw = safeGetStorageItem("user");
-    if (!raw) return null;
-    return normalizeUser(JSON.parse(raw));
-  } catch {
-    safeRemoveStorageItem("user");
-    return null;
-  }
-};
-
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (!context) throw new Error("useAuth must be used within AuthProvider");
@@ -90,7 +44,7 @@ export const useAuth = () => {
 };
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [currentUser, setCurrentUser] = useState<User | null>(() => readPersistedUser());
+  const [currentUser, setCurrentUser] = useState<User | null>(() => readPersistedAuthUser());
   const [loading, setLoading] = useState<boolean>(true);
   const authRequestVersionRef = useRef(0);
   const isMountedRef = useRef(true);
@@ -105,7 +59,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     authRequestVersionRef.current += 1;
     safeRemoveStorageItem("token");
     safeRemoveSessionStorageItem(CSRF_STORAGE_KEY);
-    persistUser(null);
+    persistAuthUser(null);
     safeRemoveSessionStorageItem("auth401_notified");
     notifyAuthStateChanged();
     if (isMountedRef.current) {
@@ -115,7 +69,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Auto-check token -> fetch /auth/me
   useEffect(() => {
-    const persistedUser = readPersistedUser();
+    const persistedUser = readPersistedAuthUser();
     if (persistedUser && isMountedRef.current) {
       setCurrentUser(persistedUser);
     }
@@ -135,9 +89,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       .get("/auth/me")
       .then((res) => {
         if (authRequestVersionRef.current !== requestVersion || !isMountedRef.current) return;
-        const normalizedUser = normalizeUser(res.data);
+        const normalizedUser = normalizeAuthUser(res.data);
         setCurrentUser(normalizedUser);
-        persistUser(normalizedUser);
+        persistAuthUser(normalizedUser);
         notifyAuthStateChanged();
       })
       .catch(() => {
@@ -155,7 +109,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const handleStorage = (event: StorageEvent) => {
       if (event.key !== "user") return;
 
-      const persistedUser = readPersistedUser();
+      const persistedUser = readPersistedAuthUser();
       if (!persistedUser) {
         clearAuthState();
         if (isMountedRef.current) {
@@ -176,9 +130,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .get("/auth/me")
         .then((res) => {
           if (authRequestVersionRef.current !== requestVersion || !isMountedRef.current) return;
-          const normalizedUser = normalizeUser(res.data);
+          const normalizedUser = normalizeAuthUser(res.data);
           setCurrentUser(normalizedUser);
-          persistUser(normalizedUser);
+          persistAuthUser(normalizedUser);
           notifyAuthStateChanged();
         })
         .catch(() => {
@@ -209,11 +163,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       // hydrate user penuh dari /auth/me agar shape user konsisten
       const meRes = await api.get("/auth/me");
-      const normalizedUser = normalizeUser(meRes.data);
+      const normalizedUser = normalizeAuthUser(meRes.data);
       if (isMountedRef.current) {
         setCurrentUser(normalizedUser);
       }
-      persistUser(normalizedUser);
+      persistAuthUser(normalizedUser);
       notifyAuthStateChanged();
       if (isMountedRef.current) {
         setLoading(false);
