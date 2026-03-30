@@ -8,7 +8,7 @@ import { hasRoleAccess } from '../../utils/roles';
 // Physical Archive preview is optimized for faster dashboard loads.
 import physicalArchivePreviewImg from '../../assets/8a215f70fe30661dded39794b547f89ef79421a3.webp';
 
-const physicalArchiveDownloadImg = new URL('../../assets/8a215f70fe30661dded39794b547f89ef79421a3.png', import.meta.url).href;
+const physicalArchiveDownloadImg = '/archive/physical-archive-reference.png';
 
 const STAT_STYLES = {
   blue: {
