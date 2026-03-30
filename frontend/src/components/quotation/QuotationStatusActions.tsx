@@ -1,4 +1,4 @@
-import { XCircle, Send, Info } from 'lucide-react'; import type { Quotation } from '../../contexts/AppContext';
+import { XCircle, Send, Info } from 'lucide-react'; import type { Quotation } from '../../types/quotation';
 
 interface QuotationStatusActionsProps {
   quotation: Quotation;

@@ -16,7 +16,8 @@ import {
   RefreshCw
 } from 'lucide-react';
 import { useApp } from '../../contexts/AppContext';
-import type { Invoice, Quotation } from '../../contexts/AppContext';
+import type { Invoice } from '../../contexts/AppContext';
+import type { Quotation } from '../../types/quotation';
 import api from '../../services/api';
 import { toast } from 'sonner@2.0.3';
 

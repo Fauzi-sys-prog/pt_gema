@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from 'react'; import { Plus, Search, Eye, Edit, Trash2, Calculator, ArrowLeft, Filter, Download, Building2, TrendingUp, FileSpreadsheet, Zap, Hammer, Truck, Wallet, CheckCircle2, X, Maximize2, ChevronRight, ChevronDown, FileText, Printer, MoreVertical, ArrowUpRight, AlertCircle, Clock, LayoutDashboard, Save, Trash, Construction, HardHat, Layers, RefreshCw } from 'lucide-react'; import { useNavigate } from 'react-router-dom'; import { useApp } from '../../contexts/AppContext';
-import type { Quotation } from '../../contexts/AppContext';
+import type { Quotation } from '../../types/quotation';
 import type { DataCollection } from '../../contexts/AppContext';
 import { ImageWithFallback } from '../../components/figma/ImageWithFallback';
 import { toast } from "sonner@2.0.3";

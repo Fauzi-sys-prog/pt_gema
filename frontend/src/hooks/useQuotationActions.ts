@@ -1,4 +1,4 @@
-import type { Quotation } from '../contexts/AppContext';
+import type { Quotation } from '../types/quotation';
 import { toast } from 'sonner';
 
 interface UseQuotationActionsProps {

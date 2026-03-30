@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'; import { useNavigate, useLocation } from 'react-router-dom'; import {    Plus, Search, Eye, Edit, Trash2, FileText, Download, CheckCircle2, Clock, XCircle, AlertCircle, ClipboardList, FileCheck, Calculator, UserCheck, Construction, HardHat, Layers, Zap, ChevronRight, Info, Calendar, X } from 'lucide-react'; import { useApp } from '../../contexts/AppContext';
-import type { Quotation } from '../../contexts/AppContext';
+import type { Quotation } from '../../types/quotation';
 import { toast } from "sonner@2.0.3"
 import { motion, AnimatePresence } from 'motion/react';
 import api from '../../services/api';

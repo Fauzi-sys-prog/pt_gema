@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'; import { useLocation, useNavigate } from 'react-router-dom'; import {    Plus, Search, Eye, Edit, Trash2, Printer, FileText, Briefcase, CheckCircle, Users, Calendar, Package, Wrench, Save, X, ShoppingCart, XCircle, Send } from 'lucide-react'; import { useApp } from '../contexts/AppContext';
-import type { Quotation, QuotationItem } from '../contexts/AppContext';
+import type { Quotation, QuotationItem } from '../types/quotation';
 import { toast } from 'sonner@2.0.3';
 import api from '../services/api';
 

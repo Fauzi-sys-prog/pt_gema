@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom'; import { ArrowLeft, Printer, CheckCircle2, Clock, XCircle, AlertCircle, FileText, Hammer, Wallet, Building2, ChevronRight, ShieldCheck, Zap, Info, Layers, Check, Target, FileCheck, FileDown, ClipboardList, Plus, Eye } from 'lucide-react'; import { useApp } from '../../contexts/AppContext';
-import type { Quotation } from '../../contexts/AppContext';
+import type { Quotation } from '../../types/quotation';
 import { toast } from 'sonner@2.0.3';
 import { motion, AnimatePresence } from 'motion/react';
 import type { Project } from '../../contexts/AppContext';

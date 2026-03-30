@@ -1,5 +1,6 @@
 import { Suspense, lazy, useEffect, useState, useMemo } from 'react'; import { FileText, Search, Download, Filter, ArrowUpRight, ArrowDownLeft, Calendar, ChevronRight, Scale, ShieldCheck, ShieldAlert, Printer, FileCheck2, AlertCircle, RefreshCw } from 'lucide-react'; import { useApp } from '../../contexts/AppContext';
-import type { Invoice, Quotation, VendorInvoice } from '../../contexts/AppContext';
+import type { Invoice, VendorInvoice } from '../../contexts/AppContext';
+import type { Quotation } from '../../types/quotation';
 import api from '../../services/api';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner@2.0.3';
