@@ -72,6 +72,30 @@
           manualChunks(id) {
             if (!id.includes('node_modules')) return;
 
+            const hasPackage = (pkg: string) =>
+              id.includes(`/node_modules/${pkg}/`) ||
+              id.includes(`\\node_modules\\${pkg}\\`);
+
+            if (
+              hasPackage('react') ||
+              hasPackage('react-dom') ||
+              hasPackage('scheduler')
+            ) {
+              return 'react-core';
+            }
+
+            if (
+              hasPackage('react-router') ||
+              hasPackage('react-router-dom') ||
+              hasPackage('@remix-run')
+            ) {
+              return 'router-vendor';
+            }
+
+            if (hasPackage('lucide-react')) {
+              return 'icons-vendor';
+            }
+
             if (id.includes('recharts')) {
               return 'charts-vendor';
             }
@@ -86,6 +110,21 @@
 
             if (id.includes('motion')) {
               return 'motion-vendor';
+            }
+
+            if (
+              hasPackage('axios') ||
+              hasPackage('sonner')
+            ) {
+              return 'network-vendor';
+            }
+
+            if (
+              hasPackage('clsx') ||
+              hasPackage('tailwind-merge') ||
+              hasPackage('class-variance-authority')
+            ) {
+              return 'utils-vendor';
             }
 
             if (
