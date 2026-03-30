@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { lazy, Suspense, useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Plus,
@@ -36,27 +36,42 @@ import api from "../../services/api";
 import { ImageWithFallback } from "../../components/figma/ImageWithFallback";
 import StatusGuideCard from "../../components/ui/StatusGuideCard";
 import { toast } from "sonner@2.0.3";
-import {
-  ManpowerModal,
-} from "../../components/data-collection/ManpowerModal";
 import type { Manpower } from "../../components/data-collection/ManpowerModal";
-import {
-  ScheduleModal,
-} from "../../components/data-collection/ScheduleModal";
 import type { Schedule } from "../../components/data-collection/ScheduleModal";
-import {
-  ConsumableModal,
-} from "../../components/data-collection/ConsumableModal";
 import type { Consumable } from "../../components/data-collection/ConsumableModal";
-import {
-  EquipmentModal,
-} from "../../components/data-collection/EquipmentModal";
 import type { Equipment } from "../../components/data-collection/EquipmentModal";
-import {
-  BOMMaterialModal,
-} from "../../components/data-collection/BOMMaterialModal";
 import type { BOMMaterial } from "../../components/data-collection/BOMMaterialModal";
-import { BOMSummaryTable } from "../../components/data-collection/BOMSummaryTable";
+
+const ManpowerModal = lazy(() =>
+  import("../../components/data-collection/ManpowerModal").then((module) => ({
+    default: module.ManpowerModal,
+  })),
+);
+const ScheduleModal = lazy(() =>
+  import("../../components/data-collection/ScheduleModal").then((module) => ({
+    default: module.ScheduleModal,
+  })),
+);
+const ConsumableModal = lazy(() =>
+  import("../../components/data-collection/ConsumableModal").then((module) => ({
+    default: module.ConsumableModal,
+  })),
+);
+const EquipmentModal = lazy(() =>
+  import("../../components/data-collection/EquipmentModal").then((module) => ({
+    default: module.EquipmentModal,
+  })),
+);
+const BOMMaterialModal = lazy(() =>
+  import("../../components/data-collection/BOMMaterialModal").then((module) => ({
+    default: module.BOMMaterialModal,
+  })),
+);
+const BOMSummaryTable = lazy(() =>
+  import("../../components/data-collection/BOMSummaryTable").then((module) => ({
+    default: module.BOMSummaryTable,
+  })),
+);
 
 // Material Interface
 interface Material {
@@ -68,6 +83,20 @@ interface Material {
   supplier: string;
   status?: string;
 }
+
+const inlineSectionLoader = (
+  <div className="rounded-2xl border border-dashed border-gray-300 bg-white/80 px-4 py-6 text-center text-sm font-semibold text-gray-500">
+    Menyiapkan ringkasan section...
+  </div>
+);
+
+const modalLoader = (
+  <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/40 px-4 backdrop-blur-sm">
+    <div className="rounded-2xl bg-white px-6 py-4 text-sm font-semibold text-gray-700 shadow-2xl">
+      Membuka form...
+    </div>
+  </div>
+);
 
 // Signature Canvas Component
 const SignatureCanvas = ({
@@ -1770,7 +1799,9 @@ export default function DataCollection() {
                   </button>
                 </div>
 
-                <BOMSummaryTable bomMaterials={formData.materials as BOMMaterial[]} />
+                <Suspense fallback={inlineSectionLoader}>
+                  <BOMSummaryTable bomMaterials={formData.materials as BOMMaterial[]} />
+                </Suspense>
               </div>
 
               {/* MANPOWER SECTION - Always Visible! */}
@@ -4480,87 +4511,104 @@ export default function DataCollection() {
       )}
 
       {/* Modals */}
-      <ManpowerModal
-        show={showManpowerModal}
-        onClose={() => {
-          setShowManpowerModal(false);
-          setEditingManpowerIndex(null);
-        }}
-        onSave={handleSaveManpower}
-        editingItem={
-          editingManpowerIndex !== null
-            ? showDetailModal
-              ? selectedItem?.manpower?.[editingManpowerIndex]
-              : formData.manpower?.[editingManpowerIndex]
-            : null
-        }
-      />
+      {showManpowerModal && (
+        <Suspense fallback={modalLoader}>
+          <ManpowerModal
+            show={showManpowerModal}
+            onClose={() => {
+              setShowManpowerModal(false);
+              setEditingManpowerIndex(null);
+            }}
+            onSave={handleSaveManpower}
+            editingItem={
+              editingManpowerIndex !== null
+                ? showDetailModal
+                  ? selectedItem?.manpower?.[editingManpowerIndex]
+                  : formData.manpower?.[editingManpowerIndex]
+                : null
+            }
+          />
+        </Suspense>
+      )}
 
-      <ScheduleModal
-        show={showScheduleModal}
-        onClose={() => {
-          setShowScheduleModal(false);
-          setEditingScheduleIndex(null);
-        }}
-        onSave={handleSaveSchedule}
-        editingItem={
-          editingScheduleIndex !== null
-            ? showDetailModal
-              ? selectedItem?.schedule?.[editingScheduleIndex]
-              : formData.schedule?.[editingScheduleIndex]
-            : null
-        }
-      />
+      {showScheduleModal && (
+        <Suspense fallback={modalLoader}>
+          <ScheduleModal
+            show={showScheduleModal}
+            onClose={() => {
+              setShowScheduleModal(false);
+              setEditingScheduleIndex(null);
+            }}
+            onSave={handleSaveSchedule}
+            editingItem={
+              editingScheduleIndex !== null
+                ? showDetailModal
+                  ? selectedItem?.schedule?.[editingScheduleIndex]
+                  : formData.schedule?.[editingScheduleIndex]
+                : null
+            }
+          />
+        </Suspense>
+      )}
 
-      <ConsumableModal
-        show={showConsumableModal}
-        onClose={() => {
-          setShowConsumableModal(false);
-          setEditingConsumableIndex(null);
-        }}
-        onSave={handleSaveConsumable}
-        editingItem={
-          editingConsumableIndex !== null
-            ? showDetailModal
-              ? selectedItem?.consumables?.[
-                  editingConsumableIndex
-                ]
-              : formData.consumables?.[editingConsumableIndex]
-            : null
-        }
-      />
+      {showConsumableModal && (
+        <Suspense fallback={modalLoader}>
+          <ConsumableModal
+            show={showConsumableModal}
+            onClose={() => {
+              setShowConsumableModal(false);
+              setEditingConsumableIndex(null);
+            }}
+            onSave={handleSaveConsumable}
+            editingItem={
+              editingConsumableIndex !== null
+                ? showDetailModal
+                  ? selectedItem?.consumables?.[editingConsumableIndex]
+                  : formData.consumables?.[editingConsumableIndex]
+                : null
+            }
+          />
+        </Suspense>
+      )}
 
-      <EquipmentModal
-        show={showEquipmentModal}
-        onClose={() => {
-          setShowEquipmentModal(false);
-          setEditingEquipmentIndex(null);
-        }}
-        onSave={handleSaveEquipment}
-        editingItem={
-          editingEquipmentIndex !== null
-            ? showDetailModal
-              ? selectedItem?.equipment?.[editingEquipmentIndex]
-              : formData.equipment?.[editingEquipmentIndex]
-            : null
-        }
-      />
+      {showEquipmentModal && (
+        <Suspense fallback={modalLoader}>
+          <EquipmentModal
+            show={showEquipmentModal}
+            onClose={() => {
+              setShowEquipmentModal(false);
+              setEditingEquipmentIndex(null);
+            }}
+            onSave={handleSaveEquipment}
+            editingItem={
+              editingEquipmentIndex !== null
+                ? showDetailModal
+                  ? selectedItem?.equipment?.[editingEquipmentIndex]
+                  : formData.equipment?.[editingEquipmentIndex]
+                : null
+            }
+          />
+        </Suspense>
+      )}
 
-      {/* BOM Material Modal */}
-      <BOMMaterialModal
-        isOpen={showBOMMaterialModal}
-        onClose={() => {
-          setShowBOMMaterialModal(false);
-          setEditingBOMMaterialIndex(null);
-        }}
-        onSave={handleSaveBOMMaterial}
-        editingMaterial={
-          editingBOMMaterialIndex !== null
-            ? (formData.materials as BOMMaterial[])?.[editingBOMMaterialIndex]
-            : null
-        }
-        editingIndex={editingBOMMaterialIndex}
-      />
+      {showBOMMaterialModal && (
+        <Suspense fallback={modalLoader}>
+          <BOMMaterialModal
+            isOpen={showBOMMaterialModal}
+            onClose={() => {
+              setShowBOMMaterialModal(false);
+              setEditingBOMMaterialIndex(null);
+            }}
+            onSave={handleSaveBOMMaterial}
+            editingMaterial={
+              editingBOMMaterialIndex !== null
+                ? (formData.materials as BOMMaterial[])?.[editingBOMMaterialIndex]
+                : null
+            }
+            editingIndex={editingBOMMaterialIndex}
+          />
+        </Suspense>
+      )}
     </div>
   );
 }

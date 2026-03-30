@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { Suspense, lazy, useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import {
@@ -32,7 +32,6 @@ import {
 import { useApp } from "../contexts/AppContext";
 import type { Project, WorkOrder } from '../contexts/AppContext';
 import { toast } from "sonner@2.0.3";
-import { BOQMaterialModal } from "../components/project/BOQMaterialModal";
 import logoGTP from "figma:asset/661f558dc14c79fa090b7039a885f26b843f5c04.png";
 import api from "../services/api";
 import FlowHintBar from "../components/ui/FlowHintBar";
@@ -43,8 +42,16 @@ type ProjectTab = "overview" | "boq" | "milestones" | "work-order" | "mutation" 
 type ProjectFilter = "All" | "Planning" | "In Progress" | "Completed" | "Approved" | "Rejected";
 type BoqCategoryKey = "manpower" | "equipment" | "consumable" | "material" | "other";
 
-import { TimelineTracker } from "../components/project/TimelineTracker";
-import { MaterialUsageReportModal } from "../components/project/MaterialUsageReportModal";
+const TimelineTracker = lazy(() =>
+  import("../components/project/TimelineTracker").then((module) => ({
+    default: module.TimelineTracker,
+  })),
+);
+const MaterialUsageReportModal = lazy(() =>
+  import("../components/project/MaterialUsageReportModal").then((module) => ({
+    default: module.MaterialUsageReportModal,
+  })),
+);
 
 const BOQ_CATEGORY_META: Record<BoqCategoryKey, { label: string; badge: string }> = {
   manpower: { label: "Manpower", badge: "bg-blue-50 text-blue-700 border-blue-100" },
@@ -101,6 +108,20 @@ const formatApprovalActor = (record: any, kind: "approved" | "spvApproved" | "re
   if (label && role) return `${label} (${role})`;
   return label || "-";
 };
+
+const projectSectionLoader = (
+  <div className="rounded-[2rem] border border-dashed border-slate-200 bg-white px-6 py-8 text-center text-xs font-black uppercase tracking-[0.2em] text-slate-400">
+    Menyiapkan section project...
+  </div>
+);
+
+const projectModalLoader = (
+  <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-900/50 px-4 backdrop-blur-sm">
+    <div className="rounded-[1.5rem] bg-white px-6 py-4 text-xs font-black uppercase tracking-[0.2em] text-slate-500 shadow-2xl">
+      Membuka detail project...
+    </div>
+  </div>
+);
 
 export default function ProjectManagementPage() {
   const {
@@ -1633,10 +1654,12 @@ export default function ProjectManagementPage() {
                   <div className="lg:col-span-2 space-y-8">
                     <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
                       <h3 className="text-sm font-black uppercase tracking-widest mb-6 border-b pb-4">Execution Roadmap</h3>
-                      <TimelineTracker 
-                        project={selectedProject} 
-                        workOrders={workOrderList.filter(wo => wo.projectId === selectedProject.id)} 
-                      />
+                      <Suspense fallback={projectSectionLoader}>
+                        <TimelineTracker 
+                          project={selectedProject} 
+                          workOrders={workOrderList.filter(wo => wo.projectId === selectedProject.id)} 
+                        />
+                      </Suspense>
                     </div>
                     {selectedQuotationSnapshot && (
                       <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
@@ -2783,22 +2806,24 @@ export default function ProjectManagementPage() {
         </div>
       )}
 
-      {selectedProject && (
-        <MaterialUsageReportModal
-          projectId={selectedProject.id}
-          projectName={selectedProject.namaProject}
-          customerName={selectedProject.customer}
-          spkOptions={selectedProjectSpkHistory}
-          isOpen={showMaterialUsageModal}
-          mode={materialUsageModalMode}
-          onClose={() => {
-            setEditingMaterialUsageReport(null);
-            setShowMaterialUsageModal(false);
-            setMaterialUsageModalMode("create");
-          }}
-          onSave={handleSaveMaterialUsageReport}
-          editingReport={editingMaterialUsageReport}
-        />
+      {selectedProject && showMaterialUsageModal && (
+        <Suspense fallback={projectModalLoader}>
+          <MaterialUsageReportModal
+            projectId={selectedProject.id}
+            projectName={selectedProject.namaProject}
+            customerName={selectedProject.customer}
+            spkOptions={selectedProjectSpkHistory}
+            isOpen={showMaterialUsageModal}
+            mode={materialUsageModalMode}
+            onClose={() => {
+              setEditingMaterialUsageReport(null);
+              setShowMaterialUsageModal(false);
+              setMaterialUsageModalMode("create");
+            }}
+            onSave={handleSaveMaterialUsageReport}
+            editingReport={editingMaterialUsageReport}
+          />
+        </Suspense>
       )}
     </div>
   );

@@ -13,7 +13,6 @@ import {
   MapPin, Eye, Trash2, RefreshCcw, Edit
 } from 'lucide-react';
 import { toast } from 'sonner@2.0.3';
-import { loadSampleQuotation } from '../../data/sampleQuotationGTP';
 import api from '../../services/api';
 import FlowHintBar from '../../components/ui/FlowHintBar';
 import { getRoleLabel, isOwnerLike } from '../../utils/roles';
@@ -816,6 +815,7 @@ export default function QuotationPage() {
     }
 
     if (!sample) {
+      const { loadSampleQuotation } = await import('../../data/sampleQuotationGTP');
       sample = loadSampleQuotation();
     }
     
