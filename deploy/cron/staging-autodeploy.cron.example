@@ -1,0 +1,1 @@
+*/5 * * * * cd /root/ptgema-staging-src && ENV_FILE=/root/ptgema-staging-config/backend.env.staging PROJECT_NAME=ptgema_staging ./scripts/staging_auto_deploy.sh >> /var/log/ptgema-staging-autodeploy.log 2>&1
