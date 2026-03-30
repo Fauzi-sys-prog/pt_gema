@@ -45,6 +45,11 @@ import {
   workOrderNumberFromPayload,
 } from "./dataPayloadUtils";
 import {
+  auditLogEntrySelect,
+  mapArchiveRegistryEntry,
+  mapAuditLogEntry,
+} from "./dataAuditMappers";
+import {
   mapFinanceBankReconciliationToLegacyPayload,
   mapFinanceCustomerInvoiceToLegacyPayload,
   mapFinancePettyCashTransactionToLegacyPayload,
@@ -6017,25 +6022,7 @@ dataRouter.get("/audit-logs", authenticate, async (req: AuthRequest, res: Respon
   try {
     const rows = await prisma.auditLogEntry.findMany({
       orderBy: { timestamp: "desc" },
-      select: {
-        id: true,
-        timestamp: true,
-        userId: true,
-        userName: true,
-        action: true,
-        module: true,
-        details: true,
-        status: true,
-        domain: true,
-        resource: true,
-        entityId: true,
-        operation: true,
-        actorUserId: true,
-        actorRole: true,
-        metadata: true,
-        createdAt: true,
-        updatedAt: true,
-      },
+      select: auditLogEntrySelect,
       take: 2000,
     });
 
@@ -6046,25 +6033,7 @@ dataRouter.get("/audit-logs", authenticate, async (req: AuthRequest, res: Respon
         if (operation && String(row.operation || "") !== operation) return false;
         return true;
       })
-      .map((row) => ({
-        id: row.id,
-        timestamp: row.timestamp.toISOString(),
-        userId: row.userId ?? row.actorUserId ?? undefined,
-        userName: row.userName ?? "System",
-        action: row.action,
-        module: row.module ?? "System",
-        details: row.details ?? "",
-        status: row.status ?? "Success",
-        domain: row.domain ?? undefined,
-        resource: row.resource ?? undefined,
-        entityId: row.entityId ?? undefined,
-        operation: row.operation ?? undefined,
-        actorUserId: row.actorUserId ?? undefined,
-        actorRole: row.actorRole ?? undefined,
-        metadata: row.metadata ?? undefined,
-        createdAt: row.createdAt.toISOString(),
-        updatedAt: row.updatedAt.toISOString(),
-      }))
+      .map(mapAuditLogEntry)
       .slice(0, limit);
 
     return res.json(filtered);
@@ -6091,49 +6060,11 @@ dataRouter.get("/audit-logs/domain/:domain", authenticate, async (req: AuthReque
     const rows = await prisma.auditLogEntry.findMany({
       where: { domain },
       orderBy: { timestamp: "desc" },
-      select: {
-        id: true,
-        timestamp: true,
-        userId: true,
-        userName: true,
-        action: true,
-        module: true,
-        details: true,
-        status: true,
-        domain: true,
-        resource: true,
-        entityId: true,
-        operation: true,
-        actorUserId: true,
-        actorRole: true,
-        metadata: true,
-        createdAt: true,
-        updatedAt: true,
-      },
+      select: auditLogEntrySelect,
       take: 2000,
     });
 
-    const filtered = rows
-      .map((row) => ({
-        id: row.id,
-        timestamp: row.timestamp.toISOString(),
-        userId: row.userId ?? row.actorUserId ?? undefined,
-        userName: row.userName ?? "System",
-        action: row.action,
-        module: row.module ?? "System",
-        details: row.details ?? "",
-        status: row.status ?? "Success",
-        domain: row.domain ?? undefined,
-        resource: row.resource ?? undefined,
-        entityId: row.entityId ?? undefined,
-        operation: row.operation ?? undefined,
-        actorUserId: row.actorUserId ?? undefined,
-        actorRole: row.actorRole ?? undefined,
-        metadata: row.metadata ?? undefined,
-        createdAt: row.createdAt.toISOString(),
-        updatedAt: row.updatedAt.toISOString(),
-      }))
-      .slice(0, limit);
+    const filtered = rows.map(mapAuditLogEntry).slice(0, limit);
 
     return res.json(filtered);
   } catch {
@@ -6190,25 +6121,7 @@ dataRouter.post("/audit-logs", authenticate, async (req: AuthRequest, res: Respo
         metadata: asTrimmedString(body.metadata) ?? null,
       },
     });
-    return res.status(201).json({
-      id: created.id,
-      timestamp: created.timestamp.toISOString(),
-      userId: created.userId ?? created.actorUserId ?? undefined,
-      userName: created.userName ?? "System",
-      action: created.action,
-      module: created.module ?? "System",
-      details: created.details ?? "",
-      status: created.status ?? "Success",
-      domain: created.domain ?? undefined,
-      resource: created.resource ?? undefined,
-      entityId: created.entityId ?? undefined,
-      operation: created.operation ?? undefined,
-      actorUserId: created.actorUserId ?? undefined,
-      actorRole: created.actorRole ?? undefined,
-      metadata: created.metadata ?? undefined,
-      createdAt: created.createdAt.toISOString(),
-      updatedAt: created.updatedAt.toISOString(),
-    });
+    return res.status(201).json(mapAuditLogEntry(created));
   } catch (err) {
     if (err instanceof PayloadValidationError) {
       return sendError(res, 400, { code: err.code, message: err.message, legacyError: err.message });
@@ -6229,19 +6142,7 @@ dataRouter.get("/archive-registry", authenticate, async (req: AuthRequest, res: 
     const rows = await prisma.archiveRegistryEntry.findMany({
       orderBy: { tanggal: "desc" },
     });
-    return res.json(rows.map((row) => ({
-      id: row.id,
-      date: row.tanggal.toISOString().slice(0, 10),
-      ref: row.reference,
-      description: row.description,
-      amount: row.amount,
-      project: row.projectName,
-      admin: row.adminName,
-      type: row.type,
-      source: row.source,
-      createdAt: row.createdAt.toISOString(),
-      updatedAt: row.updatedAt.toISOString(),
-    })));
+    return res.json(rows.map(mapArchiveRegistryEntry));
   } catch {
     return sendError(res, 500, { code: "INTERNAL_ERROR", message: "Internal server error", legacyError: "Internal server error" });
   }
