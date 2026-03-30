@@ -1108,19 +1108,19 @@ export default function ProjectManagementPage() {
       <FlowHintBar
         title="Alur Project:"
         badges={[
-          { label: "Pending", tone: "warning" },
-          { label: "Approved", tone: "success" },
-          { label: "Rejected", tone: "danger" },
+          { label: "Quotation Approved", tone: "info" },
+          { label: "Project Pending Approval", tone: "warning" },
+          { label: "Project Approved", tone: "success" },
           { label: "Unlock/Relock oleh OWNER/SPV", tone: "info" },
         ]}
-        helper="Export final project hanya aktif saat approvalStatus = Approved."
+        helper="Project idealnya lahir dari quotation yang sudah disetujui. Export final project hanya aktif saat approvalStatus = Approved."
         actions={[
           { label: "Buka Approval Hub", onClick: () => navigate("/finance/approvals") },
           { label: "Buka Quotation", onClick: () => navigate("/sales/quotation") },
         ]}
       />
 
-      <div className="bg-white p-2 rounded-[2.5rem] border border-slate-100 shadow-sm flex flex-col md:flex-row gap-2">
+        <div className="bg-white p-2 rounded-[2.5rem] border border-slate-100 shadow-sm flex flex-col md:flex-row gap-2">
         <div className="flex-1 relative group">
           <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-600 transition-colors" size={20} />
           <input
@@ -1149,7 +1149,31 @@ export default function ProjectManagementPage() {
       </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {filteredProjects.map((project) => (
+          {filteredProjects.length === 0 ? (
+            <div className="lg:col-span-2 bg-white rounded-[3rem] border border-dashed border-slate-200 p-12 text-center space-y-3">
+              <div className="w-16 h-16 mx-auto rounded-3xl bg-slate-100 flex items-center justify-center text-slate-400">
+                <Briefcase size={28} />
+              </div>
+              <p className="text-sm font-black uppercase italic text-slate-900">Belum ada project yang cocok dengan filter ini</p>
+              <p className="max-w-xl mx-auto text-sm text-slate-500">
+                Coba ubah status filter, cari nama customer lain, atau buat project baru dari quotation yang sudah approved agar alurnya tetap rapi.
+              </p>
+              <div className="flex flex-wrap justify-center gap-3 pt-2">
+                <button
+                  onClick={() => navigate('/sales/quotation')}
+                  className="px-5 py-3 rounded-2xl bg-slate-900 text-white text-[10px] font-black uppercase tracking-widest"
+                >
+                  Buka Quotation
+                </button>
+                <button
+                  onClick={() => setProjectFilter('All')}
+                  className="px-5 py-3 rounded-2xl bg-white border border-slate-200 text-slate-700 text-[10px] font-black uppercase tracking-widest"
+                >
+                  Reset Filter
+                </button>
+              </div>
+            </div>
+          ) : filteredProjects.map((project) => (
             <div
               key={project.id}
               className="bg-white rounded-[3rem] border border-slate-100 overflow-hidden hover:shadow-2xl hover:shadow-slate-200/50 transition-all cursor-pointer group flex flex-col h-full"

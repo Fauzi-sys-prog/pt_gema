@@ -29,6 +29,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
 import api from '../../services/api';
 import { hasRoleAccess } from '../../utils/roles';
+import FlowHintBar from '../../components/ui/FlowHintBar';
 
 const SURAT_JALAN_PAGE_READ_ROLES = {
   'surat-jalan': ['OWNER', 'ADMIN', 'WAREHOUSE', 'SALES', 'PRODUKSI'],
@@ -454,6 +455,21 @@ export default function SuratJalanPage() {
         ))}
       </div>
 
+      <FlowHintBar
+        title="Alur Surat Jalan:"
+        badges={[
+          { label: 'Material Delivery / Equipment Loan', tone: 'info' },
+          { label: 'Pending', tone: 'warning' },
+          { label: 'Delivered', tone: 'success' },
+          { label: 'Lanjut Berita Acara', tone: 'neutral' },
+        ]}
+        helper="Surat Jalan dipakai sebagai dokumen kirim. Untuk material delivery, stok keluar ikut disiapkan otomatis. Setelah kiriman selesai atau pekerjaan diterima, lanjutkan ke Berita Acara."
+        actions={[
+          { label: 'Ringkasan Logistik', onClick: () => navigate('/logistics/hub') },
+          { label: 'Buka Berita Acara', onClick: () => navigate('/surat-menyurat/berita-acara') },
+        ]}
+      />
+
       {/* Document List */}
       <div className="bg-white rounded-2xl lg:rounded-[3.5rem] border border-slate-100 shadow-sm overflow-hidden">
         <div className="p-4 sm:p-6 lg:p-10 border-b border-slate-50 flex flex-wrap items-center justify-between gap-4 sm:gap-6">
@@ -503,7 +519,21 @@ export default function SuratJalanPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {filteredSJ.map((sj) => (
+              {filteredSJ.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="px-6 sm:px-10 py-16 text-center">
+                    <div className="max-w-md mx-auto space-y-3">
+                      <div className="w-16 h-16 mx-auto rounded-3xl bg-slate-100 flex items-center justify-center text-slate-400">
+                        <FileText size={28} />
+                      </div>
+                      <p className="text-sm font-black text-slate-900 uppercase italic">Belum ada Surat Jalan di daftar ini</p>
+                      <p className="text-xs text-slate-500 font-medium">
+                        Coba cek mode arsip, kata kunci pencarian, atau buat Surat Jalan baru untuk pengiriman material dan peminjaman alat.
+                      </p>
+                    </div>
+                  </td>
+                </tr>
+              ) : filteredSJ.map((sj) => (
                 <tr key={sj.id} className="group hover:bg-slate-50/50 transition-all cursor-pointer" onClick={() => { setSelectedSJ(sj); setShowPreview(true); }}>
                   <td className="px-10 py-8">
                     <div className="flex flex-col">

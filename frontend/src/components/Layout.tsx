@@ -172,7 +172,7 @@ export default function Layout({ children }: LayoutProps) {
 
   const menuItems: MenuItem[] = [
     {
-      title: 'Guide Book',
+      title: 'Panduan Sistem',
       icon: <Book size={20} />,
       path: '/guide-book'
     },
@@ -197,7 +197,7 @@ export default function Layout({ children }: LayoutProps) {
       ]
     },
     {
-      title: 'Supply Chain Hub',
+      title: 'Pengadaan & Gudang',
       icon: <Package size={20} />,
       submenu: [
         { title: 'Purchase Order', path: '/purchasing/purchase-order' },
@@ -208,7 +208,7 @@ export default function Layout({ children }: LayoutProps) {
       ]
     },
     {
-      title: 'Commercial & Sales',
+      title: 'Penawaran & Penjualan',
       icon: <Calculator size={20} />,
       submenu: [
         { title: 'Quotation', path: '/sales/quotation' },
@@ -217,7 +217,7 @@ export default function Layout({ children }: LayoutProps) {
       ]
     },
     {
-      title: 'Finance & Ledger',
+      title: 'Finance & Penagihan',
       icon: <Wallet size={20} />,
       submenu: [
         { title: 'Executive Command Center', path: '/finance/executive-dashboard' },
@@ -238,21 +238,21 @@ export default function Layout({ children }: LayoutProps) {
       ]
     },
     {
-      title: 'Correspondence',
+      title: 'Dokumen Proyek',
       icon: <Mail size={20} />,
       submenu: [
-        { title: 'Surat Masuk/Keluar', path: '/surat-menyurat/dashboard' },
+        { title: 'Dokumen Masuk & Keluar', path: '/surat-menyurat/dashboard' },
         { title: 'Berita Acara', path: '/surat-menyurat/berita-acara' },
-        { title: 'Surat Jalan (DO)', path: '/surat-menyurat/surat-jalan' },
+        { title: 'Surat Jalan', path: '/surat-menyurat/surat-jalan' },
         { title: 'Surat Perintah Kerja', path: '/surat-menyurat/spk' }
       ]
     },
     {
-      title: 'Logistics Control',
+      title: 'Pengiriman & Logistik',
       icon: <Truck size={20} />,
       submenu: [
-        { title: 'Command Center', path: '/logistics/hub' },
-        { title: 'Fleet Health', path: '/asset/maintenance' },
+        { title: 'Ringkasan Logistik', path: '/logistics/hub' },
+        { title: 'Kesehatan Armada', path: '/asset/maintenance' },
         { title: 'Proof of Delivery', path: '/surat-menyurat/surat-jalan' }
       ]
     },
@@ -265,18 +265,18 @@ export default function Layout({ children }: LayoutProps) {
       ]
     },
     {
-      title: 'Human Capital',
+      title: 'HR & Absensi',
       icon: <Users size={20} />,
       submenu: [
         { title: 'Karyawan', path: '/hr/karyawan' },
         { title: 'Absensi (Daily)', path: '/hr/absensi' },
         { title: 'Absen & Kasbon (Field)', path: '/hr/field-record' },
         { title: 'Rekap Kehadiran', path: '/hr/attendance-recap' },
-        { title: 'Automatic Payroll', path: '/hr/payroll' }
+        { title: 'Payroll', path: '/hr/payroll' }
       ]
     },
     {
-      title: 'Data Collection',
+      title: 'Survey Lapangan',
       icon: <Database size={20} />,
       path: '/data-collection'
     },

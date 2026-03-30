@@ -8,6 +8,8 @@ import { toast } from 'sonner@2.0.3';
 import api from '../../services/api';
 import { sanitizeRichHtml } from '../../utils/sanitizeRichHtml';
 import { hasRoleAccess } from '../../utils/roles';
+import FlowHintBar from '../../components/ui/FlowHintBar';
+import { useNavigate } from 'react-router-dom';
 
 const BERITA_ACARA_PAGE_READ_ROLES = {
   'berita-acara': ['OWNER', 'ADMIN', 'HR', 'SALES', 'WAREHOUSE', 'FINANCE', 'PRODUKSI'],
@@ -19,6 +21,7 @@ const isAccessDeniedError = (error: unknown): boolean =>
 
 export default function BeritaAcaraPage() {
   const { beritaAcaraList, addBeritaAcara, updateBeritaAcara, deleteBeritaAcara, addAuditLog, suratJalanList, currentUser } = useApp();
+  const navigate = useNavigate();
   const [serverBeritaAcaraList, setServerBeritaAcaraList] = useState<BeritaAcara[] | null>(null);
   const [serverSuratJalanList, setServerSuratJalanList] = useState<SuratJalan[] | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -386,7 +389,7 @@ export default function BeritaAcaraPage() {
               </div>
               <div className="flex-1 min-w-0">
                 <h1 className="text-xl sm:text-2xl lg:text-4xl font-black text-slate-900 tracking-tight uppercase italic truncate">Berita Acara</h1>
-                <p className="text-slate-400 font-bold text-xs sm:text-sm uppercase tracking-wider lg:tracking-[0.2em] mt-1">Official Document Management System</p>
+                <p className="text-slate-400 font-bold text-xs sm:text-sm uppercase tracking-wider lg:tracking-[0.2em] mt-1">Dokumen serah terima, penyelesaian kerja, dan bukti dasar untuk penagihan</p>
               </div>
             </div>
             <button 
@@ -431,6 +434,22 @@ export default function BeritaAcaraPage() {
           ))}
         </div>
 
+        <FlowHintBar
+          className="mb-4 sm:mb-6 lg:mb-8"
+          title="Alur Berita Acara:"
+          badges={[
+            { label: 'Pilih Surat Jalan / pekerjaan selesai', tone: 'info' },
+            { label: 'Susun Berita Acara', tone: 'warning' },
+            { label: 'Final / Disetujui', tone: 'success' },
+            { label: 'Invoice siap dibuat', tone: 'neutral' },
+          ]}
+          helper="Berita Acara idealnya dibuat setelah kiriman sampai atau pekerjaan selesai. Dokumen final ini jadi pengikat sebelum invoice proyek diterbitkan."
+          actions={[
+            { label: 'Buka Surat Jalan', onClick: () => navigate('/surat-menyurat/surat-jalan') },
+            { label: 'Buka Invoice', onClick: () => navigate('/sales/invoice') },
+          ]}
+        />
+
         {/* Search */}
         <div className="bg-white p-4 sm:p-6 rounded-2xl lg:rounded-[2.5rem] border border-slate-100 mb-4 sm:mb-6 lg:mb-8">
           <input 
@@ -462,6 +481,9 @@ export default function BeritaAcaraPage() {
                       <div className="flex flex-col items-center gap-4">
                         <FileText size={48} className="text-slate-200 sm:w-16 sm:h-16" />
                         <p className="text-slate-400 font-bold uppercase text-xs sm:text-sm">Belum ada Berita Acara</p>
+                        <p className="max-w-md text-xs text-slate-500">
+                          Mulai dari Surat Jalan atau pekerjaan yang sudah selesai, lalu buat Berita Acara sebagai bukti serah terima dan dasar dokumen tagihan.
+                        </p>
                       </div>
                     </td>
                   </tr>

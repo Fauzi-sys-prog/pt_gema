@@ -1107,13 +1107,14 @@ export default function QuotationPage() {
           title="Alur Quotation:"
           badges={[
             { label: "Draft", tone: "neutral" },
-            { label: "Sent", tone: "info" },
-            { label: "Approved = Final Export Ready", tone: "success" },
+            { label: "Sent ke Approval", tone: "info" },
+            { label: "Approved = Siap Jadi Project", tone: "success" },
             { label: "Rejected", tone: "danger" },
             { label: "Locked jika dipakai Project Approved", tone: "warning" },
           ]}
-          helper="Export final dokumen quotation hanya aktif pada status Approved."
+          helper="Quotation paling aman dibuat dari Data Collection yang sudah lengkap. Begitu approved, quotation siap dipakai untuk pembentukan project dan export final."
           actions={[
+            { label: "Buka Data Collection", onClick: () => navigate('/data-collection') },
             { label: "Buka Approval Hub", onClick: () => navigate('/finance/approvals') },
             { label: "Buka Project Ledger", onClick: () => navigate('/project') },
           ]}

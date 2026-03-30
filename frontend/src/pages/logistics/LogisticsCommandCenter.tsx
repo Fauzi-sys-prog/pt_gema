@@ -2,11 +2,12 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Truck, MapPin, ChevronRight, Search, Filter, Clock, CheckCircle2, AlertCircle, MoreVertical, Navigation, Package, Calendar, User, ExternalLink, QrCode, X, Plus, Briefcase, Layers, Activity, UserCheck } from 'lucide-react'; import { useApp } from '../../contexts/AppContext';
 import type { Project, SuratJalan } from '../../contexts/AppContext';
 import type { Asset, AuditLog } from '../../contexts/AppContext';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner@2.0.3';
 import api from '../../services/api';
 import { hasRoleAccess } from '../../utils/roles';
+import FlowHintBar from '../../components/ui/FlowHintBar';
 
 const LOGISTICS_PATH_READ_ROLES = {
   'surat-jalan': ['OWNER', 'ADMIN', 'WAREHOUSE', 'SALES', 'PRODUKSI'],
@@ -20,6 +21,7 @@ const isAccessDeniedError = (error: unknown): boolean =>
 
 export default function LogisticsCommandCenter() {
   const { suratJalanList, projectList, addSuratJalan, updateSuratJalan, addAuditLog, assetList, auditLogs = [], currentUser } = useApp();
+  const navigate = useNavigate();
   const [serverSuratJalanList, setServerSuratJalanList] = useState<SuratJalan[] | null>(null);
   const [serverProjectList, setServerProjectList] = useState<Project[] | null>(null);
   const [serverAssetList, setServerAssetList] = useState<Asset[] | null>(null);
@@ -310,14 +312,14 @@ export default function LogisticsCommandCenter() {
               <Truck size={28} />
             </div>
             <div>
-              <h1 className="text-3xl font-black text-slate-900 tracking-tight uppercase italic">Logistics Command Center</h1>
-              <p className="text-[10px] text-slate-500 font-black uppercase tracking-[0.2em] mt-1">Real-time Digital POD & Delivery Traceability</p>
+              <h1 className="text-3xl font-black text-slate-900 tracking-tight uppercase italic">Pengiriman & Logistik</h1>
+              <p className="text-[10px] text-slate-500 font-black uppercase tracking-[0.2em] mt-1">Ringkasan tugas kirim, armada aktif, dan bukti serah terima lapangan</p>
             </div>
           </div>
 
           <div className="flex gap-3">
-             <Link to="/assets/fleet" className="px-6 py-3 bg-white border-2 border-slate-100 text-slate-600 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-50 transition-all flex items-center gap-2">
-                Fleet Management
+             <Link to="/asset/equipment" className="px-6 py-3 bg-white border-2 border-slate-100 text-slate-600 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-50 transition-all flex items-center gap-2">
+                Daftar Asset
              </Link>
              <button 
               onClick={() => setShowPickupModal(true)}
@@ -375,6 +377,21 @@ export default function LogisticsCommandCenter() {
            </div>
         </div>
 
+        <FlowHintBar
+          title="Alur Logistik:"
+          badges={[
+            { label: 'Buat Surat Jalan', tone: 'info' },
+            { label: 'Dispatch / In Transit', tone: 'warning' },
+            { label: 'Delivered', tone: 'success' },
+            { label: 'Lanjut Berita Acara', tone: 'neutral' },
+          ]}
+          helper="Page ini dipakai Warehouse, Sales, dan Produksi untuk memantau kiriman aktif. Setelah barang sampai atau pekerjaan selesai, lanjutkan ke Berita Acara."
+          actions={[
+            { label: 'Buka Surat Jalan', onClick: () => navigate('/surat-menyurat/surat-jalan') },
+            { label: 'Buka Berita Acara', onClick: () => navigate('/surat-menyurat/berita-acara') },
+          ]}
+        />
+
         <div className="bg-white rounded-[3rem] border border-slate-100 shadow-sm overflow-hidden">
            <div className="p-8 border-b border-slate-50 flex flex-col md:flex-row md:items-center justify-between gap-6">
               <div className="flex items-center gap-6">
@@ -415,7 +432,21 @@ export default function LogisticsCommandCenter() {
                     </tr>
                  </thead>
                  <tbody className="divide-y divide-slate-100">
-                    {filteredSJ.map((sj) => (
+                    {filteredSJ.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="px-8 py-16 text-center">
+                          <div className="max-w-md mx-auto space-y-3">
+                            <div className="w-16 h-16 mx-auto rounded-3xl bg-slate-100 flex items-center justify-center text-slate-400">
+                              <Truck size={28} />
+                            </div>
+                            <p className="text-sm font-black text-slate-900 uppercase italic">Belum ada kiriman yang cocok dengan filter ini</p>
+                            <p className="text-xs text-slate-500 font-medium">
+                              Coba ubah filter status, cari nomor surat yang berbeda, atau buat Surat Jalan baru jika kiriman hari ini belum masuk sistem.
+                            </p>
+                          </div>
+                        </td>
+                      </tr>
+                    ) : filteredSJ.map((sj) => (
                       <tr key={sj.id} className="hover:bg-slate-50/50 transition-all group">
                          <td className="px-8 py-6">
                             <div className="flex flex-col">
