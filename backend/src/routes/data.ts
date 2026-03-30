@@ -50,6 +50,17 @@ import {
   mapAuditLogEntry,
 } from "./dataAuditMappers";
 import {
+  applyReceivedQuantitiesToLegacyPoItems,
+  applyReceivedQuantitiesToRelationalPoItems,
+  buildReceivedQuantitiesFromLegacyReceivings,
+  buildReceivedQuantitiesFromLegacyStockIns,
+  buildReceivedQuantitiesFromRelationalReceivings,
+  buildReceivedQuantitiesFromRelationalStockIns,
+  isPostedReceivingStockIn,
+  isTerminalPurchaseOrderStatus,
+  summarizePurchaseOrderProgress,
+} from "./dataPurchaseOrderProgress";
+import {
   mapFinanceBankReconciliationToLegacyPayload,
   mapFinanceCustomerInvoiceToLegacyPayload,
   mapFinancePettyCashTransactionToLegacyPayload,
@@ -5413,12 +5424,6 @@ function normalizeResourcePayload(params: {
   return asRecord(payload);
 }
 
-function isPostedReceivingStockIn(payload: Record<string, unknown>): boolean {
-  const type = String(payload.type || "").trim().toLowerCase();
-  const status = String(payload.status || "").trim().toLowerCase();
-  return type === "receiving" && status === "posted";
-}
-
 async function syncPurchaseOrderProgressFromStockIn(stockInPayload: Record<string, unknown>): Promise<void> {
   if (!isPostedReceivingStockIn(stockInPayload)) return;
 
@@ -5445,42 +5450,26 @@ async function syncPurchaseOrderProgressFromStockIn(stockInPayload: Record<strin
   }
 
   if (relationalPo) {
-    if (["Received", "Rejected", "Cancelled"].includes(relationalPo.status)) return;
+    if (isTerminalPurchaseOrderStatus(relationalPo.status)) return;
 
     const linkedStockIns = await prisma.inventoryStockIn.findMany({
       where: { poId: relationalPo.id },
       include: { items: true },
     });
-    const receivedByCode = new Map<string, number>();
-    const receivedByName = new Map<string, number>();
-    for (const row of linkedStockIns) {
-      if (!isPostedReceivingStockIn(mapInventoryStockInToLegacyPayload({
-        ...row,
-        po: null,
-        project: null,
-      }))) continue;
-      for (const item of row.items) {
-        const qty = Math.max(0, item.qty);
-        if (qty <= 0) continue;
-        const codeKey = String(item.itemCode || "").trim().toLowerCase();
-        const nameKey = String(item.itemName || "").trim().toLowerCase();
-        if (codeKey) receivedByCode.set(codeKey, (receivedByCode.get(codeKey) || 0) + qty);
-        if (nameKey) receivedByName.set(nameKey, (receivedByName.get(nameKey) || 0) + qty);
-      }
-    }
-
-    const updatedItems = relationalPo.items.map((item) => {
-      const codeKey = String(item.itemCode || "").trim().toLowerCase();
-      const nameKey = String(item.itemName || "").trim().toLowerCase();
-      const ordered = Math.max(0, item.qty);
-      const qtyReceived = Math.min(ordered, Math.max(receivedByCode.get(codeKey) || 0, receivedByName.get(nameKey) || 0));
-      return { ...item, qtyReceived };
-    });
-    const hasItems = updatedItems.length > 0;
-    const allReceived = hasItems && updatedItems.every((it) => it.qtyReceived >= it.qty);
-    const someReceived = updatedItems.some((it) => it.qtyReceived > 0);
+    const quantityMaps = buildReceivedQuantitiesFromRelationalStockIns(
+      linkedStockIns,
+    );
+    const updatedItems = applyReceivedQuantitiesToRelationalPoItems(
+      relationalPo.items,
+      quantityMaps,
+    );
+    const { allReceived, someReceived, nextStatus } =
+      summarizePurchaseOrderProgress(
+        updatedItems,
+        (item) => item.qty,
+        (item) => item.qtyReceived,
+      );
     if (!someReceived && !allReceived) return;
-    const nextStatus = allReceived ? "Received" : "Partial";
     await prisma.procurementPurchaseOrder.update({
       where: { id: relationalPo.id },
       data: {
@@ -5528,63 +5517,28 @@ async function syncPurchaseOrderProgressFromStockIn(stockInPayload: Record<strin
 
   const poPayload = asRecord(poRow.payload);
   const poStatus = String(asTrimmedString(poPayload.status) || "").trim();
-  if (["Received", "Rejected", "Cancelled"].includes(poStatus)) return;
+  if (isTerminalPurchaseOrderStatus(poStatus)) return;
 
   const poNo = String(asTrimmedString(poPayload.noPO) || "").trim().toLowerCase();
   const linkedStockIns = await prisma.stockInRecord.findMany({
     select: { poId: true, payload: true },
   });
-
-  const receivedByCode = new Map<string, number>();
-  const receivedByName = new Map<string, number>();
-
-  for (const row of linkedStockIns) {
-    const payload = asRecord(row.payload);
-    if (!isPostedReceivingStockIn(payload)) continue;
-
-    const rowPoId = String(row.poId || "").trim();
-    const rowPayloadPoId = String(asTrimmedString(payload.poId) || "").trim();
-    const rowNoPO = String(asTrimmedString(payload.noPO) || "").trim().toLowerCase();
-    const matched =
-      (rowPoId && rowPoId === poRow.id) ||
-      (rowPayloadPoId && rowPayloadPoId === poRow.id) ||
-      (poNo && rowNoPO && rowNoPO === poNo);
-    if (!matched) continue;
-
-    const items = Array.isArray(payload.items) ? payload.items : [];
-    for (const itemRaw of items) {
-      const item = asRecord(itemRaw);
-      const qty = Math.max(0, toFiniteNumber(item.qty, 0));
-      if (qty <= 0) continue;
-      const codeKey = String(item.kode || "").trim().toLowerCase();
-      const nameKey = String(item.nama || "").trim().toLowerCase();
-      if (codeKey) receivedByCode.set(codeKey, (receivedByCode.get(codeKey) || 0) + qty);
-      if (nameKey) receivedByName.set(nameKey, (receivedByName.get(nameKey) || 0) + qty);
-    }
-  }
-
   const poItemsRaw = Array.isArray(poPayload.items) ? poPayload.items : [];
-  const updatedPOItems = poItemsRaw.map((itemRaw) => {
-    const item = asRecord(itemRaw);
-    const codeKey = String(item.kode || "").trim().toLowerCase();
-    const nameKey = String(item.nama || "").trim().toLowerCase();
-    const ordered = Math.max(0, toFiniteNumber(item.qty, 0));
-    const byCode = codeKey ? receivedByCode.get(codeKey) || 0 : 0;
-    const byName = nameKey ? receivedByName.get(nameKey) || 0 : 0;
-    const qtyReceived = Math.min(ordered, Math.max(byCode, byName));
-    return {
-      ...item,
-      qty: ordered,
-      qtyReceived,
-    };
-  });
-
-  const hasItems = updatedPOItems.length > 0;
-  const allReceived = hasItems && updatedPOItems.every((it) => toFiniteNumber(it.qtyReceived, 0) >= toFiniteNumber(it.qty, 0));
-  const someReceived = updatedPOItems.some((it) => toFiniteNumber(it.qtyReceived, 0) > 0);
+  const quantityMaps = buildReceivedQuantitiesFromLegacyStockIns(
+    linkedStockIns,
+    poRow.id,
+    poNo,
+  );
+  const updatedPOItems = applyReceivedQuantitiesToLegacyPoItems(
+    poItemsRaw,
+    quantityMaps,
+  );
+  const { allReceived, someReceived, nextStatus } = summarizePurchaseOrderProgress(
+    updatedPOItems,
+    (item) => toFiniteNumber(item.qty, 0),
+    (item) => toFiniteNumber(item.qtyReceived, 0),
+  );
   if (!someReceived && !allReceived) return;
-
-  const nextStatus = allReceived ? "Received" : "Partial";
   const normalizedPoPayload = normalizeResourcePayload({
     resource: "purchase-orders",
     payload: {
@@ -5622,38 +5576,26 @@ async function syncPurchaseOrderProgressFromReceiving(receivingPayload: Record<s
   }
 
   if (relationalPo) {
-    if (["Received", "Rejected", "Cancelled"].includes(relationalPo.status)) return;
+    if (isTerminalPurchaseOrderStatus(relationalPo.status)) return;
 
     const linkedReceivings = await prisma.procurementReceiving.findMany({
       where: { purchaseOrderId: relationalPo.id },
       include: { items: true },
     });
-    const receivedByCode = new Map<string, number>();
-    const receivedByName = new Map<string, number>();
-    for (const row of linkedReceivings) {
-      if (row.status === "Rejected") continue;
-      for (const item of row.items) {
-        const qty = Math.max(0, item.qtyReceived || item.qtyGood || 0);
-        if (qty <= 0) continue;
-        const codeKey = String(item.itemCode || "").trim().toLowerCase();
-        const nameKey = String(item.itemName || "").trim().toLowerCase();
-        if (codeKey) receivedByCode.set(codeKey, (receivedByCode.get(codeKey) || 0) + qty);
-        if (nameKey) receivedByName.set(nameKey, (receivedByName.get(nameKey) || 0) + qty);
-      }
-    }
-
-    const updatedItems = relationalPo.items.map((item) => {
-      const codeKey = String(item.itemCode || "").trim().toLowerCase();
-      const nameKey = String(item.itemName || "").trim().toLowerCase();
-      const ordered = Math.max(0, item.qty);
-      const qtyReceived = Math.min(ordered, Math.max(receivedByCode.get(codeKey) || 0, receivedByName.get(nameKey) || 0));
-      return { ...item, qtyReceived };
-    });
-    const hasItems = updatedItems.length > 0;
-    const allReceived = hasItems && updatedItems.every((it) => it.qtyReceived >= it.qty);
-    const someReceived = updatedItems.some((it) => it.qtyReceived > 0);
+    const quantityMaps = buildReceivedQuantitiesFromRelationalReceivings(
+      linkedReceivings,
+    );
+    const updatedItems = applyReceivedQuantitiesToRelationalPoItems(
+      relationalPo.items,
+      quantityMaps,
+    );
+    const { allReceived, someReceived, nextStatus } =
+      summarizePurchaseOrderProgress(
+        updatedItems,
+        (item) => item.qty,
+        (item) => item.qtyReceived,
+      );
     if (!someReceived && !allReceived) return;
-    const nextStatus = allReceived ? "Received" : "Partial";
     await prisma.procurementPurchaseOrder.update({
       where: { id: relationalPo.id },
       data: {
@@ -5701,64 +5643,28 @@ async function syncPurchaseOrderProgressFromReceiving(receivingPayload: Record<s
 
   const poPayload = asRecord(poRow.payload);
   const poStatus = String(asTrimmedString(poPayload.status) || "").trim();
-  if (["Received", "Rejected", "Cancelled"].includes(poStatus)) return;
+  if (isTerminalPurchaseOrderStatus(poStatus)) return;
 
   const poNo = String(asTrimmedString(poPayload.noPO) || "").trim().toLowerCase();
   const linkedReceivings = await prisma.receivingRecord.findMany({
     select: { poId: true, payload: true },
   });
-
-  const receivedByCode = new Map<string, number>();
-  const receivedByName = new Map<string, number>();
-
-  for (const row of linkedReceivings) {
-    const payload = asRecord(row.payload);
-    const receivingStatus = String(asTrimmedString(payload.status) || "").trim();
-    if (receivingStatus === "Rejected") continue;
-
-    const rowPoId = String(row.poId || "").trim();
-    const rowPayloadPoId = String(asTrimmedString(payload.poId) || "").trim();
-    const rowNoPO = String(asTrimmedString(payload.noPO) || "").trim().toLowerCase();
-    const matched =
-      (rowPoId && rowPoId === poRow.id) ||
-      (rowPayloadPoId && rowPayloadPoId === poRow.id) ||
-      (poNo && rowNoPO && rowNoPO === poNo);
-    if (!matched) continue;
-
-    const items = Array.isArray(payload.items) ? payload.items : [];
-    for (const itemRaw of items) {
-      const item = asRecord(itemRaw);
-      const qty = Math.max(0, toFiniteNumber(item.qtyReceived ?? item.qtyGood ?? item.qty, 0));
-      if (qty <= 0) continue;
-      const codeKey = String(item.itemKode || "").trim().toLowerCase();
-      const nameKey = String(item.itemName || "").trim().toLowerCase();
-      if (codeKey) receivedByCode.set(codeKey, (receivedByCode.get(codeKey) || 0) + qty);
-      if (nameKey) receivedByName.set(nameKey, (receivedByName.get(nameKey) || 0) + qty);
-    }
-  }
-
   const poItemsRaw = Array.isArray(poPayload.items) ? poPayload.items : [];
-  const updatedPOItems = poItemsRaw.map((itemRaw) => {
-    const item = asRecord(itemRaw);
-    const codeKey = String(item.kode || "").trim().toLowerCase();
-    const nameKey = String(item.nama || "").trim().toLowerCase();
-    const ordered = Math.max(0, toFiniteNumber(item.qty, 0));
-    const byCode = codeKey ? receivedByCode.get(codeKey) || 0 : 0;
-    const byName = nameKey ? receivedByName.get(nameKey) || 0 : 0;
-    const qtyReceived = Math.min(ordered, Math.max(byCode, byName));
-    return {
-      ...item,
-      qty: ordered,
-      qtyReceived,
-    };
-  });
-
-  const hasItems = updatedPOItems.length > 0;
-  const allReceived = hasItems && updatedPOItems.every((it) => toFiniteNumber(it.qtyReceived, 0) >= toFiniteNumber(it.qty, 0));
-  const someReceived = updatedPOItems.some((it) => toFiniteNumber(it.qtyReceived, 0) > 0);
+  const quantityMaps = buildReceivedQuantitiesFromLegacyReceivings(
+    linkedReceivings,
+    poRow.id,
+    poNo,
+  );
+  const updatedPOItems = applyReceivedQuantitiesToLegacyPoItems(
+    poItemsRaw,
+    quantityMaps,
+  );
+  const { allReceived, someReceived, nextStatus } = summarizePurchaseOrderProgress(
+    updatedPOItems,
+    (item) => toFiniteNumber(item.qty, 0),
+    (item) => toFiniteNumber(item.qtyReceived, 0),
+  );
   if (!someReceived && !allReceived) return;
-
-  const nextStatus = allReceived ? "Received" : "Partial";
   const normalizedPoPayload = normalizeResourcePayload({
     resource: "purchase-orders",
     payload: {
