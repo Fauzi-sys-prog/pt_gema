@@ -1,5 +1,5 @@
 import React from 'react';
-import type { SuratJalan } from '../../contexts/AppContext';
+import type { SuratJalan } from '../../types/correspondence';
 
 interface SuratJalanPrintProps {
   data: SuratJalan;

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom'; import { CheckCircle2, Truck, MapPin, Package, User, Calendar, Clock, ShieldCheck, ArrowLeft, Camera, PenTool, Send, Info, Navigation, ExternalLink } from 'lucide-react'; import { useApp } from '../../contexts/AppContext';
 import { toast } from 'sonner@2.0.3';
-import type { SuratJalan } from '../../contexts/AppContext';
+import type { SuratJalan } from '../../types/correspondence';
 import api from '../../services/api';
 
 type ProofOfDeliveryPayload = {

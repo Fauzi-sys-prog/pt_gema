@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { useApp } from '../../contexts/AppContext';
-import type { SuratJalan, Invoice, Project, BeritaAcara } from '../../contexts/AppContext';
+import type { Invoice, Project } from '../../contexts/AppContext';
+import type { SuratJalan, BeritaAcara } from '../../types/correspondence';
 import { 
   FileCheck, 
   Truck, 

@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from 'react'; import { useApp } from '../../contexts/AppContext';
-import type { SuratJalan } from '../../contexts/AppContext';
+import type { SuratJalan } from '../../types/correspondence';
 import { 
   Search, 
   Truck, 

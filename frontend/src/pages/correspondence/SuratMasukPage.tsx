@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'; import { Plus, Search, Eye, Edit, Trash2, FileText, Calendar, Filter, ArrowRight, X, Download, Printer, RefreshCw } from 'lucide-react'; import { useApp } from '../../contexts/AppContext';
-import type { SuratMasuk } from '../../contexts/AppContext';
+import type { SuratMasuk } from '../../types/correspondence';
 import { toast } from 'sonner@2.0.3';
 import api from '../../services/api';
 

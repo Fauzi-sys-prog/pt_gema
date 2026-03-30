@@ -1,5 +1,5 @@
 import React from 'react';
-import type { BeritaAcara } from '../../contexts/AppContext';
+import type { BeritaAcara } from '../../types/correspondence';
 import logoGM from 'figma:asset/661f558dc14c79fa090b7039a885f26b843f5c04.png';
 
 interface BeritaAcaraPrintProps {

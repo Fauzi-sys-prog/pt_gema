@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'; import { useNavigate } from 'react-router-dom'; import {   Mail, Send, FileText, Clock, CheckCircle, AlertCircle, TrendingUp, Calendar, User, Building, Search, Download, Eye, Truck, Archive, Maximize2, Zap, RefreshCw } from 'lucide-react'; import { useApp } from '../../contexts/AppContext';
-import type { BeritaAcara, SuratJalan, SuratKeluar, SuratMasuk } from '../../contexts/AppContext';
+import type { BeritaAcara, SuratJalan, SuratKeluar, SuratMasuk } from '../../types/correspondence';
 import { ImageWithFallback } from '../../components/figma/ImageWithFallback';
 import { toast } from 'sonner@2.0.3';
 import api from '../../services/api';

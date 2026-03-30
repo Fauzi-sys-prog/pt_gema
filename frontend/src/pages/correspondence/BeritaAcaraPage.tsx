@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useApp } from '../../contexts/AppContext';
-import type { BeritaAcara, SuratJalan } from '../../contexts/AppContext';
+import type { BeritaAcara, SuratJalan } from '../../types/correspondence';
 
 import { motion, AnimatePresence } from 'motion/react';
 import { FileText, Plus, X, Printer, Save, Download, FileSignature, ChevronDown, Layers, Package, CheckCircle2, Clock, Copy, RefreshCw, Search } from 'lucide-react';

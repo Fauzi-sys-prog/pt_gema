@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Truck, MapPin, ChevronRight, Search, Filter, Clock, CheckCircle2, AlertCircle, MoreVertical, Navigation, Package, Calendar, User, ExternalLink, QrCode, X, Plus, Briefcase, Layers, Activity, UserCheck } from 'lucide-react'; import { useApp } from '../../contexts/AppContext';
-import type { Project, SuratJalan } from '../../contexts/AppContext';
+import type { Project } from '../../contexts/AppContext';
+import type { SuratJalan } from '../../types/correspondence';
 import type { Asset, AuditLog } from '../../contexts/AppContext';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Plus, Search, Eye, Edit, Send, Trash2, CheckCircle, XCircle, X, FileText, Download, Printer, RefreshCw } from 'lucide-react';
 import { useApp } from '../../contexts/AppContext';
-import type { SuratKeluar } from '../../contexts/AppContext';
+import type { SuratKeluar } from '../../types/correspondence';
 import { toast } from 'sonner@2.0.3';
 import api from '../../services/api';
 import { sanitizeRichHtml } from '../../utils/sanitizeRichHtml';
