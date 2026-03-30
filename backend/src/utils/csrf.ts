@@ -2,7 +2,7 @@ import crypto from "crypto";
 import type { CookieOptions, Request, Response } from "express";
 import { env } from "../config/env";
 
-export const CSRF_COOKIE_NAME = "ptgema_csrf_token";
+export const CSRF_COOKIE_NAME = env.csrfCookieName;
 
 function parseDurationMs(rawValue: string): number | undefined {
   const normalized = rawValue.trim();
@@ -29,8 +29,8 @@ const csrfCookieMaxAge = parseDurationMs(env.jwtExpiresIn);
 const baseCookieOptions: CookieOptions = {
   httpOnly: false,
   sameSite: "lax",
-  secure: env.nodeEnv === "production",
-  path: "/",
+  secure: env.cookieSecure,
+  path: env.cookiePath,
 };
 
 const csrfCookieOptions: CookieOptions = csrfCookieMaxAge

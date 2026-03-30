@@ -1,7 +1,7 @@
 import type { CookieOptions, Request, Response } from "express";
 import { env } from "../config/env";
 
-export const ACCESS_TOKEN_COOKIE_NAME = "ptgema_access_token";
+export const ACCESS_TOKEN_COOKIE_NAME = env.accessTokenCookieName;
 
 function parseDurationMs(rawValue: string): number | undefined {
   const normalized = rawValue.trim();
@@ -28,8 +28,8 @@ const accessTokenCookieMaxAge = parseDurationMs(env.jwtExpiresIn);
 const baseCookieOptions: CookieOptions = {
   httpOnly: true,
   sameSite: "lax",
-  secure: env.nodeEnv === "production",
-  path: "/",
+  secure: env.cookieSecure,
+  path: env.cookiePath,
 };
 
 const accessTokenCookieOptions: CookieOptions = accessTokenCookieMaxAge

@@ -3,6 +3,26 @@ import "dotenv/config";
 const nodeEnv = process.env.NODE_ENV || "development";
 const jwtSecret = process.env.JWT_SECRET;
 
+const parseBoolean = (value: string | undefined): boolean | undefined => {
+  if (typeof value !== "string") return undefined;
+  const normalized = value.trim().toLowerCase();
+  if (!normalized) return undefined;
+  if (["1", "true", "yes", "on"].includes(normalized)) return true;
+  if (["0", "false", "no", "off"].includes(normalized)) return false;
+  return undefined;
+};
+
+const normalizeCookieName = (value: string | undefined, fallback: string) => {
+  const trimmed = String(value || "").trim();
+  return trimmed || fallback;
+};
+
+const normalizeCookiePath = (value: string | undefined) => {
+  const trimmed = String(value || "").trim();
+  if (!trimmed) return "/";
+  return trimmed.startsWith("/") ? trimmed : `/${trimmed}`;
+};
+
 if (!jwtSecret) {
   throw new Error("JWT_SECRET must be defined");
 }
@@ -24,6 +44,7 @@ const corsOrigins = rawCorsOrigins
   .filter(Boolean);
 const allowLocalhostCorsInProd =
   process.env.ALLOW_LOCALHOST_CORS_IN_PROD === "true";
+const cookieSecureOverride = parseBoolean(process.env.COOKIE_SECURE);
 
 if (nodeEnv === "production") {
   if (corsOrigins.length === 0) {
@@ -50,4 +71,17 @@ export const env = {
   jwtIssuer: process.env.JWT_ISSUER || "ptgema-api",
   jwtAudience: process.env.JWT_AUDIENCE || "ptgema-client",
   corsOrigins,
+  accessTokenCookieName: normalizeCookieName(
+    process.env.ACCESS_TOKEN_COOKIE_NAME,
+    "ptgema_access_token",
+  ),
+  csrfCookieName: normalizeCookieName(
+    process.env.CSRF_COOKIE_NAME,
+    "ptgema_csrf_token",
+  ),
+  cookiePath: normalizeCookiePath(process.env.COOKIE_PATH),
+  cookieSecure:
+    typeof cookieSecureOverride === "boolean"
+      ? cookieSecureOverride
+      : nodeEnv === "production",
 };
