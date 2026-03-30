@@ -106,6 +106,7 @@ Simpan minimal:
 Gunakan lembar ini juga:
 - [docs/UAT_EVIDENCE_SHEET.md](/Users/macbook/Downloads/Ptgema-main%202/docs/UAT_EVIDENCE_SHEET.md)
 - [docs/UAT_ROLE_CHECKLIST.md](/Users/macbook/Downloads/Ptgema-main%202/docs/UAT_ROLE_CHECKLIST.md)
+- [docs/UAT_TEAM_ASSIGNMENT.md](/Users/macbook/Downloads/Ptgema-main%202/docs/UAT_TEAM_ASSIGNMENT.md)
 
 ## Sign-Off
 - SPV menyatakan flow operasional aman
