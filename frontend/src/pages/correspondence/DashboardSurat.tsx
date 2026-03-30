@@ -5,8 +5,10 @@ import { toast } from 'sonner@2.0.3';
 import api from '../../services/api';
 import { hasRoleAccess } from '../../utils/roles';
 
-// Physical Archive Image from user
-import physicalArchiveImg from 'figma:asset/8a215f70fe30661dded39794b547f89ef79421a3.png';
+// Physical Archive preview is optimized for faster dashboard loads.
+import physicalArchivePreviewImg from '../../assets/8a215f70fe30661dded39794b547f89ef79421a3.webp';
+
+const physicalArchiveDownloadImg = new URL('../../assets/8a215f70fe30661dded39794b547f89ef79421a3.png', import.meta.url).href;
 
 const STAT_STYLES = {
   blue: {
@@ -231,7 +233,7 @@ export default function DashboardSurat() {
 
   const handleDownloadArchiveImage = async () => {
     try {
-      const response = await fetch(physicalArchiveImg);
+      const response = await fetch(physicalArchiveDownloadImg);
       const blob = await response.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -303,7 +305,7 @@ export default function DashboardSurat() {
             <div className={`p-6 transition-all duration-500 ${showGallery ? 'max-h-[1000px]' : 'max-h-[320px]'} overflow-hidden relative`}>
               <div className="bg-slate-100 rounded-xl p-4 flex items-center justify-center cursor-pointer group/img relative" onClick={() => setShowGallery(!showGallery)}>
                  <ImageWithFallback 
-                   src={physicalArchiveImg} 
+                   src={physicalArchivePreviewImg} 
                    className="w-full h-auto rounded-lg shadow-2xl border border-slate-200" 
                  />
                  {!showGallery && (

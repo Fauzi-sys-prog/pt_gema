@@ -22,8 +22,8 @@ import { toast } from 'sonner@2.0.3';
 import { useApp } from '../../contexts/AppContext';
 import api from '../../services/api';
 
-// New image asset from user
-import imgBiayaKerjaRef from 'figma:asset/58af19785453a99273d5a0b2ab1d8cd3bef38814.png';
+// Optimized preview asset to keep the finance module lighter on first load.
+import imgBiayaKerjaRef from '../../assets/58af19785453a99273d5a0b2ab1d8cd3bef38814.webp';
 
 interface ExpenseItem {
   id: string;
