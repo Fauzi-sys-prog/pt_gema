@@ -1,27 +1,22 @@
-import { useState, useEffect } from 'react'; import { ShieldCheck, Lock, Unlock, TrendingUp, TrendingDown, PieChart as PieChartIcon, Download, ChevronRight, CheckCircle2, AlertCircle, BarChart3, Calendar, FileText, History, ArrowRight, GanttChartSquare, Sparkles } from 'lucide-react'; import { useApp } from '../../contexts/AppContext';
+import { Suspense, lazy, useState, useEffect } from 'react'; import { ShieldCheck, Lock, Unlock, TrendingUp, TrendingDown, PieChart as PieChartIcon, Download, ChevronRight, CheckCircle2, AlertCircle, BarChart3, Calendar, FileText, History, ArrowRight, GanttChartSquare, Sparkles } from 'lucide-react'; import { useApp } from '../../contexts/AppContext';
 import api from '../../services/api';
-import { 
-  BarChart, 
-  Bar, 
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  Tooltip, 
-  ResponsiveContainer, 
-  Cell,
-  PieChart,
-  Pie,
-  AreaChart,
-  Area
-} from 'recharts';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner@2.0.3';
+
+const YearEndRevenueChart = lazy(
+  () => import('../../components/finance/YearEndRevenueChart')
+);
+
+const chartFallback = (
+  <div className="h-64 w-full animate-pulse rounded-[2rem] bg-slate-100" />
+);
 
 export default function YearEndClosingPage() {
   const { addAuditLog, currentUser } = useApp();
   const [isClosing, setIsClosing] = useState(false);
   const [closingStep, setClosingStep] = useState(0);
   const [isYearLocked, setIsYearLocked] = useState(false);
+  const [showCharts, setShowCharts] = useState(false);
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [serverAnnualSummary, setServerAnnualSummary] = useState<{
     totalRev: number;
@@ -69,6 +64,11 @@ export default function YearEndClosingPage() {
 
   useEffect(() => {
     fetchYearEndSummary(true);
+  }, []);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setShowCharts(true), 0);
+    return () => window.clearTimeout(timer);
   }, []);
 
   const annualSummary = serverAnnualSummary || {
@@ -357,23 +357,13 @@ export default function YearEndClosingPage() {
                </div>
             </div>
 
-            <div className="h-64 w-full">
-               <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
-                  <AreaChart data={monthlyRevData}>
-                     <defs>
-                        <linearGradient id="colorRevYE" x1="0" y1="0" x2="0" y2="1">
-                           <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.1}/>
-                           <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
-                        </linearGradient>
-                     </defs>
-                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F1F5F9" />
-                     <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{fill:'#94A3B8', fontSize:10, fontWeight:900}} />
-                     <Tooltip />
-                     <Area type="monotone" dataKey="rev" stroke="#3b82f6" strokeWidth={4} fill="url(#colorRevYE)" />
-                     <Area type="monotone" dataKey="profit" stroke="#10b981" strokeWidth={2} fill="transparent" />
-                  </AreaChart>
-               </ResponsiveContainer>
-            </div>
+            {showCharts ? (
+              <Suspense fallback={chartFallback}>
+                <YearEndRevenueChart monthlyRevData={monthlyRevData} />
+              </Suspense>
+            ) : (
+              chartFallback
+            )}
          </div>
 
          <div className="space-y-8">

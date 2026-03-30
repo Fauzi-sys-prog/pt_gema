@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { Suspense, lazy, useEffect, useMemo, useState } from 'react';
 import { 
   TrendingUp, 
   TrendingDown, 
@@ -15,24 +15,21 @@ import {
   Award,
   RefreshCw
 } from 'lucide-react';
-import { 
-  BarChart, 
-  Bar, 
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  Legend, 
-  Cell,
-  LineChart,
-  Line,
-  AreaChart,
-  Area
-} from 'recharts';
-import { ChartContainer, ChartTooltip, ChartTooltipContent } from '../../components/ui/chart';
 import { useApp } from '../../contexts/AppContext';
 import type { Invoice, Quotation } from '../../contexts/AppContext';
 import api from '../../services/api';
 import { toast } from 'sonner@2.0.3';
+
+const SalesRevenueComparisonChart = lazy(
+  () => import('../../components/sales/SalesRevenueComparisonChart')
+);
+
+const chartFallback = (
+  <div className="bg-white rounded-[3rem] border-2 border-slate-100 p-8 shadow-sm min-w-0">
+    <div className="mb-8 h-5 w-72 rounded-full bg-slate-100" />
+    <div className="h-[400px] animate-pulse rounded-[2rem] bg-slate-100" />
+  </div>
+);
 
 type AnalyticsInvoice = {
   id: string;
@@ -62,6 +59,7 @@ export default function SalesAnalyticsPage() {
   const [serverInvoiceList, setServerInvoiceList] = useState<AnalyticsInvoice[] | null>(null);
   const [serverQuotationList, setServerQuotationList] = useState<Quotation[] | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [showCharts, setShowCharts] = useState(false);
   const fallbackInvoices = useMemo(
     () =>
       (invoiceList || []).map((inv: Invoice) => ({
@@ -104,6 +102,11 @@ export default function SalesAnalyticsPage() {
 
   useEffect(() => {
     fetchSalesAnalyticsSources();
+  }, []);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setShowCharts(true), 0);
+    return () => window.clearTimeout(timer);
   }, []);
 
   const formatIDR = (val: number) => {
@@ -267,17 +270,6 @@ export default function SalesAnalyticsPage() {
     toast.info(`Periode aktif: ${yearNow} dibandingkan ${yearPrev}.`);
   };
 
-  const chartConfig = {
-    omzet: {
-      label: `Omzet ${yearNow}`,
-      color: "#2563eb",
-    },
-    prevYear: {
-      label: `Omzet ${yearPrev}`,
-      color: "#cbd5e1",
-    },
-  };
-
   return (
     <div className="p-6 space-y-6 bg-slate-50 min-h-screen">
       {/* Header */}
@@ -342,62 +334,18 @@ export default function SalesAnalyticsPage() {
       </div>
 
       {/* Main Chart */}
-      <div className="bg-white rounded-[3rem] border-2 border-slate-100 p-8 shadow-sm min-w-0">
-         <div className="flex items-center justify-between mb-8">
-            <h3 className="text-sm font-black uppercase italic tracking-widest text-slate-900 flex items-center gap-2">
-               <BarChartIcon className="text-blue-600" size={20} />
-               Yearly Revenue Comparison ({yearNow} vs {yearPrev})
-            </h3>
-            <div className="flex gap-4">
-               <div className="flex items-center gap-4 mr-4">
-                  <div className="flex items-center gap-2">
-                     <div className="w-3 h-3 bg-blue-600 rounded-sm"></div>
-                     <span className="text-[10px] font-black text-slate-600 uppercase">{yearNow}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                     <div className="w-3 h-3 bg-slate-300 rounded-sm"></div>
-                     <span className="text-[10px] font-black text-slate-600 uppercase">{yearPrev}</span>
-                  </div>
-               </div>
-            </div>
-         </div>
-         
-         <div className="w-full h-[300px] lg:h-[400px] relative min-w-0">
-            <ChartContainer config={chartConfig} className="h-full">
-               <BarChart data={monthlyData} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                  <XAxis 
-                     dataKey="month" 
-                     axisLine={false} 
-                     tickLine={false} 
-                     tick={{ fill: '#64748b', fontSize: 10, fontWeight: 800 }} 
-                     dy={10}
-                  />
-                  <YAxis 
-                     axisLine={false} 
-                     tickLine={false} 
-                     tick={{ fill: '#64748b', fontSize: 10, fontWeight: 800 }} 
-                     tickFormatter={(value) => formatShortIDR(value)}
-                  />
-                  <ChartTooltip content={<ChartTooltipContent />} />
-                  <Bar 
-                     dataKey="omzet" 
-                     name="2025" 
-                     fill="#2563eb" 
-                     radius={[6, 6, 0, 0]} 
-                     barSize={40} 
-                  />
-                  <Bar 
-                     dataKey="prevYear" 
-                     name="2024" 
-                     fill="#cbd5e1" 
-                     radius={[6, 6, 0, 0]} 
-                     barSize={40} 
-                  />
-               </BarChart>
-            </ChartContainer>
-         </div>
-      </div>
+      {showCharts ? (
+        <Suspense fallback={chartFallback}>
+          <SalesRevenueComparisonChart
+            monthlyData={monthlyData}
+            yearNow={yearNow}
+            yearPrev={yearPrev}
+            formatShortIDR={formatShortIDR}
+          />
+        </Suspense>
+      ) : (
+        chartFallback
+      )}
 
       {/* Detail Table Comparison */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 pb-12">
