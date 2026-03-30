@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { Suspense, lazy, useEffect, useState } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "./contexts/AuthContext";
 import { AppProvider } from './contexts/AppContext';
@@ -6,91 +6,103 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import Layout from "./components/Layout";
 import AppErrorBoundary from "./components/AppErrorBoundary";
 
-// Pages
 import LoginPage from "./pages/LoginPage";
-import MainDashboard from "./pages/dashboard/MainDashboard";
-import DataCollection from "./pages/data-collection/DataCollection";
-import ProjectManagementPage from "./pages/ProjectManagementPage";
-
-// Sales
-import PenawaranPage from "./pages/sales/PenawaranPage";
-import PenawaranDetailPage from "./pages/sales/PenawaranDetailPage";
-import RABProjectPage from "./pages/sales/RABProjectPage";
-import InvoicePage from "./pages/sales/InvoicePage";
-import SalesAnalyticsPage from "./pages/sales/SalesAnalyticsPage";
-
-// Purchasing
-import ProcurementHubPage from "./pages/purchasing/ProcurementHubPage";
-import PurchaseOrderPage from "./pages/purchasing/PurchaseOrderPage";
-import ReceivingPage from "./pages/purchasing/ReceivingPage";
-import VendorAnalysisPage from "./pages/purchasing/VendorAnalysisPage";
-
-// Production
-import ProductionDashboard from "./pages/production/ProductionDashboard";
-import ProductionReportPage from "./pages/production/ProductionReportPage";
-import { ProductionTrackerPage } from "./pages/production/Tracker";
-import ProductionGuidePage from "./pages/production/ProductionGuidePage";
-import QCInspectionPage from "./pages/production/QCInspectionPage";
-
-// Inventory
-import WarehouseLedgerPage from "./pages/inventory/WarehouseLedgerPage";
-import StockInPage from "./pages/inventory/StockInPage";
-import StockOutPage from "./pages/inventory/StockOutPage";
-import StockReportPage from "./pages/inventory/StockReportPage";
-import StockJournalPage from "./pages/inventory/StockJournalPage";
-import StockCardDetailPage from "./pages/inventory/StockCardDetailPage";
-import TraceabilityPage from "./pages/inventory/TraceabilityPage";
-import StockAgingPage from "./pages/inventory/StockAgingPage";
-import StockOpnamePage from "./pages/inventory/StockOpnamePage";
-import BOMVerificationPage from "./pages/production/BOMVerificationPage";
-
-// Asset & Rental
-import DaftarAsset from "./pages/asset/DaftarAsset";
-import RentalOutPage from "./pages/asset/RentalOutPage";
-import InternalUsagePage from "./pages/asset/InternalUsagePage";
-
-// HR
-import KaryawanPage from "./pages/hr/KaryawanPage";
-import AbsensiPage from "./pages/hr/AbsensiPage";
-import AttendanceRecapPage from "./pages/hr/AttendanceRecapPage";
-import FieldProjectRecord from "./pages/hr/FieldProjectRecord";
-import CutiPage from "./pages/hr/CutiPage";
-import PayrollPage from "./pages/finance/PayrollPage";
-
-// Finance
-import CashflowPage from "./pages/finance/CashflowPage";
-import GeneralLedgerPage from "./pages/finance/GeneralLedgerPage";
-import AccountsPayablePage from "./pages/finance/AccountsPayablePage";
-import DigitalArchivePage from "./pages/finance/DigitalArchivePage";
-import ProjectProfitLossPage from "./pages/finance/ProjectProfitLossPage";
-import ApprovalCenterPage from "./pages/finance/ApprovalCenterPage";
-import PPNPage from "./pages/finance/PPNPage";
-import BankReconciliationPage from "./pages/finance/BankReconciliationPage";
-import PettyCashPage from "./pages/finance/PettyCashPage";
-import ExecutiveDashboardPage from "./pages/finance/ExecutiveDashboardPage";
-import YearEndClosingPage from "./pages/finance/YearEndClosingPage";
-import UserManagementPage from "./pages/settings/UserManagementPage";
-import AuditTrailPage from "./pages/settings/AuditTrailPage";
-import WorkingExpensePage from "./pages/finance/WorkingExpensePage";
-import VendorPaymentPage from "./pages/finance/VendorPaymentPage";
-import AccountsReceivablePage from "./pages/finance/AccountsReceivablePage";
-import CashFlowCommandCenter from "./pages/finance/CashFlowCommandCenter";
-import GuideHubPage from "./pages/guide/GuideHubPage";
-
-// Correspondence
-import DashboardSurat from "./pages/correspondence/DashboardSurat";
-import SuratMasukPage from "./pages/correspondence/SuratMasukPage";
-import SuratKeluarPage from "./pages/correspondence/SuratKeluarPage";
-import BeritaAcaraPage from "./pages/correspondence/BeritaAcaraPage";
-import SuratJalanPage from "./pages/correspondence/SuratJalanPage";
-
-// Sales
-import QuotationPage from "./pages/sales/QuotationPage";
-import LogisticsCommandCenter from "./pages/logistics/LogisticsCommandCenter";
-import DeliveryTrackingPage from "./pages/logistics/DeliveryTrackingPage";
-import FleetMaintenancePage from "./pages/asset/FleetMaintenancePage";
-import SuratPerintahKerjaPage from "./pages/correspondence/SuratPerintahKerjaPage";
 import logoImage from "figma:asset/661f558dc14c79fa090b7039a885f26b843f5c04.png";
+
+const MainDashboard = lazy(() => import("./pages/dashboard/MainDashboard"));
+const DataCollection = lazy(() => import("./pages/data-collection/DataCollection"));
+const ProjectManagementPage = lazy(() => import("./pages/ProjectManagementPage"));
+const PenawaranPage = lazy(() => import("./pages/sales/PenawaranPage"));
+const PenawaranDetailPage = lazy(() => import("./pages/sales/PenawaranDetailPage"));
+const RABProjectPage = lazy(() => import("./pages/sales/RABProjectPage"));
+const InvoicePage = lazy(() => import("./pages/sales/InvoicePage"));
+const SalesAnalyticsPage = lazy(() => import("./pages/sales/SalesAnalyticsPage"));
+const ProcurementHubPage = lazy(() => import("./pages/purchasing/ProcurementHubPage"));
+const PurchaseOrderPage = lazy(() => import("./pages/purchasing/PurchaseOrderPage"));
+const ReceivingPage = lazy(() => import("./pages/purchasing/ReceivingPage"));
+const VendorAnalysisPage = lazy(() => import("./pages/purchasing/VendorAnalysisPage"));
+const ProductionDashboard = lazy(() => import("./pages/production/ProductionDashboard"));
+const ProductionReportPage = lazy(() => import("./pages/production/ProductionReportPage"));
+const ProductionTrackerPage = lazy(() =>
+  import("./pages/production/Tracker").then((module) => ({ default: module.ProductionTrackerPage })),
+);
+const ProductionGuidePage = lazy(() => import("./pages/production/ProductionGuidePage"));
+const QCInspectionPage = lazy(() => import("./pages/production/QCInspectionPage"));
+const WarehouseLedgerPage = lazy(() => import("./pages/inventory/WarehouseLedgerPage"));
+const StockInPage = lazy(() => import("./pages/inventory/StockInPage"));
+const StockOutPage = lazy(() => import("./pages/inventory/StockOutPage"));
+const StockReportPage = lazy(() => import("./pages/inventory/StockReportPage"));
+const StockJournalPage = lazy(() => import("./pages/inventory/StockJournalPage"));
+const StockCardDetailPage = lazy(() => import("./pages/inventory/StockCardDetailPage"));
+const TraceabilityPage = lazy(() => import("./pages/inventory/TraceabilityPage"));
+const StockAgingPage = lazy(() => import("./pages/inventory/StockAgingPage"));
+const StockOpnamePage = lazy(() => import("./pages/inventory/StockOpnamePage"));
+const BOMVerificationPage = lazy(() => import("./pages/production/BOMVerificationPage"));
+const DaftarAsset = lazy(() => import("./pages/asset/DaftarAsset"));
+const RentalOutPage = lazy(() => import("./pages/asset/RentalOutPage"));
+const InternalUsagePage = lazy(() => import("./pages/asset/InternalUsagePage"));
+const KaryawanPage = lazy(() => import("./pages/hr/KaryawanPage"));
+const AbsensiPage = lazy(() => import("./pages/hr/AbsensiPage"));
+const AttendanceRecapPage = lazy(() => import("./pages/hr/AttendanceRecapPage"));
+const FieldProjectRecord = lazy(() => import("./pages/hr/FieldProjectRecord"));
+const CutiPage = lazy(() => import("./pages/hr/CutiPage"));
+const PayrollPage = lazy(() => import("./pages/finance/PayrollPage"));
+const CashflowPage = lazy(() => import("./pages/finance/CashflowPage"));
+const GeneralLedgerPage = lazy(() => import("./pages/finance/GeneralLedgerPage"));
+const AccountsPayablePage = lazy(() => import("./pages/finance/AccountsPayablePage"));
+const DigitalArchivePage = lazy(() => import("./pages/finance/DigitalArchivePage"));
+const ProjectProfitLossPage = lazy(() => import("./pages/finance/ProjectProfitLossPage"));
+const ApprovalCenterPage = lazy(() => import("./pages/finance/ApprovalCenterPage"));
+const PPNPage = lazy(() => import("./pages/finance/PPNPage"));
+const BankReconciliationPage = lazy(() => import("./pages/finance/BankReconciliationPage"));
+const PettyCashPage = lazy(() => import("./pages/finance/PettyCashPage"));
+const ExecutiveDashboardPage = lazy(() => import("./pages/finance/ExecutiveDashboardPage"));
+const YearEndClosingPage = lazy(() => import("./pages/finance/YearEndClosingPage"));
+const UserManagementPage = lazy(() => import("./pages/settings/UserManagementPage"));
+const AuditTrailPage = lazy(() => import("./pages/settings/AuditTrailPage"));
+const WorkingExpensePage = lazy(() => import("./pages/finance/WorkingExpensePage"));
+const VendorPaymentPage = lazy(() => import("./pages/finance/VendorPaymentPage"));
+const AccountsReceivablePage = lazy(() => import("./pages/finance/AccountsReceivablePage"));
+const CashFlowCommandCenter = lazy(() => import("./pages/finance/CashFlowCommandCenter"));
+const GuideHubPage = lazy(() => import("./pages/guide/GuideHubPage"));
+const DashboardSurat = lazy(() => import("./pages/correspondence/DashboardSurat"));
+const SuratMasukPage = lazy(() => import("./pages/correspondence/SuratMasukPage"));
+const SuratKeluarPage = lazy(() => import("./pages/correspondence/SuratKeluarPage"));
+const BeritaAcaraPage = lazy(() => import("./pages/correspondence/BeritaAcaraPage"));
+const SuratJalanPage = lazy(() => import("./pages/correspondence/SuratJalanPage"));
+const QuotationPage = lazy(() => import("./pages/sales/QuotationPage"));
+const LogisticsCommandCenter = lazy(() => import("./pages/logistics/LogisticsCommandCenter"));
+const DeliveryTrackingPage = lazy(() => import("./pages/logistics/DeliveryTrackingPage"));
+const FleetMaintenancePage = lazy(() => import("./pages/asset/FleetMaintenancePage"));
+const SuratPerintahKerjaPage = lazy(() => import("./pages/correspondence/SuratPerintahKerjaPage"));
+
+function RouteLoader() {
+  return (
+    <div className="min-h-screen bg-slate-50 flex items-center justify-center px-6">
+      <div className="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-8 shadow-sm">
+        <div className="flex items-center gap-3">
+          <div className="h-4 w-4 rounded-full bg-red-600 animate-pulse" />
+          <p className="text-sm font-black uppercase tracking-widest text-slate-700">
+            Menyiapkan halaman...
+          </p>
+        </div>
+        <p className="mt-3 text-sm text-slate-500 leading-relaxed">
+          Kami sedang memuat modul yang kamu buka supaya bundle awal tetap ringan dan halaman lain tidak ikut terbawa.
+        </p>
+        <div className="mt-5 h-2 w-full rounded-full bg-slate-100 overflow-hidden">
+          <div className="h-full w-1/3 rounded-full bg-red-600 animate-[loadingPulse_1200ms_ease-in-out_infinite]" />
+        </div>
+        <style>{`
+          @keyframes loadingPulse {
+            0% { transform: translateX(-100%); }
+            50% { transform: translateX(120%); }
+            100% { transform: translateX(260%); }
+          }
+        `}</style>
+      </div>
+    </div>
+  );
+}
 
 export default function App() {
   const [showSplash, setShowSplash] = useState(true);
@@ -133,6 +145,7 @@ export default function App() {
       <AppProvider>
         <AuthProvider>
           <AppErrorBoundary>
+          <Suspense fallback={<RouteLoader />}>
           <Routes>
             <Route path="/login" element={<LoginPage />} />
 
@@ -842,6 +855,7 @@ export default function App() {
               element={<Navigate to="/dashboard" replace />}
             />
           </Routes>
+          </Suspense>
           </AppErrorBoundary>
         </AuthProvider>
       </AppProvider>

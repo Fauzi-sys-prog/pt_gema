@@ -67,6 +67,44 @@
     build: {
       target: 'esnext',
       outDir: 'build',
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            if (!id.includes('node_modules')) return;
+
+            if (id.includes('recharts')) {
+              return 'charts-vendor';
+            }
+
+            if (
+              id.includes('docx') ||
+              id.includes('xlsx') ||
+              id.includes('file-saver')
+            ) {
+              return 'office-vendor';
+            }
+
+            if (id.includes('motion')) {
+              return 'motion-vendor';
+            }
+
+            if (
+              id.includes('@radix-ui') ||
+              id.includes('cmdk') ||
+              id.includes('vaul') ||
+              id.includes('embla-carousel') ||
+              id.includes('react-day-picker') ||
+              id.includes('input-otp') ||
+              id.includes('react-hook-form') ||
+              id.includes('react-resizable-panels')
+            ) {
+              return 'ui-vendor';
+            }
+
+            return 'vendor';
+          },
+        },
+      },
     },
     server: {
       port: 3000,
