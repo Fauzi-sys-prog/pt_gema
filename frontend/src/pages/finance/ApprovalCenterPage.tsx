@@ -19,6 +19,7 @@ import { toast } from "sonner@2.0.3";
 import { motion, AnimatePresence } from 'motion/react';
 import api from "../../services/api";
 import FlowHintBar from "../../components/ui/FlowHintBar";
+import StatusGuideCard from "../../components/ui/StatusGuideCard";
 import { subscribeDataSync } from "../../services/dataSyncBus";
 import { isOwnerLike } from "../../utils/roles";
 
@@ -528,6 +529,83 @@ export default function ApprovalCenterPage() {
           { label: "Material Request", tone: "danger" },
         ]}
         helper="Semua approval utama dipusatkan di halaman ini untuk menghindari alur yang terpecah."
+      />
+
+      <StatusGuideCard
+        title="Panduan Status Approval"
+        helper="Gunakan panduan ini untuk cepat membaca posisi dokumen sebelum menekan approve, reject, verify, atau issue."
+        sections={[
+          {
+            title: "Quotation",
+            items: [
+              {
+                label: "Draft",
+                tone: "neutral",
+                description: "Dokumen masih disusun sales dan belum dikirim untuk keputusan manajemen.",
+              },
+              {
+                label: "Sent / Review",
+                tone: "warning",
+                description: "Quotation sudah masuk meja approval dan tinggal menunggu keputusan OWNER atau SPV.",
+              },
+              {
+                label: "Approved",
+                tone: "success",
+                description: "Quotation sudah disetujui dan aman dilanjutkan ke tahap project atau pekerjaan berikutnya.",
+              },
+              {
+                label: "Rejected",
+                tone: "danger",
+                description: "Quotation ditolak dan harus diperbaiki atau dikirim ulang sebelum lanjut.",
+              },
+            ],
+          },
+          {
+            title: "Purchase Order",
+            items: [
+              {
+                label: "Draft",
+                tone: "neutral",
+                description: "PO masih disusun dan belum siap diproses vendor atau receiving.",
+              },
+              {
+                label: "Sent",
+                tone: "info",
+                description: "PO sudah diterbitkan dan biasanya menunggu review atau tindak lanjut proses barang masuk.",
+              },
+              {
+                label: "Partial / Received",
+                tone: "success",
+                description: "Barang datang sebagian atau sudah diterima penuh, jadi tim gudang bisa lanjut cek receiving.",
+              },
+            ],
+          },
+          {
+            title: "Invoice & Material Request",
+            items: [
+              {
+                label: "Unpaid",
+                tone: "warning",
+                description: "Invoice belum diverifikasi lunas, jadi finance masih perlu cek pembayaran masuk.",
+              },
+              {
+                label: "Paid",
+                tone: "success",
+                description: "Pembayaran sudah tervalidasi dan invoice tidak butuh tindak lanjut operasional.",
+              },
+              {
+                label: "Pending / Approved / Issued",
+                tone: "info",
+                description: "Material request bergerak dari menunggu review, siap issue, lalu selesai dikeluarkan untuk lapangan.",
+              },
+              {
+                label: "Rejected",
+                tone: "danger",
+                description: "Permintaan material ditolak dan perlu koreksi kebutuhan sebelum diajukan ulang.",
+              },
+            ],
+          },
+        ]}
       />
 
       {/* Grid Summary */}

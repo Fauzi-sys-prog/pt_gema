@@ -34,6 +34,7 @@ import { useApp } from "../../contexts/AppContext";
 import type { DataCollection as DataCollectionType } from "../../contexts/AppContext";
 import api from "../../services/api";
 import { ImageWithFallback } from "../../components/figma/ImageWithFallback";
+import StatusGuideCard from "../../components/ui/StatusGuideCard";
 import { toast } from "sonner@2.0.3";
 import {
   ManpowerModal,
@@ -1124,6 +1125,48 @@ export default function DataCollection() {
           </div>
         </div>
       </div>
+
+      <StatusGuideCard
+        title="Panduan Status Survey Lapangan"
+        helper="Data collection yang rapi akan mempermudah sales, SPV, dan tim operasional membaca kesiapan dokumen sebelum lanjut quotation atau project."
+        sections={[
+          {
+            title: "Status Dokumen",
+            items: [
+              {
+                label: "Draft",
+                tone: "neutral",
+                description: "Data baru masuk dan biasanya masih butuh pelengkapan item, lampiran, atau catatan survey.",
+              },
+              {
+                label: "Verified",
+                tone: "info",
+                description: "Isi survey sudah dicek dan cukup aman dipakai sales untuk menyusun quotation atau penawaran awal.",
+              },
+              {
+                label: "Completed",
+                tone: "success",
+                description: "Pengumpulan data sudah lengkap, jadi dokumen siap diteruskan ke tahapan quotation, project, atau kebutuhan operasional berikutnya.",
+              },
+            ],
+          },
+          {
+            title: "Arah Lanjut Kerja",
+            items: [
+              {
+                label: "Belum Lengkap",
+                tone: "warning",
+                description: "Kalau material, manpower, schedule, atau lampiran inti masih kosong, tahan dulu agar user berikutnya tidak membaca data yang setengah jadi.",
+              },
+              {
+                label: "Siap Dilanjutkan",
+                tone: "success",
+                description: "Setelah status jelas dan data penting lengkap, tim sales bisa cepat lanjut ke quotation tanpa perlu menebak kondisi survey.",
+              },
+            ],
+          },
+        ]}
+      />
 
       {/* Search */}
       <div className="bg-white p-4 rounded-lg border border-gray-200">

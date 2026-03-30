@@ -6,6 +6,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner@2.0.3';
 import api from '../../services/api';
 import { SKURegistrationModal } from '../../components/SKURegistrationModal';
+import StatusGuideCard from '../../components/ui/StatusGuideCard';
 import gmLogo from "figma:asset/661f558dc14c79fa090b7039a885f26b843f5c04.png";
 import { ImageWithFallback } from '../../components/figma/ImageWithFallback';
 
@@ -775,6 +776,54 @@ export default function PurchaseOrderPage() {
           </button>
         </div>
       </div>
+
+      <StatusGuideCard
+        title="Panduan Status Purchase Order"
+        helper="Status PO menentukan kapan dokumen masih disusun, kapan boleh dikirim, dan kapan tim gudang bisa lanjut receiving."
+        className="mb-6"
+        sections={[
+          {
+            title: "Alur Inti PO",
+            items: [
+              {
+                label: "Draft",
+                tone: "neutral",
+                description: "PO masih dirapikan dan item atau supplier masih bisa disunting sebelum dikirim.",
+              },
+              {
+                label: "Pending / Sent",
+                tone: "warning",
+                description: "PO sudah diajukan atau diterbitkan dan sedang menunggu review atau tindak lanjut supplier.",
+              },
+              {
+                label: "Approved",
+                tone: "success",
+                description: "PO sudah disetujui dan siap diteruskan ke vendor atau proses penerimaan barang.",
+              },
+              {
+                label: "Rejected / Cancelled",
+                tone: "danger",
+                description: "PO dihentikan, jadi dokumen ini tidak boleh dipakai lanjut receiving tanpa revisi atau pembuatan ulang.",
+              },
+            ],
+          },
+          {
+            title: "Status Barang Datang",
+            items: [
+              {
+                label: "Partial",
+                tone: "info",
+                description: "Barang baru datang sebagian. Receiving tetap bisa dibuat, tapi PO belum dianggap selesai penuh.",
+              },
+              {
+                label: "Received",
+                tone: "success",
+                description: "Semua item PO sudah diterima penuh dan dokumen pembelian bisa dianggap tuntas.",
+              },
+            ],
+          },
+        ]}
+      />
 
       {/* Filters and Search */}
       <div className="bg-white rounded-xl border shadow-sm p-4 mb-6">
