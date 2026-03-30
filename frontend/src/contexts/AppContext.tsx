@@ -53,8 +53,17 @@ import {
 import {
   normalizeQuotationForApi,
   normalizeQuotationForUi,
-  normalizeQuotationStatus,
 } from "../utils/quotationNormalization";
+import {
+  findAssetByMachineRefInList,
+  findAssetByPlateOrNameRefInList,
+  findAssetByPlateRefInList,
+  findAssetBySuratJalanRefInList,
+  getIdleAssetStatus,
+  isActiveDeliveryStatus,
+  isActiveMaintenanceStatus,
+  isActiveWorkOrderStatus,
+} from "../utils/assetWorkflow";
 
 const safeRemoveLocalStorageItem = (key: string) => {
   try {
@@ -1072,73 +1081,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
   };
 
-  const normalizeRef = (value?: string | null) => String(value || "").trim().toLowerCase();
-
-  const isActiveWorkOrderStatus = (status?: WorkOrder["status"]) =>
-    status === "Draft" || status === "In Progress" || status === "QC";
-  const isActiveDeliveryStatus = (status?: SuratJalan["deliveryStatus"]) =>
-    status === "Pending" || status === "On Delivery" || status === "In Transit";
-  const isActiveMaintenanceStatus = (status?: MaintenanceRecord["status"]) =>
-    status === "Scheduled" || status === "In Progress";
-
-  const isAssetMatchedByMachineRef = (asset: Asset, machineRef?: string) => {
-    const ref = normalizeRef(machineRef);
-    if (!ref) return false;
-    return (
-      normalizeRef(asset.id) === ref ||
-      normalizeRef(asset.assetCode) === ref ||
-      normalizeRef(asset.name) === ref
-    );
-  };
-
-  const isAssetMatchedByPlateRef = (asset: Asset, plateRef?: string) => {
-    const ref = normalizeRef(plateRef);
-    if (!ref) return false;
-    return normalizeRef(asset.assetCode) === ref || normalizeRef(asset.name) === ref;
-  };
-
   const findAssetByMachineRef = (machineRef?: string, assets: Asset[] = assetList) =>
-    assets.find((asset) => isAssetMatchedByMachineRef(asset, machineRef));
+    findAssetByMachineRefInList(assets, machineRef);
 
   const findAssetByPlateRef = (plateRef?: string, assets: Asset[] = assetList) =>
-    assets.find((asset) => isAssetMatchedByPlateRef(asset, plateRef));
+    findAssetByPlateRefInList(assets, plateRef);
 
   const findAssetBySuratJalanRef = (sj?: Partial<SuratJalan> | null, assets: Asset[] = assetList) => {
-    const assetIdRef = normalizeRef(sj?.assetId);
-    if (assetIdRef) {
-      const byId = assets.find((asset) => normalizeRef(asset.id) === assetIdRef);
-      if (byId) return byId;
-    }
-    return findAssetByPlateRef(sj?.noPolisi, assets);
-  };
-
-  const hasActiveWorkOrderForAsset = (asset: Asset, workOrders: WorkOrder[]) =>
-    workOrders.some((wo) => isActiveWorkOrderStatus(wo.status) && isAssetMatchedByMachineRef(asset, wo.machineId));
-
-  const hasActiveDeliveryForAsset = (asset: Asset, suratJalans: SuratJalan[]) =>
-    suratJalans.some((sj) => {
-      if (!isActiveDeliveryStatus(sj.deliveryStatus ?? "Pending")) return false;
-      return normalizeRef(sj.assetId) === normalizeRef(asset.id) || isAssetMatchedByPlateRef(asset, sj.noPolisi);
-    });
-
-  const hasActiveMaintenanceForAsset = (asset: Asset, maintenances: MaintenanceRecord[] = maintenanceList) =>
-    maintenances.some(
-      (record) =>
-        isActiveMaintenanceStatus(record.status) &&
-        (normalizeRef(record.assetCode) === normalizeRef(asset.assetCode) ||
-          normalizeRef(record.equipmentName) === normalizeRef(asset.name))
-    );
-
-  const getIdleAssetStatus = (
-    asset: Asset,
-    workOrders: WorkOrder[],
-    suratJalans: SuratJalan[],
-    maintenances: MaintenanceRecord[]
-  ): Asset["status"] => {
-    if (hasActiveMaintenanceForAsset(asset, maintenances)) return "Under Maintenance";
-    if (hasActiveWorkOrderForAsset(asset, workOrders)) return "In Use";
-    if (hasActiveDeliveryForAsset(asset, suratJalans)) return "In Use";
-    return "Available";
+    return findAssetBySuratJalanRefInList(assets, sj);
   };
 
   const syncAssetLinkedUpdate = (assetId: string, updates: Partial<Asset>) => {
@@ -3644,7 +3594,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setMaintenanceList((prev) => [m, ...prev]);
     const linkedAsset =
       findAssetByPlateRef(m.assetCode) ||
-      assetList.find((asset) => normalizeRef(asset.name) === normalizeRef(m.equipmentName));
+      findAssetByPlateOrNameRefInList(assetList, m.equipmentName);
     if (linkedAsset && linkedAsset.status !== "Scrapped") {
       const nextStatus: Asset["status"] =
         isActiveMaintenanceStatus(m.status)
