@@ -164,6 +164,8 @@ Related references already in the repo:
 - [PRODUCTION_READY_CHECKLIST.md](/Users/macbook/Downloads/Ptgema-main%202/PRODUCTION_READY_CHECKLIST.md)
 - [docs/UAT_FINAL_CHECKLIST.md](/Users/macbook/Downloads/Ptgema-main%202/docs/UAT_FINAL_CHECKLIST.md)
 - [docs/UAT_EVIDENCE_SHEET.md](/Users/macbook/Downloads/Ptgema-main%202/docs/UAT_EVIDENCE_SHEET.md)
+- [docs/UAT_ROLE_CHECKLIST.md](/Users/macbook/Downloads/Ptgema-main%202/docs/UAT_ROLE_CHECKLIST.md)
+- [docs/STAGING_UAT_RUNBOOK.md](/Users/macbook/Downloads/Ptgema-main%202/docs/STAGING_UAT_RUNBOOK.md)
 - [docs/DEPLOY_RUNBOOK.md](/Users/macbook/Downloads/Ptgema-main%202/docs/DEPLOY_RUNBOOK.md)
 - [docs/PRODUCTION_DEPLOY.md](/Users/macbook/Downloads/Ptgema-main%202/docs/PRODUCTION_DEPLOY.md)
 - [docs/release-notes.md](/Users/macbook/Downloads/Ptgema-main%202/docs/release-notes.md)
