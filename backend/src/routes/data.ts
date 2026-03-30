@@ -32,6 +32,21 @@ import {
   usesRelationalProduction,
 } from "./dataResourceRules";
 import {
+  asRecord,
+  asTrimmedString,
+  customerNameFromPayload,
+  inventoryDateString,
+  inventoryPoNumber,
+  inventoryProjectName,
+  projectNameFromPayload,
+  toDedicatedContractPayload,
+  toEntityRow,
+  toFiniteNumber,
+  toPayloadRows,
+  vendorNameFromPayload,
+  workOrderNumberFromPayload,
+} from "./dataPayloadUtils";
+import {
   extractWorkflowStatus,
   validateWorkflowStatusWrite,
 } from "./dataWorkflowRules";
@@ -68,28 +83,6 @@ const DEDICATED_CONTRACT_RESOURCES = new Set([
   "vendors",
   "customers",
 ]);
-
-function inventoryDateString(value: string | Date | null | undefined): string {
-  if (!value) return new Date().toISOString().slice(0, 10);
-  if (value instanceof Date) return value.toISOString().slice(0, 10);
-  const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? String(value) : parsed.toISOString().slice(0, 10);
-}
-
-function projectNameFromPayload(project: { payload: unknown } | null | undefined): string | undefined {
-  const payload = asRecord(project?.payload);
-  return asTrimmedString(payload.namaProject ?? payload.projectName ?? payload.name) ?? undefined;
-}
-
-function vendorNameFromPayload(vendor: { payload: unknown } | null | undefined): string | undefined {
-  const payload = asRecord(vendor?.payload);
-  return asTrimmedString(payload.namaVendor ?? payload.vendorName ?? payload.nama ?? payload.name) ?? undefined;
-}
-
-function customerNameFromPayload(customer: { payload: unknown } | null | undefined): string | undefined {
-  const payload = asRecord(customer?.payload);
-  return asTrimmedString(payload.namaCustomer ?? payload.customerName ?? payload.nama ?? payload.name) ?? undefined;
-}
 
 async function findProjectNameById(projectId: string | null | undefined): Promise<string | undefined> {
   const id = asTrimmedString(projectId);
@@ -285,39 +278,6 @@ async function findFleetAssetContextOrThrow(assetId: string): Promise<{
     assetCode: asTrimmedString(asset.assetCode) ?? undefined,
     equipmentName: asTrimmedString(asset.name) ?? undefined,
   };
-}
-
-function workOrderNumberFromPayload(workOrder: { payload: unknown } | null | undefined): string | undefined {
-  const payload = asRecord(workOrder?.payload);
-  return asTrimmedString(payload.woNumber ?? payload.number ?? payload.id) ?? undefined;
-}
-
-function toPayloadRows(rows: DedicatedRow[]) {
-  return rows.map((row) => ({
-    entityId: row.id,
-    payload: row.payload,
-    createdAt: row.createdAt,
-    updatedAt: row.updatedAt,
-  }));
-}
-
-function toEntityRow(entityId: string, payload: Record<string, unknown>, createdAt?: Date, updatedAt?: Date) {
-  return {
-    entityId,
-    payload,
-    createdAt: createdAt ?? new Date(),
-    updatedAt: updatedAt ?? new Date(),
-  };
-}
-
-function inventoryProjectName(project: { payload: unknown } | null | undefined): string | undefined {
-  const payload = asRecord(project?.payload);
-  return asTrimmedString(payload.namaProject ?? payload.projectName ?? payload.name) ?? undefined;
-}
-
-function inventoryPoNumber(po: { payload: unknown } | null | undefined): string | undefined {
-  const payload = asRecord(po?.payload);
-  return asTrimmedString(payload.noPO ?? payload.number ?? payload.id) ?? undefined;
 }
 
 function mapInventoryItemToLegacyPayload(row: {
@@ -4747,27 +4707,6 @@ async function assertDedicatedRelationsExist(
   }
 }
 
-function asRecord(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : {};
-}
-
-function toFiniteNumber(value: unknown, fallback = 0): number {
-  if (typeof value === "number" && Number.isFinite(value)) return value;
-  if (typeof value === "string" && value.trim()) {
-    const parsed = Number(value);
-    if (Number.isFinite(parsed)) return parsed;
-  }
-  return fallback;
-}
-
-function asTrimmedString(value: unknown): string | null {
-  if (typeof value !== "string") return null;
-  const v = value.trim();
-  return v ? v : null;
-}
-
 function mapAssetRecord(row: {
   id: string;
   projectId: string | null;
@@ -6965,15 +6904,6 @@ async function writeDataAuditLog(
       metadata: metadata ? JSON.stringify(metadata) : null,
     },
   });
-}
-
-function toDedicatedContractPayload(row: { entityId: string; payload: unknown } | null): Record<string, unknown> | null {
-  if (!row) return null;
-  const payload = asRecord(row.payload);
-  return {
-    ...payload,
-    id: asTrimmedString(payload.id) || row.entityId,
-  };
 }
 
 function dedicatedContractBodySchema(resource: string) {
