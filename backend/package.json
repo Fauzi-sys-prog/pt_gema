@@ -44,6 +44,7 @@
     "smoke:core-business-flow": "tsx src/smokeCoreBusinessFlow.ts",
     "smoke:security-fast": "tsx src/smokeSecurityFast.ts",
     "smoke:hr-endpoints": "tsx src/smokeHrEndpoints.ts",
+    "test:helpers": "tsx --test src/**/*.test.ts",
     "import:penawaran": "tsx src/importPenawaranExcel.ts",
     "ingest:documents": "tsx src/ingestDocuments.ts",
     "build:tk-jakon": "tsx src/buildTkJakonFromIngest.ts",
