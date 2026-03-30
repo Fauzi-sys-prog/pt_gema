@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, lazy, useEffect, useMemo, useState } from "react";
 import {
   Plus,
   Search,
@@ -18,8 +18,6 @@ import {
 } from "lucide-react";
 import { useApp } from "../../contexts/AppContext";
 import api from "../../services/api";
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid } from "recharts";
-import { ChartContainer, ChartTooltip, ChartTooltipContent } from "../../components/ui/chart";
 import { motion, AnimatePresence } from "motion/react";
 import { toast } from "sonner@2.0.3";
 
@@ -35,16 +33,16 @@ interface JournalEntry {
   sourceId: string;
 }
 
-const chartConfig = {
-  totalIncome: {
-    label: "Revenue",
-    color: "#2563eb",
-  },
-  totalExpense: {
-    label: "Expense",
-    color: "#f43f5e",
-  },
-};
+const GeneralLedgerTrendChart = lazy(
+  () => import("../../components/finance/GeneralLedgerTrendChart"),
+);
+
+const chartFallback = (
+  <div className="lg:col-span-8 bg-white rounded-[3rem] border-2 border-slate-100 p-8 shadow-sm">
+    <div className="mb-8 h-5 w-56 rounded-full bg-slate-100" />
+    <div className="h-[400px] animate-pulse rounded-[2rem] bg-slate-100" />
+  </div>
+);
 
 export default function GeneralLedgerPage() {
   const { addAuditLog, currentUser } = useApp();
@@ -53,6 +51,7 @@ export default function GeneralLedgerPage() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [showCharts, setShowCharts] = useState(false);
 
   const [newEntry, setNewEntry] = useState({
     date: new Date().toISOString().split("T")[0],
@@ -97,6 +96,11 @@ export default function GeneralLedgerPage() {
 
   useEffect(() => {
     fetchGeneralLedgerSummary(true);
+  }, []);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setShowCharts(true), 0);
+    return () => window.clearTimeout(timer);
   }, []);
 
   const effectiveJournalEntries = serverSummary?.journalEntries || [];
@@ -460,46 +464,13 @@ export default function GeneralLedgerPage() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        <div className="lg:col-span-8 bg-white rounded-[3rem] border-2 border-slate-100 p-8 shadow-sm">
-          <div className="flex items-center justify-between mb-8">
-            <h3 className="text-sm font-black uppercase italic tracking-widest text-slate-900 flex items-center gap-2">
-              <TrendingUp className="text-blue-600" size={20} />
-              Verified Cash Movement Analysis
-            </h3>
-            <div className="flex gap-4">
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 bg-blue-600 rounded-full" />
-                <span className="text-[9px] font-black uppercase text-slate-400">Pemasukan</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 bg-rose-500 rounded-full" />
-                <span className="text-[9px] font-black uppercase text-slate-400">Pengeluaran</span>
-              </div>
-            </div>
-          </div>
-          <div className="w-full h-[300px] lg:h-[400px] relative min-w-0">
-            <ChartContainer config={chartConfig}>
-              <AreaChart data={financialData} margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="colorIncome" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#2563eb" stopOpacity={0.1} />
-                    <stop offset="95%" stopColor="#2563eb" stopOpacity={0} />
-                  </linearGradient>
-                  <linearGradient id="colorExpense" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#f43f5e" stopOpacity={0.1} />
-                    <stop offset="95%" stopColor="#f43f5e" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: "bold", fill: "#94a3b8" }} />
-                <YAxis hide />
-                <ChartTooltip content={<ChartTooltipContent />} />
-                <Area type="monotone" dataKey="totalIncome" stroke="#2563eb" strokeWidth={4} fillOpacity={1} fill="url(#colorIncome)" />
-                <Area type="monotone" dataKey="totalExpense" stroke="#f43f5e" strokeWidth={4} fillOpacity={1} fill="url(#colorExpense)" />
-              </AreaChart>
-            </ChartContainer>
-          </div>
-        </div>
+        {showCharts ? (
+          <Suspense fallback={chartFallback}>
+            <GeneralLedgerTrendChart financialData={financialData} />
+          </Suspense>
+        ) : (
+          chartFallback
+        )}
 
         <div className="lg:col-span-4 bg-slate-900 rounded-[3rem] p-8 text-white relative overflow-hidden">
           <div className="absolute top-0 right-0 p-8 opacity-10">

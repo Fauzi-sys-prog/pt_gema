@@ -2,17 +2,6 @@ import { useEffect, useState, useMemo } from 'react'; import { Plus, Search, Eye
 import type { Quotation } from '../../contexts/AppContext';
 import type { DataCollection } from '../../contexts/AppContext';
 import { ImageWithFallback } from '../../components/figma/ImageWithFallback';
-import { 
-  BarChart, 
-  Bar, 
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  Cell,
-  PieChart as RePieChart,
-  Pie
-} from 'recharts';
-import { ChartContainer, ChartTooltip, ChartTooltipContent } from '../../components/ui/chart';
 import { toast } from "sonner@2.0.3";
 import api from '../../services/api';
 
