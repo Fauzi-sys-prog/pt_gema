@@ -1,24 +1,23 @@
-import { useEffect, useState, useMemo } from 'react'; import { FileText, Search, Download, Filter, ArrowUpRight, ArrowDownLeft, Calendar, ChevronRight, TrendingUp, Scale, ShieldCheck, ShieldAlert, Printer, FileCheck2, AlertCircle, RefreshCw } from 'lucide-react'; import { useApp } from '../../contexts/AppContext';
+import { Suspense, lazy, useEffect, useState, useMemo } from 'react'; import { FileText, Search, Download, Filter, ArrowUpRight, ArrowDownLeft, Calendar, ChevronRight, Scale, ShieldCheck, ShieldAlert, Printer, FileCheck2, AlertCircle, RefreshCw } from 'lucide-react'; import { useApp } from '../../contexts/AppContext';
 import type { Invoice, Quotation, VendorInvoice } from '../../contexts/AppContext';
 import api from '../../services/api';
-import { 
-  BarChart, 
-  Bar, 
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  Legend,
-  ResponsiveContainer,
-  Tooltip,
-  Cell
-} from 'recharts';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner@2.0.3';
+
+const PpnTrendChart = lazy(() => import('../../components/finance/PpnTrendChart'));
+
+const ppnChartFallback = (
+  <div className="lg:col-span-2 bg-white p-10 rounded-[3rem] border border-slate-200 shadow-sm">
+    <div className="mb-10 h-6 w-52 rounded-full bg-slate-100" />
+    <div className="h-[300px] animate-pulse rounded-[2rem] bg-slate-100" />
+  </div>
+);
 
 export default function PPNPage() {
   const { invoiceList, vendorInvoiceList, quotationList, projectList, addAuditLog } = useApp();
   const [activeTab, setActiveTab] = useState<'summary' | 'keluaran' | 'masukan'>('summary');
   const [searchTerm, setSearchTerm] = useState('');
+  const [showCharts, setShowCharts] = useState(false);
   const [serverInvoiceList, setServerInvoiceList] = useState<Invoice[] | null>(null);
   const [serverVendorInvoiceList, setServerVendorInvoiceList] = useState<VendorInvoice[] | null>(null);
   const [serverQuotationList, setServerQuotationList] = useState<Quotation[] | null>(null);
@@ -97,6 +96,11 @@ export default function PPNPage() {
 
   useEffect(() => {
     fetchPpnSources();
+  }, []);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setShowCharts(true), 0);
+    return () => window.clearTimeout(timer);
   }, []);
 
   const formatCurrency = (amount: number) => {
@@ -388,61 +392,13 @@ export default function PPNPage() {
            </div>
         </div>
 
-        {/* Analytics Chart */}
-        <div className="lg:col-span-2 bg-white p-10 rounded-[3rem] border border-slate-200 shadow-sm">
-           <div className="flex items-center justify-between mb-10">
-              <div>
-                <h4 className="text-lg font-black uppercase italic tracking-tighter text-slate-900 flex items-center gap-2">
-                  <TrendingUp className="text-red-600" size={24} />
-                  Fiscan Trend Analysis
-                </h4>
-                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Perbandingan PPN Bulanan</p>
-              </div>
-              <select className="bg-slate-50 border-none rounded-xl px-4 py-2 text-[10px] font-black uppercase outline-none focus:ring-2 focus:ring-red-500">
-                <option>Filter Tahun 2026</option>
-              </select>
-           </div>
-           <div className="h-[300px] w-full min-w-0 min-h-0 overflow-hidden flex flex-col relative">
-              <ResponsiveContainer width="100%" height={300} minWidth={0} minHeight={0}>
-                <BarChart data={chartData} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F1F5F9" />
-                  <XAxis 
-                    dataKey="name" 
-                    axisLine={false} 
-                    tickLine={false} 
-                    tick={{ fill: '#94A3B8', fontSize: 10, fontWeight: 'bold' }} 
-                  />
-                  <YAxis 
-                    axisLine={false} 
-                    tickLine={false} 
-                    tick={{ fill: '#94A3B8', fontSize: 10, fontWeight: 'bold' }}
-                    tickFormatter={(val) => `Rp ${val/1000000}M`}
-                  />
-                  <Tooltip 
-                    cursor={{ fill: '#F8FAFC' }}
-                    content={({ active, payload }) => {
-                      if (active && payload && payload.length) {
-                        return (
-                          <div className="bg-slate-900 p-4 rounded-2xl shadow-2xl border border-slate-800">
-                            <p className="text-[10px] font-black text-slate-500 uppercase mb-2">{payload[0].payload.name}</p>
-                            {payload.map((p, i) => (
-                              <div key={i} className="flex items-center gap-3 mb-1">
-                                <div className="w-2 h-2 rounded-full" style={{ backgroundColor: p.color }} />
-                                <span className="text-[10px] font-bold text-white uppercase">{p.name}: {formatCurrency(p.value as number)}</span>
-                              </div>
-                            ))}
-                          </div>
-                        );
-                      }
-                      return null;
-                    }}
-                  />
-                  <Bar name="Keluaran" dataKey="keluaran" fill="#EF4444" radius={[4, 4, 0, 0]} barSize={25} />
-                  <Bar name="Masukan" dataKey="masukan" fill="#6366F1" radius={[4, 4, 0, 0]} barSize={25} />
-                </BarChart>
-              </ResponsiveContainer>
-           </div>
-        </div>
+        {showCharts ? (
+          <Suspense fallback={ppnChartFallback}>
+            <PpnTrendChart chartData={chartData} />
+          </Suspense>
+        ) : (
+          ppnChartFallback
+        )}
       </div>
 
       {/* Transactions Table */}
