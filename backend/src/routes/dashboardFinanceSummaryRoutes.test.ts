@@ -53,6 +53,25 @@ function createPettyCashRow(payload: Record<string, unknown>, updatedAt = new Da
   };
 }
 
+function createVendorInvoiceRow(
+  payload: Record<string, unknown>,
+  updatedAt = new Date("2026-03-12T00:00:00.000Z"),
+) {
+  return {
+    id: String(payload.id || "vinv-1"),
+    payload,
+    updatedAt,
+  };
+}
+
+function createArchiveRow(payload: Record<string, unknown>, updatedAt = new Date("2026-03-18T00:00:00.000Z")) {
+  return {
+    entityId: String(payload.id || "arc-1"),
+    payload,
+    updatedAt,
+  };
+}
+
 async function withServer(run: (baseUrl: string) => Promise<void>) {
   const server = app.listen(0);
   await once(server, "listening");
@@ -79,6 +98,7 @@ function installFinanceSummaryRouteMocks(authRole: Role) {
     invoiceFindMany: 0,
     appEntityFindMany: [] as Array<Record<string, unknown>>,
     vendorExpenseFindMany: 0,
+    vendorInvoiceFindMany: 0,
     pettyCashFindMany: 0,
   };
 
@@ -87,6 +107,7 @@ function installFinanceSummaryRouteMocks(authRole: Role) {
   const originalInvoiceFindMany = prismaAny.invoiceRecord.findMany;
   const originalAppEntityFindMany = prismaAny.appEntity.findMany;
   const originalVendorExpenseFindMany = prismaAny.vendorExpenseRecord?.findMany;
+  const originalVendorInvoiceFindMany = prismaAny.vendorInvoiceRecord?.findMany;
   const originalPettyCashFindMany = prismaAny.financePettyCashTransactionRecord?.findMany;
 
   prismaAny.revokedToken.findUnique = async () => null;
@@ -101,6 +122,8 @@ function installFinanceSummaryRouteMocks(authRole: Role) {
       createInvoiceRow({
         id: "inv-2",
         noInvoice: "INV-002",
+        subtotal: 1_000_000,
+        ppn: 110_000,
         totalBayar: 1_000_000,
         paidAmount: 0,
         outstandingAmount: 1_000_000,
@@ -111,6 +134,30 @@ function installFinanceSummaryRouteMocks(authRole: Role) {
   };
   prismaAny.appEntity.findMany = async (args: Record<string, unknown>) => {
     calls.appEntityFindMany.push(args);
+    const resource = (args?.where as { resource?: string } | undefined)?.resource;
+    if (resource === "archive-registry") {
+      return [
+        createArchiveRow({
+          id: "arc-1",
+          date: "2026-03-18",
+          type: "BK",
+          amount: 40_000,
+          ref: "BK-001",
+          description: "Top up",
+        }),
+        createArchiveRow(
+          {
+            id: "arc-2",
+            date: "2026-03-16",
+            type: "AP",
+            amount: 10_000,
+            ref: "AP-001",
+            description: "Misc expense",
+          },
+          new Date("2026-03-16T00:00:00.000Z"),
+        ),
+      ];
+    }
     return [];
   };
 
@@ -165,6 +212,38 @@ function installFinanceSummaryRouteMocks(authRole: Role) {
     ];
   };
 
+  if (!prismaAny.vendorInvoiceRecord) {
+    prismaAny.vendorInvoiceRecord = {};
+  }
+  prismaAny.vendorInvoiceRecord.findMany = async () => {
+    calls.vendorInvoiceFindMany += 1;
+    return [
+      createVendorInvoiceRow({
+        id: "vinv-1",
+        noInvoiceVendor: "VINV-001",
+        tanggal: "2026-03-12",
+        supplier: "Vendor A",
+        totalAmount: 800_000,
+        ppn: 88_000,
+        paidAmount: 120_000,
+        paymentDate: "2026-03-13",
+      }),
+      createVendorInvoiceRow(
+        {
+          id: "vinv-2",
+          noInvoiceVendor: "VINV-002",
+          date: "2026-03-18",
+          vendorName: "Vendor B",
+          totalAmount: 100_000,
+          ppn: 11_000,
+          paidAmount: 50_000,
+          paymentDate: "2026-03-17",
+        },
+        new Date("2026-03-18T00:00:00.000Z"),
+      ),
+    ];
+  };
+
   return {
     calls,
     restore() {
@@ -174,6 +253,9 @@ function installFinanceSummaryRouteMocks(authRole: Role) {
       prismaAny.appEntity.findMany = originalAppEntityFindMany;
       if (prismaAny.vendorExpenseRecord) {
         prismaAny.vendorExpenseRecord.findMany = originalVendorExpenseFindMany;
+      }
+      if (prismaAny.vendorInvoiceRecord) {
+        prismaAny.vendorInvoiceRecord.findMany = originalVendorInvoiceFindMany;
       }
       if (prismaAny.financePettyCashTransactionRecord) {
         prismaAny.financePettyCashTransactionRecord.findMany = originalPettyCashFindMany;
@@ -271,6 +353,94 @@ test("GET /dashboard/finance-payment-summary rejects unauthorized role before lo
     assert.equal(mock.calls.invoiceFindMany, 0);
     assert.equal(mock.calls.vendorExpenseFindMany, 0);
     assert.equal(mock.calls.pettyCashFindMany, 0);
+    assert.equal(mock.calls.appEntityFindMany.length, 0);
+  } finally {
+    mock.restore();
+  }
+});
+
+test("GET /dashboard/finance-ppn-summary returns PPN summary with latest timestamp", async () => {
+  const mock = installFinanceSummaryRouteMocks(Role.FINANCE);
+  const token = signAccessToken({ id: "user-fin", role: Role.FINANCE });
+
+  try {
+    await withServer(async (baseUrl) => {
+      const response = await fetch(`${baseUrl}/dashboard/finance-ppn-summary`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      assert.equal(response.status, 200);
+      const payload = (await response.json()) as Record<string, any>;
+      assert.equal(payload.summary.totalKeluaran, 440_000);
+      assert.equal(payload.summary.totalMasukan, 99_000);
+      assert.equal(payload.summary.ppnKurangBayar, 341_000);
+      assert.equal(payload.summary.ppnLebihBayar, 0);
+      assert.equal(payload.keluaran.length, 2);
+      assert.equal(payload.masukan.length, 2);
+      assert.equal(payload.lastUpdatedAt, "2026-03-18T00:00:00.000Z");
+    });
+
+    assert.equal(mock.calls.invoiceFindMany, 1);
+    assert.equal(mock.calls.vendorInvoiceFindMany, 1);
+    assert.equal(mock.calls.appEntityFindMany.length, 1);
+  } finally {
+    mock.restore();
+  }
+});
+
+test("GET /dashboard/finance-bank-recon-summary returns merged finance transactions", async () => {
+  const mock = installFinanceSummaryRouteMocks(Role.FINANCE);
+  const token = signAccessToken({ id: "user-fin", role: Role.FINANCE });
+
+  try {
+    await withServer(async (baseUrl) => {
+      const response = await fetch(`${baseUrl}/dashboard/finance-bank-recon-summary`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      assert.equal(response.status, 200);
+      const payload = (await response.json()) as Record<string, any>;
+      assert.equal(payload.summary.totalDebit, 540_000);
+      assert.equal(payload.summary.totalCredit, 180_000);
+      assert.equal(payload.summary.netMovement, 360_000);
+      assert.equal(payload.summary.transactionCount, 5);
+      assert.equal(payload.transactions[0].id, "arc-1");
+      assert.equal(payload.transactions[0].source, "ARCHIVE");
+      assert.equal(payload.lastUpdatedAt, "2026-03-18T00:00:00.000Z");
+    });
+
+    assert.equal(mock.calls.invoiceFindMany, 1);
+    assert.equal(mock.calls.vendorInvoiceFindMany, 1);
+    assert.equal(mock.calls.appEntityFindMany.length, 2);
+  } finally {
+    mock.restore();
+  }
+});
+
+test("GET /dashboard/finance-bank-recon-summary rejects unauthorized role before loading data", async () => {
+  const mock = installFinanceSummaryRouteMocks(Role.SALES);
+  const token = signAccessToken({ id: "user-sales", role: Role.SALES });
+
+  try {
+    await withServer(async (baseUrl) => {
+      const response = await fetch(`${baseUrl}/dashboard/finance-bank-recon-summary`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      assert.equal(response.status, 403);
+      const payload = (await response.json()) as Record<string, unknown>;
+      assert.equal(payload.code, "FORBIDDEN");
+      assert.equal(payload.message, "Forbidden");
+    });
+
+    assert.equal(mock.calls.invoiceFindMany, 0);
+    assert.equal(mock.calls.vendorInvoiceFindMany, 0);
     assert.equal(mock.calls.appEntityFindMany.length, 0);
   } finally {
     mock.restore();
