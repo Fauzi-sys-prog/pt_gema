@@ -53,6 +53,11 @@ import {
   buildFinanceReconciliationCheck,
 } from "./dashboardFinanceCashHelpers";
 import {
+  buildInvoiceVerificationPayload,
+  buildMaterialRequestActionPayload,
+  buildPurchaseOrderApprovalPayload,
+} from "./dashboardFinanceDocumentActions";
+import {
   buildPendingInvoices,
   buildPendingMaterialRequests,
   buildPendingPurchaseOrders,
@@ -4043,28 +4048,16 @@ dashboardRouter.post("/dashboard/finance-approval-action", authenticate, async (
         return sendError(res, 404, { code: "NOT_FOUND", message: "Purchase Order tidak ditemukan", legacyError: "Purchase Order tidak ditemukan" });
       }
       const payload = current.payload;
-      const total =
-        readNumber(payload, "total") ||
-        readNumber(payload, "totalAmount") ||
-        readNumber(payload, "grandTotal");
+      const { total, nextStatus, updatedPayload } = buildPurchaseOrderApprovalPayload({
+        documentId,
+        payload,
+        action,
+        actor,
+        reason,
+      });
       if (!canApprovePoByRole(req.user?.role, total)) {
         return sendError(res, 403, { code: "FORBIDDEN", message: "Role tidak boleh approve/reject PO ini", legacyError: "Role tidak boleh approve/reject PO ini" });
       }
-      const nextStatus = action === "APPROVE" ? "APPROVED" : "REJECTED";
-      const updatedPayload = {
-        ...payload,
-        id: readString(payload, "id") || documentId,
-        status: nextStatus,
-        approvedBy: action === "APPROVE" ? actor.actorName : payload.approvedBy,
-        approvedByUserId: action === "APPROVE" ? actor.actorUserId : payload.approvedByUserId,
-        approvedByRole: action === "APPROVE" ? actor.actorRole : payload.approvedByRole,
-        approvedAt: action === "APPROVE" ? new Date().toISOString() : payload.approvedAt,
-        rejectedBy: action === "REJECT" ? actor.actorName : payload.rejectedBy,
-        rejectedByUserId: action === "REJECT" ? actor.actorUserId : payload.rejectedByUserId,
-        rejectedByRole: action === "REJECT" ? actor.actorRole : payload.rejectedByRole,
-        rejectedAt: action === "REJECT" ? new Date().toISOString() : payload.rejectedAt,
-        rejectReason: action === "REJECT" ? reason || undefined : payload.rejectReason,
-      };
       await updateFinanceResourceDoc("purchase-orders", documentId, current.source, updatedPayload);
       await writeFinanceApprovalAuditLog(req, `PO_${action}`, "PO", documentId, { total, reason: reason || null });
       return res.json({ ok: true, documentType, documentId, status: nextStatus });
@@ -4082,21 +4075,11 @@ dashboardRouter.post("/dashboard/finance-approval-action", authenticate, async (
         return sendError(res, 404, { code: "NOT_FOUND", message: "Invoice tidak ditemukan", legacyError: "Invoice tidak ditemukan" });
       }
       const payload = current.payload;
-      const totalBayar =
-        readNumber(payload, "totalBayar") ||
-        readNumber(payload, "totalAmount") ||
-        readNumber(payload, "subtotal");
-      const updatedPayload = {
-        ...payload,
-        id: readString(payload, "id") || documentId,
-        status: "PAID",
-        paidAmount: totalBayar,
-        outstandingAmount: 0,
-        tanggalBayar: new Date().toISOString().slice(0, 10),
-        verifiedBy: actor.actorName,
-        verifiedByUserId: actor.actorUserId,
-        verifiedByRole: actor.actorRole,
-      };
+      const { updatedPayload } = buildInvoiceVerificationPayload({
+        documentId,
+        payload,
+        actor,
+      });
       await updateFinanceResourceDoc("invoices", documentId, current.source, updatedPayload);
       await writeFinanceApprovalAuditLog(req, "INVOICE_VERIFY", "INVOICE", documentId);
       return res.json({ ok: true, documentType, documentId, status: "PAID" });
@@ -4252,25 +4235,13 @@ dashboardRouter.post("/dashboard/finance-approval-action", authenticate, async (
       }
 
       const payload = current.payload;
-      const nextStatus = action === "APPROVE" ? "APPROVED" : action === "REJECT" ? "REJECTED" : "ISSUED";
-      const updatedPayload = {
-        ...payload,
-        id: readString(payload, "id") || documentId,
-        status: nextStatus,
-        approvedBy: action === "APPROVE" ? actor.actorName : payload.approvedBy,
-        approvedByUserId: action === "APPROVE" ? actor.actorUserId : payload.approvedByUserId,
-        approvedByRole: action === "APPROVE" ? actor.actorRole : payload.approvedByRole,
-        approvedAt: action === "APPROVE" ? new Date().toISOString() : payload.approvedAt,
-        rejectedBy: action === "REJECT" ? actor.actorName : payload.rejectedBy,
-        rejectedByUserId: action === "REJECT" ? actor.actorUserId : payload.rejectedByUserId,
-        rejectedByRole: action === "REJECT" ? actor.actorRole : payload.rejectedByRole,
-        rejectedAt: action === "REJECT" ? new Date().toISOString() : payload.rejectedAt,
-        rejectReason: action === "REJECT" ? reason || undefined : payload.rejectReason,
-        issuedBy: action === "ISSUE" ? actor.actorName : payload.issuedBy,
-        issuedByUserId: action === "ISSUE" ? actor.actorUserId : payload.issuedByUserId,
-        issuedByRole: action === "ISSUE" ? actor.actorRole : payload.issuedByRole,
-        issuedAt: action === "ISSUE" ? new Date().toISOString() : payload.issuedAt,
-      };
+      const { nextStatus, updatedPayload } = buildMaterialRequestActionPayload({
+        documentId,
+        payload,
+        action,
+        actor,
+        reason,
+      });
       await updateFinanceResourceDoc("material-requests", documentId, current.source, updatedPayload);
       await writeFinanceApprovalAuditLog(req, `MATERIAL_REQUEST_${action}`, "MATERIAL_REQUEST", documentId, { reason: reason || null });
       return res.json({ ok: true, documentType, documentId, status: nextStatus });
