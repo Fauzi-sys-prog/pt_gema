@@ -46,6 +46,12 @@ import {
   buildFinanceGeneralLedgerSummary,
   buildFinancePpnSummary,
 } from "./dashboardFinanceAnalytics";
+import {
+  buildFinanceBankReconSummary,
+  buildFinancePaymentSummary,
+  buildFinancePettyCashSummary,
+  buildFinanceReconciliationCheck,
+} from "./dashboardFinanceCashHelpers";
 
 export const dashboardRouter = Router();
 
@@ -3649,78 +3655,16 @@ dashboardRouter.get("/dashboard/finance-bank-recon-summary", authenticate, async
     const invoiceRows = invoices.map((row) => mapInvoiceDashboardPayload(row));
     const vendorRows = vendorInvoices.map((row) => asRecord(row.payload));
     const archiveRows = archives.map((row) => asRecord(row.payload));
-
-    const trx = [
-      ...invoiceRows.map((inv, idx) => {
-        const paid = readNumber(inv, "paidAmount");
-        const total = readNumber(inv, "totalBayar") || readNumber(inv, "totalAmount");
-        const paymentDate =
-          readString(inv, "tanggalBayar") ||
-          readString(inv, "paidAt") ||
-          readString(inv, "paymentDate") ||
-          readString(inv, "tanggal") ||
-          readString(inv, "date") ||
-          "";
-        return {
-          id: readString(inv, "id") || `AR-${idx + 1}`,
-          date: paymentDate,
-          source: "AR",
-          ref: readString(inv, "noInvoice") || "",
-          debit: paid > 0 ? paid : 0,
-          credit: 0,
-          note: `Invoice receipt (${total})`,
-        };
-      }),
-      ...vendorRows.map((vinv, idx) => {
-        const paid = readNumber(vinv, "paidAmount");
-        const paymentDate =
-          readString(vinv, "paidAt") ||
-          readString(vinv, "tanggalBayar") ||
-          readString(vinv, "paymentDate") ||
-          readString(vinv, "date") ||
-          readString(vinv, "tanggal") ||
-          readString(vinv, "jatuhTempo") ||
-          "";
-        return {
-          id: readString(vinv, "id") || `AP-${idx + 1}`,
-          date: paymentDate,
-          source: "AP",
-          ref: readString(vinv, "noInvoiceVendor") || "",
-          debit: 0,
-          credit: paid,
-          note: "Vendor payment",
-        };
-      }),
-      ...archiveRows.map((arc, idx) => {
-        const amount = readNumber(arc, "amount");
-        const type = String(readString(arc, "type") || "").toUpperCase();
-        const isDebit = type === "AR" || type === "BK";
-        return {
-          id: readString(arc, "id") || `ARC-${idx + 1}`,
-          date: readString(arc, "date") || "",
-          source: "ARCHIVE",
-          ref: readString(arc, "ref") || "",
-          debit: isDebit ? amount : 0,
-          credit: isDebit ? 0 : amount,
-          note: readString(arc, "description") || "-",
-        };
-      }),
-    ]
-      .filter((x) => x.debit > 0 || x.credit > 0)
-      .sort((a, b) => (b.date || "").localeCompare(a.date || ""));
-
-    const totalDebit = trx.reduce((sum, t) => sum + t.debit, 0);
-    const totalCredit = trx.reduce((sum, t) => sum + t.credit, 0);
+    const { summary, transactions } = buildFinanceBankReconSummary(
+      invoiceRows,
+      vendorRows,
+      archiveRows
+    );
 
     return res.json({
       generatedAt: new Date().toISOString(),
-      summary: {
-        totalDebit,
-        totalCredit,
-        netMovement: totalDebit - totalCredit,
-        transactionCount: trx.length,
-      },
-      transactions: trx,
+      summary,
+      transactions,
       lastUpdatedAt: maxDate([invoices[0]?.updatedAt, vendorInvoices[0]?.updatedAt, archives[0]?.updatedAt]),
     });
   } catch {
@@ -3742,44 +3686,16 @@ dashboardRouter.get("/dashboard/finance-petty-cash-summary", authenticate, async
     const transactions = await pettyDelegate.findMany({
       select: { id: true, payload: true, updatedAt: true },
     });
-
-    const pettyRows = transactions
-      .map((tx, idx) => {
-        const row = asRecord(tx.payload);
-        const type = String(readString(row, "type") || "").toUpperCase();
-        const amount = readNumber(row, "amount");
-        const ref = readString(row, "ref") || "";
-        const source = readString(row, "source");
-        const sourceTags = parseTaggedSource(source);
-        const direction = (sourceTags.direction || "").toLowerCase();
-        const kind = (sourceTags.kind || "").toLowerCase();
-        const isDebit =
-          direction === "debit" ||
-          (direction !== "credit" && (kind === "topup" || ref.startsWith("PC-TOPUP-") || type === "BK"));
-        return {
-          id: readString(row, "id") || tx.id || `PC-${idx + 1}`,
-          date: readString(row, "date") || "",
-          ref,
-          description: readString(row, "description") || "-",
-          debit: isDebit ? amount : 0,
-          credit: isDebit ? 0 : amount,
-          amount,
-          type,
-        };
-      });
-
-    const totalDebit = pettyRows.reduce((sum: number, r) => sum + r.debit, 0);
-    const totalCredit = pettyRows.reduce((sum: number, r) => sum + r.credit, 0);
+    const pettyTransactions = transactions.map((tx) => ({
+      id: tx.id,
+      payload: asRecord(tx.payload),
+    }));
+    const { summary, rows } = buildFinancePettyCashSummary(pettyTransactions);
 
     return res.json({
       generatedAt: new Date().toISOString(),
-      summary: {
-        totalDebit,
-        totalCredit,
-        endingBalance: totalDebit - totalCredit,
-        transactionCount: pettyRows.length,
-      },
-      rows: pettyRows.sort((a: { date: string }, b: { date: string }) => (b.date || "").localeCompare(a.date || "")),
+      summary,
+      rows,
       lastUpdatedAt: maxDate(transactions.map((tx) => tx.updatedAt)),
     });
   } catch {
@@ -3801,39 +3717,11 @@ dashboardRouter.get("/dashboard/finance-payment-summary", authenticate, async (r
 
     const arRows = invoices.map((row) => mapInvoiceDashboardPayload(row));
     const expRows = expenses.map((row) => asRecord(row.payload));
-
-    const arOutstanding = arRows
-      .map((r) => {
-        const total =
-          readNumber(r, "totalBayar") ||
-          readNumber(r, "totalNominal") ||
-          readNumber(r, "totalAmount");
-        const paid = readNumber(r, "paidAmount");
-        return Math.max(0, readNumber(r, "outstandingAmount") || total - paid);
-      })
-      .reduce((sum, n) => sum + n, 0);
-
-    const paidIn = arRows.reduce((sum, r) => sum + readNumber(r, "paidAmount"), 0);
-    const paidOut = expRows
-      .filter((r) => String(readString(r, "status") || "").toUpperCase() === "PAID")
-      .reduce((sum, r) => sum + (readNumber(r, "totalNominal") || readNumber(r, "nominal")), 0);
-
-    const pendingVendor = expRows
-      .filter((r) => {
-        const status = String(readString(r, "status") || "").toUpperCase();
-        return status === "PENDING APPROVAL" || status === "APPROVED";
-      })
-      .reduce((sum, r) => sum + (readNumber(r, "totalNominal") || readNumber(r, "nominal")), 0);
+    const summary = buildFinancePaymentSummary(arRows, expRows);
 
     return res.json({
       generatedAt: new Date().toISOString(),
-      summary: {
-        arOutstanding,
-        paidIn,
-        paidOut,
-        pendingVendor,
-        netCashRealized: paidIn - paidOut,
-      },
+      summary,
       lastUpdatedAt: maxDate([invoices[0]?.updatedAt, expenses[0]?.updatedAt]),
     });
   } catch {
@@ -3885,129 +3773,25 @@ dashboardRouter.get("/dashboard/finance-reconciliation-check", authenticate, asy
       );
     const pettyRows = pettyTransactions
       .map((tx) => ({ id: tx.id, payload: asRecord(tx.payload), updatedAt: tx.updatedAt }))
-      .filter((tx) => isOnOrAfterStart(readString(tx.payload, "date")));
-
-    const paymentSummary = (() => {
-      const arOutstanding = invoiceRows
-        .map((r) => {
-          const total =
-            readNumber(r, "totalBayar") ||
-            readNumber(r, "totalNominal") ||
-            readNumber(r, "totalAmount");
-          const paid = readNumber(r, "paidAmount");
-          return Math.max(0, readNumber(r, "outstandingAmount") || total - paid);
-        })
-        .reduce((sum, n) => sum + n, 0);
-
-      const paidIn = invoiceRows.reduce((sum, r) => {
-        const paymentDate = readString(r, "tanggalBayar") || readString(r, "tanggal") || readString(r, "date");
-        return sum + (isOnOrAfterStart(paymentDate) ? readNumber(r, "paidAmount") : 0);
-      }, 0);
-
-      const paidOut = expenseRows
-        .filter((r) => String(readString(r, "status") || "").toUpperCase() === "PAID")
-        .reduce((sum, r) => sum + (readNumber(r, "totalNominal") || readNumber(r, "nominal")), 0);
-
-      const pendingVendor = expenseRows
-        .filter((r) => {
-          const status = String(readString(r, "status") || "").toUpperCase();
-          return status === "PENDING APPROVAL" || status === "APPROVED";
-        })
-        .reduce((sum, r) => sum + (readNumber(r, "totalNominal") || readNumber(r, "nominal")), 0);
-
-      return {
-        arOutstanding,
-        paidIn,
-        paidOut,
-        pendingVendor,
-        netCashRealized: paidIn - paidOut,
-      };
-    })();
-
-    const paymentRegistryDetail = (() => {
-      const inboundCount = invoiceRows.reduce(
-        (sum, r) =>
-          sum +
-          (readNumber(r, "paidAmount") > 0 &&
-          isOnOrAfterStart(readString(r, "tanggalBayar") || readString(r, "tanggal") || readString(r, "date"))
-            ? 1
-            : 0),
-        0
-      );
-      const outboundRows = expenseRows.filter((r) =>
-        ["APPROVED", "PAID", "PENDING APPROVAL", "REJECTED"].includes(String(readString(r, "status") || "").toUpperCase())
-      );
-      const outboundTotalListed = outboundRows.reduce(
-        (sum, r) => sum + (readNumber(r, "totalNominal") || readNumber(r, "nominal")),
-        0
-      );
-      const outboundRejectedTotal = outboundRows
-        .filter((r) => String(readString(r, "status") || "").toUpperCase() === "REJECTED")
-        .reduce((sum, r) => sum + (readNumber(r, "totalNominal") || readNumber(r, "nominal")), 0);
-
-      return {
-        inboundCount,
-        outboundCount: outboundRows.length,
-        outboundTotalListed,
-        outboundRejectedTotal,
-      };
-    })();
-
-    const pettyCashSummary = (() => {
-      const rows = pettyRows.map((tx, idx) => {
-        const row = tx.payload;
-        const amount = readNumber(row, "amount");
-        const ref = readString(row, "ref") || "";
-        const type = String(readString(row, "type") || "").toUpperCase();
-        const sourceTags = parseTaggedSource(readString(row, "source"));
-        const direction = String(sourceTags.direction || "").toLowerCase();
-        const kind = String(sourceTags.kind || "").toLowerCase();
-        const isDebit =
-          direction === "debit" ||
-          (direction !== "credit" && (kind === "topup" || ref.startsWith("PC-TOPUP-") || type === "BK"));
-        return {
-          id: readString(row, "id") || tx.id || `PC-${idx + 1}`,
-          debit: isDebit ? amount : 0,
-          credit: isDebit ? 0 : amount,
-        };
+      .filter((tx) => {
+        const d = parseDate(readString(tx.payload, "date"));
+        return !!d && d >= startDate;
       });
-      const totalDebit = rows.reduce((sum, r) => sum + r.debit, 0);
-      const totalCredit = rows.reduce((sum, r) => sum + r.credit, 0);
-      return {
-        totalDebit,
-        totalCredit,
-        endingBalance: totalDebit - totalCredit,
-        transactionCount: rows.length,
-      };
-    })();
+
+    const { checks, recordCounts } = buildFinanceReconciliationCheck({
+      invoiceRows,
+      expenseRows,
+      pettyRows: pettyRows.map((tx) => ({ id: tx.id, payload: tx.payload })),
+      startDate,
+    });
 
     return res.json({
       generatedAt: new Date().toISOString(),
       period: {
         startDate: startDate.toISOString().slice(0, 10),
       },
-      checks: {
-        paymentRegistry: {
-          source: {
-            summary: "invoices + vendor-expenses",
-            detail: "invoices + vendor-expenses",
-          },
-          summary: paymentSummary,
-          detail: paymentRegistryDetail,
-          isConsistentSource: true,
-          isNetCashConsistent: Math.abs(paymentSummary.netCashRealized - (paymentSummary.paidIn - paymentSummary.paidOut)) < 0.0001,
-        },
-        pettyCash: {
-          source: "finance-petty-cash-transactions (dedicated)",
-          summary: pettyCashSummary,
-          isConsistentSource: pettyRows.length >= 0,
-        },
-      },
-      recordCounts: {
-        invoices: invoiceRows.length,
-        vendorExpenses: expenseRows.length,
-        pettyCashTransactions: pettyRows.length,
-      },
+      checks,
+      recordCounts,
       lastUpdatedAt: maxDate([
         invoices[0]?.updatedAt,
         vendorExpenses[0]?.updatedAt,
