@@ -2980,7 +2980,11 @@ dashboardRouter.get("/dashboard/finance-general-ledger-summary", authenticate, a
       journalEntries,
       financialData,
       totals,
-      lastUpdatedAt: maxDate([archives[0]?.updatedAt, invoices[0]?.updatedAt, purchaseOrders[0]?.updatedAt]),
+      lastUpdatedAt: maxDate([
+        ...archives.map((row) => row.updatedAt),
+        ...invoices.map((row) => row.updatedAt),
+        ...purchaseOrders.map((row) => row.updatedAt),
+      ]),
     });
   } catch {
     return res.status(500).json({ error: "Internal server error" });
@@ -3505,10 +3509,10 @@ dashboardRouter.get("/dashboard/finance-year-end-summary", authenticate, async (
       monthlyRevData: monthly,
       expenseAlloc,
       lastUpdatedAt: maxDate([
-        invoices[0]?.updatedAt,
-        vendorInvoices[0]?.updatedAt,
-        purchaseOrders[0]?.updatedAt,
-        payrolls[0]?.updatedAt,
+        ...invoices.map((row) => row.updatedAt),
+        ...vendorInvoices.map((row) => row.updatedAt),
+        ...purchaseOrders.map((row) => row.updatedAt),
+        ...payrolls.map((row) => row.updatedAt),
       ]),
     });
   } catch {
