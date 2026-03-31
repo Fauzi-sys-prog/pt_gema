@@ -58,19 +58,14 @@ import {
   buildPurchaseOrderApprovalPayload,
 } from "./dashboardFinanceDocumentActions";
 import {
-  buildPendingInvoices,
-  buildPendingMaterialRequests,
-  buildPendingPurchaseOrders,
-  buildPendingQuotations,
-  buildQuotationActorMap,
   canApproveMaterialRequestByRole,
   canApprovePoByRole,
   canIssueMaterialRequestByRole,
   canReadFinanceApprovalQueue,
   canSendQuotationByRole,
   canVerifyInvoiceByRole,
-  collectQuotationActorIds,
 } from "./dashboardFinanceApprovalHelpers";
+import { buildFinanceApprovalQueuePayload } from "./dashboardFinanceApprovalQueue";
 import {
   buildQuotationDecisionPayload,
   buildQuotationSendPayload,
@@ -3862,154 +3857,8 @@ dashboardRouter.get("/dashboard/finance-approval-queue", authenticate, async (re
   }
 
   try {
-    const [poRows, poDedicatedRows, quotationRows, invoiceRows, invoiceDedicatedRows, mrRows, mrDedicatedRows] = await Promise.all([
-      prisma.appEntity.findMany({
-        where: { resource: "purchase-orders" },
-        select: { entityId: true, payload: true, updatedAt: true },
-      }),
-      prisma.procurementPurchaseOrder.findMany({
-        select: {
-          id: true,
-          number: true,
-          tanggal: true,
-          supplierName: true,
-          projectId: true,
-          vendorId: true,
-          supplierAddress: true,
-          supplierPhone: true,
-          supplierFax: true,
-          supplierContact: true,
-          attention: true,
-          notes: true,
-          ppnRate: true,
-          topDays: true,
-          ref: true,
-          poCode: true,
-          deliveryDate: true,
-          signatoryName: true,
-          totalAmount: true,
-          status: true,
-          updatedAt: true,
-          items: {
-            select: {
-              id: true,
-              itemCode: true,
-              itemName: true,
-              qty: true,
-              unit: true,
-              unitPrice: true,
-              total: true,
-              qtyReceived: true,
-              source: true,
-              sourceRef: true,
-            },
-            orderBy: { id: "asc" },
-          },
-        },
-      }),
-      prisma.quotation.findMany({
-        select: quotationDashboardSelect,
-      }),
-      prisma.appEntity.findMany({
-        where: { resource: "invoices" },
-        select: { entityId: true, payload: true, updatedAt: true },
-      }),
-      prisma.invoiceRecord.findMany({
-        select: invoiceDashboardDetailSelect,
-      }),
-      prisma.appEntity.findMany({
-        where: { resource: "material-requests" },
-        select: { entityId: true, payload: true, updatedAt: true },
-      }),
-      prisma.productionMaterialRequest.findMany({
-        select: {
-          id: true,
-          number: true,
-          projectId: true,
-          projectName: true,
-          requestedBy: true,
-          requestedAt: true,
-          status: true,
-          updatedAt: true,
-          items: {
-            select: {
-              id: true,
-              itemCode: true,
-              itemName: true,
-              qty: true,
-              unit: true,
-            },
-            orderBy: { id: "asc" },
-          },
-        },
-      }),
-    ]);
-
-    const poQueueRowsNormalized = mergeFinanceRows(
-      poRows,
-      poDedicatedRows.map((row) => ({
-        id: row.id,
-        payload: mapProcurementPurchaseOrderDashboardPayload(row),
-        updatedAt: row.updatedAt,
-      }))
-    );
-    const invoiceQueueRows = mergeFinanceRows(
-      invoiceRows,
-      invoiceDedicatedRows.map((row) => ({
-        id: row.id,
-        payload: mapInvoiceDashboardPayload(row),
-        updatedAt: row.updatedAt,
-      }))
-    );
-    const mrQueueRows = mergeFinanceRows(
-      mrRows,
-      mrDedicatedRows.map((row) => ({
-        id: row.id,
-        payload: mapProductionMaterialRequestDashboardPayload(row),
-        updatedAt: row.updatedAt,
-      }))
-    );
-
-    const pendingPOs = buildPendingPurchaseOrders(poQueueRowsNormalized, req.user?.role);
-
-    const quotationActorIds = collectQuotationActorIds(quotationRows);
-    const quotationActors = quotationActorIds.length
-      ? await prisma.user.findMany({
-          where: { id: { in: quotationActorIds } },
-          select: { id: true, name: true, username: true, role: true },
-        })
-      : [];
-    const quotationActorMap = buildQuotationActorMap(quotationActors);
-    const pendingQuotations = buildPendingQuotations(
-      quotationRows,
-      quotationActorMap,
-      req.user?.role
-    );
-
-    const pendingInvoices = buildPendingInvoices(invoiceQueueRows, req.user?.role);
-
-    const pendingMaterialRequests = buildPendingMaterialRequests(
-      mrQueueRows,
-      req.user?.role
-    );
-
-    return res.json({
-      generatedAt: new Date().toISOString(),
-      stats: {
-        total: pendingPOs.length + pendingQuotations.length + pendingInvoices.length + pendingMaterialRequests.length,
-        highValue: pendingPOs.filter((p) => p.total > 10_000_000).length,
-      },
-        po: pendingPOs,
-      quotations: pendingQuotations,
-      invoices: pendingInvoices,
-      materialRequests: pendingMaterialRequests,
-      lastUpdatedAt: maxDate([
-        poQueueRowsNormalized[0]?.updatedAt,
-        quotationRows[0]?.updatedAt,
-        invoiceQueueRows[0]?.updatedAt,
-        mrQueueRows[0]?.updatedAt,
-      ]),
-    });
+    const payload = await buildFinanceApprovalQueuePayload(req.user?.role);
+    return res.json(payload);
   } catch {
     return sendError(res, 500, { code: "INTERNAL_ERROR", message: "Internal server error", legacyError: "Internal server error" });
   }
