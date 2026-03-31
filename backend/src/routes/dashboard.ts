@@ -2923,7 +2923,7 @@ dashboardRouter.get("/dashboard/finance-ap-summary", authenticate, async (req: A
       generatedAt: new Date().toISOString(),
       stats,
       topSuppliers,
-      lastUpdatedAt: maxDate([vendorInvoices[0]?.updatedAt]),
+      lastUpdatedAt: maxDate(vendorInvoices.map((row) => row.updatedAt)),
     });
   } catch {
     return res.status(500).json({ error: "Internal server error" });
@@ -2946,7 +2946,7 @@ dashboardRouter.get("/dashboard/finance-ar-aging", authenticate, async (req: Aut
       generatedAt: new Date().toISOString(),
       agingList,
       totals,
-      lastUpdatedAt: maxDate([invoices[0]?.updatedAt]),
+      lastUpdatedAt: maxDate(invoices.map((row) => row.updatedAt)),
     });
   } catch {
     return res.status(500).json({ error: "Internal server error" });
@@ -3617,7 +3617,11 @@ dashboardRouter.get("/dashboard/finance-payroll-summary", authenticate, async (r
         employeeCount: payrollRows.length,
       },
       rows: payrollRows.sort((a, b) => b.netSalary - a.netSalary),
-      lastUpdatedAt: maxDate([employees[0]?.updatedAt, attendances[0]?.updatedAt, kasbons[0]?.updatedAt]),
+      lastUpdatedAt: maxDate([
+        ...employees.map((row) => row.updatedAt),
+        ...attendances.map((row) => row.updatedAt),
+        ...kasbons.map((row) => row.updatedAt),
+      ]),
     });
   } catch {
     return res.status(500).json({ error: "Internal server error" });

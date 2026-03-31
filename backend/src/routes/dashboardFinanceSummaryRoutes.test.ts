@@ -72,6 +72,42 @@ function createArchiveRow(payload: Record<string, unknown>, updatedAt = new Date
   };
 }
 
+function createEmployeeRow(overrides: Record<string, unknown> = {}) {
+  return {
+    id: "emp-db-1",
+    employeeId: "EMP-001",
+    name: "Budi",
+    position: "Welder",
+    department: "Produksi",
+    employmentType: "Tetap",
+    salary: 3_460_000,
+    updatedAt: new Date("2026-03-20T00:00:00.000Z"),
+    ...overrides,
+  };
+}
+
+function createAttendanceRow(overrides: Record<string, unknown> = {}) {
+  return {
+    employeeId: "emp-db-1",
+    workHours: 8,
+    overtime: 2,
+    status: "PRESENT",
+    updatedAt: new Date("2026-03-21T00:00:00.000Z"),
+    ...overrides,
+  };
+}
+
+function createKasbonRow(overrides: Record<string, unknown> = {}) {
+  return {
+    employeeId: "emp-db-1",
+    amount: 250_000,
+    status: "APPROVED",
+    approved: true,
+    updatedAt: new Date("2026-03-22T00:00:00.000Z"),
+    ...overrides,
+  };
+}
+
 async function withServer(run: (baseUrl: string) => Promise<void>) {
   const server = app.listen(0);
   await once(server, "listening");
@@ -100,6 +136,9 @@ function installFinanceSummaryRouteMocks(authRole: Role) {
     vendorExpenseFindMany: 0,
     vendorInvoiceFindMany: 0,
     pettyCashFindMany: 0,
+    employeeFindMany: 0,
+    attendanceFindMany: 0,
+    kasbonFindMany: 0,
   };
 
   const originalRevokedFindUnique = prismaAny.revokedToken.findUnique;
@@ -109,6 +148,9 @@ function installFinanceSummaryRouteMocks(authRole: Role) {
   const originalVendorExpenseFindMany = prismaAny.vendorExpenseRecord?.findMany;
   const originalVendorInvoiceFindMany = prismaAny.vendorInvoiceRecord?.findMany;
   const originalPettyCashFindMany = prismaAny.financePettyCashTransactionRecord?.findMany;
+  const originalEmployeeFindMany = prismaAny.employeeRecord?.findMany;
+  const originalAttendanceFindMany = prismaAny.attendanceRecord?.findMany;
+  const originalKasbonFindMany = prismaAny.hrKasbon?.findMany;
 
   prismaAny.revokedToken.findUnique = async () => null;
   prismaAny.user.findUnique = async () => ({
@@ -227,6 +269,8 @@ function installFinanceSummaryRouteMocks(authRole: Role) {
         ppn: 88_000,
         paidAmount: 120_000,
         paymentDate: "2026-03-13",
+        jatuhTempo: "2026-03-01",
+        status: "Unpaid",
       }),
       createVendorInvoiceRow(
         {
@@ -238,9 +282,71 @@ function installFinanceSummaryRouteMocks(authRole: Role) {
           ppn: 11_000,
           paidAmount: 50_000,
           paymentDate: "2026-03-17",
+          dueDate: "2026-05-01",
+          status: "Approved",
         },
         new Date("2026-03-18T00:00:00.000Z"),
       ),
+    ];
+  };
+
+  if (!prismaAny.employeeRecord) {
+    prismaAny.employeeRecord = {};
+  }
+  prismaAny.employeeRecord.findMany = async () => {
+    calls.employeeFindMany += 1;
+    return [
+      createEmployeeRow(),
+      createEmployeeRow({
+        id: "emp-db-2",
+        employeeId: "EMP-002",
+        name: "Sari",
+        position: "Admin",
+        department: "Finance",
+        salary: 5_190_000,
+        updatedAt: new Date("2026-03-19T00:00:00.000Z"),
+      }),
+    ];
+  };
+
+  if (!prismaAny.attendanceRecord) {
+    prismaAny.attendanceRecord = {};
+  }
+  prismaAny.attendanceRecord.findMany = async () => {
+    calls.attendanceFindMany += 1;
+    return [
+      createAttendanceRow(),
+      createAttendanceRow({
+        employeeId: "emp-db-1",
+        workHours: 8,
+        overtime: 1,
+        status: "MASUK",
+        updatedAt: new Date("2026-03-21T12:00:00.000Z"),
+      }),
+      createAttendanceRow({
+        employeeId: "emp-db-2",
+        workHours: 8,
+        overtime: 0,
+        status: "PRESENT",
+        updatedAt: new Date("2026-03-18T00:00:00.000Z"),
+      }),
+    ];
+  };
+
+  if (!prismaAny.hrKasbon) {
+    prismaAny.hrKasbon = {};
+  }
+  prismaAny.hrKasbon.findMany = async () => {
+    calls.kasbonFindMany += 1;
+    return [
+      createKasbonRow(),
+      createKasbonRow({
+        employeeId: "emp-db-2",
+        amount: 100_000,
+        status: "PAID",
+        approved: false,
+        updatedAt: new Date("2026-03-22T06:00:00.000Z"),
+      }),
     ];
   };
 
@@ -259,6 +365,15 @@ function installFinanceSummaryRouteMocks(authRole: Role) {
       }
       if (prismaAny.financePettyCashTransactionRecord) {
         prismaAny.financePettyCashTransactionRecord.findMany = originalPettyCashFindMany;
+      }
+      if (prismaAny.employeeRecord) {
+        prismaAny.employeeRecord.findMany = originalEmployeeFindMany;
+      }
+      if (prismaAny.attendanceRecord) {
+        prismaAny.attendanceRecord.findMany = originalAttendanceFindMany;
+      }
+      if (prismaAny.hrKasbon) {
+        prismaAny.hrKasbon.findMany = originalKasbonFindMany;
       }
     },
   };
@@ -442,6 +557,127 @@ test("GET /dashboard/finance-bank-recon-summary rejects unauthorized role before
     assert.equal(mock.calls.invoiceFindMany, 0);
     assert.equal(mock.calls.vendorInvoiceFindMany, 0);
     assert.equal(mock.calls.appEntityFindMany.length, 0);
+  } finally {
+    mock.restore();
+  }
+});
+
+test("GET /dashboard/finance-ap-summary returns payable stats and supplier aggregation", async () => {
+  const mock = installFinanceSummaryRouteMocks(Role.FINANCE);
+  const token = signAccessToken({ id: "user-fin", role: Role.FINANCE });
+
+  try {
+    await withServer(async (baseUrl) => {
+      const response = await fetch(`${baseUrl}/dashboard/finance-ap-summary`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      assert.equal(response.status, 200);
+      const payload = (await response.json()) as Record<string, any>;
+      assert.equal(payload.stats.totalPayable, 730_000);
+      assert.equal(payload.stats.overdue, 680_000);
+      assert.equal(payload.stats.paidThisMonth, 170_000);
+      assert.equal(payload.stats.invoiceCount, 2);
+      assert.equal(payload.stats.overdueCount, 1);
+      assert.equal(payload.topSuppliers[0].supplier, "Vendor A");
+      assert.equal(payload.topSuppliers[0].outstanding, 680_000);
+      assert.equal(payload.lastUpdatedAt, "2026-03-18T00:00:00.000Z");
+    });
+
+    assert.equal(mock.calls.vendorInvoiceFindMany, 1);
+    assert.equal(mock.calls.appEntityFindMany.length, 1);
+  } finally {
+    mock.restore();
+  }
+});
+
+test("GET /dashboard/finance-ar-aging returns receivable totals and latest timestamp", async () => {
+  const mock = installFinanceSummaryRouteMocks(Role.FINANCE);
+  const token = signAccessToken({ id: "user-fin", role: Role.FINANCE });
+
+  try {
+    await withServer(async (baseUrl) => {
+      const response = await fetch(`${baseUrl}/dashboard/finance-ar-aging`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      assert.equal(response.status, 200);
+      const payload = (await response.json()) as Record<string, any>;
+      assert.equal(payload.totals.totalOutstanding, 3_830_000);
+      assert.equal(payload.agingList.length, 1);
+      assert.equal(payload.agingList[0].customer, "PT Customer");
+      assert.equal(payload.agingList[0].totalOutstanding, 3_830_000);
+      assert.equal(payload.lastUpdatedAt, "2026-03-10T00:00:00.000Z");
+    });
+
+    assert.equal(mock.calls.invoiceFindMany, 1);
+  } finally {
+    mock.restore();
+  }
+});
+
+test("GET /dashboard/finance-petty-cash-summary returns debit credit rollup", async () => {
+  const mock = installFinanceSummaryRouteMocks(Role.FINANCE);
+  const token = signAccessToken({ id: "user-fin", role: Role.FINANCE });
+
+  try {
+    await withServer(async (baseUrl) => {
+      const response = await fetch(`${baseUrl}/dashboard/finance-petty-cash-summary`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      assert.equal(response.status, 200);
+      const payload = (await response.json()) as Record<string, any>;
+      assert.equal(payload.summary.totalDebit, 100_000);
+      assert.equal(payload.summary.totalCredit, 25_000);
+      assert.equal(payload.summary.endingBalance, 75_000);
+      assert.equal(payload.summary.transactionCount, 2);
+      assert.equal(payload.rows[0].id, "pc-2");
+      assert.equal(payload.rows[1].id, "pc-1");
+      assert.equal(payload.lastUpdatedAt, "2026-03-17T00:00:00.000Z");
+    });
+
+    assert.equal(mock.calls.pettyCashFindMany, 1);
+  } finally {
+    mock.restore();
+  }
+});
+
+test("GET /dashboard/finance-payroll-summary returns payroll summary and derived salaries", async () => {
+  const mock = installFinanceSummaryRouteMocks(Role.FINANCE);
+  const token = signAccessToken({ id: "user-fin", role: Role.FINANCE });
+
+  try {
+    await withServer(async (baseUrl) => {
+      const response = await fetch(`${baseUrl}/dashboard/finance-payroll-summary`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      assert.equal(response.status, 200);
+      const payload = (await response.json()) as Record<string, any>;
+      assert.equal(payload.summary.employeeCount, 2);
+      assert.equal(payload.summary.totalManHours, 24);
+      assert.equal(payload.summary.totalOvertime, 3);
+      assert.equal(payload.summary.totalKasbon, 350_000);
+      assert.equal(payload.summary.totalNetPayroll, 8_504_000);
+      assert.equal(payload.rows[0].id, "emp-db-2");
+      assert.equal(payload.rows[0].netSalary, 5_128_000);
+      assert.equal(payload.rows[1].id, "emp-db-1");
+      assert.equal(payload.rows[1].netSalary, 3_376_000);
+      assert.equal(payload.lastUpdatedAt, "2026-03-22T06:00:00.000Z");
+    });
+
+    assert.equal(mock.calls.employeeFindMany, 1);
+    assert.equal(mock.calls.attendanceFindMany, 1);
+    assert.equal(mock.calls.kasbonFindMany, 1);
   } finally {
     mock.restore();
   }
