@@ -3645,7 +3645,10 @@ dashboardRouter.get("/dashboard/finance-ppn-summary", authenticate, async (req: 
       summary,
       keluaran,
       masukan,
-      lastUpdatedAt: maxDate([invoices[0]?.updatedAt, vendorInvoices[0]?.updatedAt]),
+      lastUpdatedAt: maxDate([
+        ...invoices.map((row) => row.updatedAt),
+        ...vendorInvoices.map((row) => row.updatedAt),
+      ]),
     });
   } catch {
     return res.status(500).json({ error: "Internal server error" });
@@ -3678,7 +3681,11 @@ dashboardRouter.get("/dashboard/finance-bank-recon-summary", authenticate, async
       generatedAt: new Date().toISOString(),
       summary,
       transactions,
-      lastUpdatedAt: maxDate([invoices[0]?.updatedAt, vendorInvoices[0]?.updatedAt, archives[0]?.updatedAt]),
+      lastUpdatedAt: maxDate([
+        ...invoices.map((row) => row.updatedAt),
+        ...vendorInvoices.map((row) => row.updatedAt),
+        ...archives.map((row) => row.updatedAt),
+      ]),
     });
   } catch {
     return res.status(500).json({ error: "Internal server error" });
@@ -3735,7 +3742,10 @@ dashboardRouter.get("/dashboard/finance-payment-summary", authenticate, async (r
     return res.json({
       generatedAt: new Date().toISOString(),
       summary,
-      lastUpdatedAt: maxDate([invoices[0]?.updatedAt, expenses[0]?.updatedAt]),
+      lastUpdatedAt: maxDate([
+        ...invoices.map((row) => row.updatedAt),
+        ...expenses.map((row) => row.updatedAt),
+      ]),
     });
   } catch {
     return res.status(500).json({ error: "Internal server error" });
@@ -3806,9 +3816,9 @@ dashboardRouter.get("/dashboard/finance-reconciliation-check", authenticate, asy
       checks,
       recordCounts,
       lastUpdatedAt: maxDate([
-        invoices[0]?.updatedAt,
-        vendorExpenses[0]?.updatedAt,
-        pettyRows[0]?.updatedAt,
+        ...invoices.map((row) => row.updatedAt),
+        ...vendorExpenses.map((row) => row.updatedAt),
+        ...pettyRows.map((row) => row.updatedAt),
       ]),
     });
   } catch {
