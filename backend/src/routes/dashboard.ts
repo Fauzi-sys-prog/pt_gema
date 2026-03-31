@@ -53,22 +53,15 @@ import {
   buildFinanceReconciliationCheck,
 } from "./dashboardFinanceCashHelpers";
 import {
-  buildInvoiceVerificationPayload,
-  buildMaterialRequestActionPayload,
-  buildPurchaseOrderApprovalPayload,
-} from "./dashboardFinanceDocumentActions";
-import {
-  canApproveMaterialRequestByRole,
-  canApprovePoByRole,
-  canIssueMaterialRequestByRole,
   canReadFinanceApprovalQueue,
-  canSendQuotationByRole,
-  canVerifyInvoiceByRole,
 } from "./dashboardFinanceApprovalHelpers";
+import {
+  executeFinanceApprovalAction,
+  FinanceApprovalActionError,
+  parseFinanceApprovalActionInput,
+} from "./dashboardFinanceApprovalAction";
 import { buildFinanceApprovalQueuePayload } from "./dashboardFinanceApprovalQueue";
 import {
-  buildQuotationDecisionPayload,
-  buildQuotationSendPayload,
   upsertProjectFromQuotationForApprovalSync,
   writeQuotationApprovalLogSafe,
 } from "./dashboardQuotationWorkflow";
@@ -3865,239 +3858,45 @@ dashboardRouter.get("/dashboard/finance-approval-queue", authenticate, async (re
 });
 
 dashboardRouter.post("/dashboard/finance-approval-action", authenticate, async (req: AuthRequest, res: Response) => {
-  if (!canReadFinanceApprovalQueue(req.user?.role)) {
-    return sendError(res, 403, { code: "FORBIDDEN", message: "Forbidden", legacyError: "Forbidden" });
-  }
-
-  const body = req.body && typeof req.body === "object" && !Array.isArray(req.body)
-    ? (req.body as Record<string, unknown>)
-    : null;
-  if (!body) {
-    return sendError(res, 400, { code: "INVALID_PAYLOAD", message: "Invalid payload", legacyError: "Invalid payload" });
-  }
-
-  const documentType = String(body.documentType || "").toUpperCase();
-  const action = String(body.action || "").toUpperCase();
-  const documentId = String(body.documentId || "").trim();
-  const reason = String(body.reason || "").trim();
-
-  if (!documentType || !action || !documentId) {
-    return sendError(res, 400, { code: "VALIDATION_ERROR", message: "documentType/action/documentId wajib diisi", legacyError: "documentType/action/documentId wajib diisi" });
-  }
-
   try {
+    const input = parseFinanceApprovalActionInput(req.body);
     const actor = await resolveActorSnapshot(req.user?.id, req.user?.role);
-
-    if (documentType === "PO") {
-      if (!(action === "APPROVE" || action === "REJECT")) {
-        return sendError(res, 400, { code: "VALIDATION_ERROR", message: "Action PO harus APPROVE/REJECT", legacyError: "Action PO harus APPROVE/REJECT" });
-      }
-      const current = await findFinanceResourceDoc("purchase-orders", documentId);
-      if (!current) {
-        return sendError(res, 404, { code: "NOT_FOUND", message: "Purchase Order tidak ditemukan", legacyError: "Purchase Order tidak ditemukan" });
-      }
-      const payload = current.payload;
-      const { total, nextStatus, updatedPayload } = buildPurchaseOrderApprovalPayload({
-        documentId,
-        payload,
-        action,
-        actor,
-        reason,
-      });
-      if (!canApprovePoByRole(req.user?.role, total)) {
-        return sendError(res, 403, { code: "FORBIDDEN", message: "Role tidak boleh approve/reject PO ini", legacyError: "Role tidak boleh approve/reject PO ini" });
-      }
-      await updateFinanceResourceDoc("purchase-orders", documentId, current.source, updatedPayload);
-      await writeFinanceApprovalAuditLog(req, `PO_${action}`, "PO", documentId, { total, reason: reason || null });
-      return res.json({ ok: true, documentType, documentId, status: nextStatus });
-    }
-
-    if (documentType === "INVOICE") {
-      if (action !== "VERIFY") {
-        return sendError(res, 400, { code: "VALIDATION_ERROR", message: "Action INVOICE harus VERIFY", legacyError: "Action INVOICE harus VERIFY" });
-      }
-      if (!canVerifyInvoiceByRole(req.user?.role)) {
-        return sendError(res, 403, { code: "FORBIDDEN", message: "Role tidak boleh verify invoice", legacyError: "Role tidak boleh verify invoice" });
-      }
-      const current = await findFinanceResourceDoc("invoices", documentId);
-      if (!current) {
-        return sendError(res, 404, { code: "NOT_FOUND", message: "Invoice tidak ditemukan", legacyError: "Invoice tidak ditemukan" });
-      }
-      const payload = current.payload;
-      const { updatedPayload } = buildInvoiceVerificationPayload({
-        documentId,
-        payload,
-        actor,
-      });
-      await updateFinanceResourceDoc("invoices", documentId, current.source, updatedPayload);
-      await writeFinanceApprovalAuditLog(req, "INVOICE_VERIFY", "INVOICE", documentId);
-      return res.json({ ok: true, documentType, documentId, status: "PAID" });
-    }
-
-    if (documentType === "QUOTATION") {
-      if (!(action === "SEND" || action === "APPROVE" || action === "REJECT")) {
-        return sendError(res, 400, { code: "VALIDATION_ERROR", message: "Action QUOTATION harus SEND/APPROVE/REJECT", legacyError: "Action QUOTATION harus SEND/APPROVE/REJECT" });
-      }
-
-      const current = await prisma.quotation.findUnique({
-        where: { id: documentId },
-        select: { id: true, status: true, payload: true },
-      });
-      if (!current) {
-        return sendError(res, 404, { code: "NOT_FOUND", message: "Quotation tidak ditemukan", legacyError: "Quotation tidak ditemukan" });
-      }
-
-      const payload = asRecord(current.payload);
-      const currentStatus = String(current.status || readString(payload, "status") || "Draft").toUpperCase();
-
-      if (action === "SEND") {
-        if (!canSendQuotationByRole(req.user?.role)) {
-          return sendError(res, 403, { code: "FORBIDDEN", message: "Role tidak boleh mengirim quotation", legacyError: "Role tidak boleh mengirim quotation" });
-        }
-        if (!(currentStatus === "DRAFT" || currentStatus === "REJECTED")) {
-          return sendError(res, 400, { code: "STATUS_INVALID", message: "Quotation hanya bisa di-send dari status Draft atau Rejected", legacyError: "Quotation hanya bisa di-send dari status Draft atau Rejected" });
-        }
-
-        const nextPayload = buildQuotationSendPayload({
-          quotationId: current.id,
-          payload,
-          actor,
-        });
-
+    const result = await executeFinanceApprovalAction({
+      input,
+      role: req.user?.role,
+      userId: req.user?.id ?? null,
+      actor,
+      findFinanceResourceDoc,
+      updateFinanceResourceDoc,
+      findQuotation: async (quotationId) =>
+        prisma.quotation.findUnique({
+          where: { id: quotationId },
+          select: { id: true, status: true, payload: true },
+        }),
+      updateQuotation: async (quotationId, status, payload) => {
         await prisma.quotation.update({
-          where: { id: current.id },
+          where: { id: quotationId },
           data: {
-            status: "SENT",
-            payload: nextPayload as Prisma.InputJsonValue,
+            status,
+            payload: payload as Prisma.InputJsonValue,
           },
         });
-        await upsertProjectFromQuotationForApprovalSync({
-          quotationId: current.id,
-          quotationPayload: nextPayload,
-        });
-        await writeQuotationApprovalLogSafe({
-          quotationId: current.id,
-          action: "SEND",
-          actorUserId: req.user?.id ?? null,
-          actorRole: req.user?.role ?? null,
-          fromStatus: currentStatus,
-          toStatus: "SENT",
-          metadata: {
-            source: "finance-approval-center",
-            actorName: actor.actorName,
-            actorRole: actor.actorRole,
-          },
-        });
-        await writeFinanceApprovalAuditLog(req, "QUOTATION_SEND", "QUOTATION", documentId);
-        return res.json({ ok: true, documentType, documentId, status: "SENT" });
-      }
+      },
+      syncProjectFromQuotation: upsertProjectFromQuotationForApprovalSync,
+      writeQuotationApprovalLog: writeQuotationApprovalLogSafe,
+      writeAuditLog: async (action, documentType, documentId, metadata) =>
+        writeFinanceApprovalAuditLog(req, action, documentType, documentId, metadata),
+    });
 
-      const role = req.user?.role;
-      const isOwner = isOwnerLike(role);
-      const isSpv = role === "SPV";
-      const canManageApproval = isSpv || isOwner;
-      let nextStatus: "APPROVED" | "REJECTED";
-
-      if (action === "APPROVE") {
-        if ((currentStatus === "SENT" || currentStatus === "REVIEW") && canManageApproval) {
-          nextStatus = "APPROVED";
-        } else {
-          return sendError(res, 403, {
-            code: "FORBIDDEN",
-            message: "Role tidak boleh approve quotation pada status ini",
-            legacyError: "Role tidak boleh approve quotation pada status ini",
-          });
-        }
-      } else {
-        if ((currentStatus === "SENT" || currentStatus === "REVIEW") && canManageApproval) {
-          nextStatus = "REJECTED";
-        } else {
-          return sendError(res, 403, {
-            code: "FORBIDDEN",
-            message: "Role tidak boleh reject quotation pada status ini",
-            legacyError: "Role tidak boleh reject quotation pada status ini",
-          });
-        }
-      }
-
-      if (!["SENT", "REVIEW"].includes(currentStatus)) {
-        return sendError(res, 400, { code: "STATUS_INVALID", message: "Quotation hanya bisa diproses dari status Sent atau Review", legacyError: "Quotation hanya bisa diproses dari status Sent atau Review" });
-      }
-
-      const nextPayload = buildQuotationDecisionPayload({
-        quotationId: current.id,
-        payload,
-        action,
-        actor,
-        nextStatus,
-        reason,
+    return res.json(result);
+  } catch (error) {
+    if (error instanceof FinanceApprovalActionError) {
+      return sendError(res, error.status, {
+        code: error.code,
+        message: error.message,
+        legacyError: error.legacyError,
       });
-
-      await prisma.quotation.update({
-        where: { id: current.id },
-        data: {
-          status: nextStatus,
-          payload: nextPayload as Prisma.InputJsonValue,
-        },
-      });
-      await upsertProjectFromQuotationForApprovalSync({
-        quotationId: current.id,
-        quotationPayload: nextPayload,
-      });
-      await writeQuotationApprovalLogSafe({
-        quotationId: current.id,
-        action: action === "APPROVE" ? "APPROVE" : "REJECT",
-        actorUserId: req.user?.id ?? null,
-        actorRole: req.user?.role ?? null,
-        fromStatus: currentStatus,
-        toStatus: nextStatus,
-        reason: action === "REJECT" ? reason || null : null,
-        metadata: {
-          source: "finance-approval-center",
-          approvalStage:
-            nextStatus === "APPROVED"
-              ? req.user?.role === "SPV"
-                ? "SPV_FINAL"
-                : "MANAGEMENT_FINAL"
-              : "REJECT",
-          actorName: actor.actorName,
-          actorRole: actor.actorRole,
-        },
-      });
-      await writeFinanceApprovalAuditLog(req, `QUOTATION_${action}`, "QUOTATION", documentId, { reason: reason || null });
-      return res.json({ ok: true, documentType, documentId, status: nextStatus });
     }
-
-    if (documentType === "MATERIAL_REQUEST") {
-      if (!(action === "APPROVE" || action === "REJECT" || action === "ISSUE")) {
-        return sendError(res, 400, { code: "VALIDATION_ERROR", message: "Action MATERIAL_REQUEST harus APPROVE/REJECT/ISSUE", legacyError: "Action MATERIAL_REQUEST harus APPROVE/REJECT/ISSUE" });
-      }
-      const current = await findFinanceResourceDoc("material-requests", documentId);
-      if (!current) {
-        return sendError(res, 404, { code: "NOT_FOUND", message: "Material Request tidak ditemukan", legacyError: "Material Request tidak ditemukan" });
-      }
-      if ((action === "APPROVE" || action === "REJECT") && !canApproveMaterialRequestByRole(req.user?.role)) {
-        return sendError(res, 403, { code: "FORBIDDEN", message: "Role tidak boleh approve/reject material request", legacyError: "Role tidak boleh approve/reject material request" });
-      }
-      if (action === "ISSUE" && !canIssueMaterialRequestByRole(req.user?.role)) {
-        return sendError(res, 403, { code: "FORBIDDEN", message: "Role tidak boleh issue material request", legacyError: "Role tidak boleh issue material request" });
-      }
-
-      const payload = current.payload;
-      const { nextStatus, updatedPayload } = buildMaterialRequestActionPayload({
-        documentId,
-        payload,
-        action,
-        actor,
-        reason,
-      });
-      await updateFinanceResourceDoc("material-requests", documentId, current.source, updatedPayload);
-      await writeFinanceApprovalAuditLog(req, `MATERIAL_REQUEST_${action}`, "MATERIAL_REQUEST", documentId, { reason: reason || null });
-      return res.json({ ok: true, documentType, documentId, status: nextStatus });
-    }
-
-    return sendError(res, 400, { code: "VALIDATION_ERROR", message: "documentType tidak didukung", legacyError: "documentType tidak didukung" });
-  } catch {
     return sendError(res, 500, { code: "INTERNAL_ERROR", message: "Internal server error", legacyError: "Internal server error" });
   }
 });
