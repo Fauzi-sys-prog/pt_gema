@@ -476,6 +476,7 @@ function installFinanceSummaryRouteMocks(authRole: Role) {
         projectId: "proj-1",
         projectName: "Project A",
         vendorName: "Vendor A",
+        rabItemId: "MAT-001",
       }),
       createVendorExpenseRow(
         {
@@ -486,6 +487,7 @@ function installFinanceSummaryRouteMocks(authRole: Role) {
           projectId: "proj-1",
           projectName: "Project A",
           vendorName: "Vendor A",
+          rabItemId: "MAT-001",
         },
         new Date("2026-03-14T00:00:00.000Z"),
       ),
@@ -1539,6 +1541,127 @@ test("GET /dashboard/finance-project-pl-summary returns profitability rows and l
     assert.equal(mock.calls.attendanceFindMany, 1);
   } finally {
     prismaAny.attendanceRecord.findMany = originalAttendanceFindMany;
+    mock.restore();
+  }
+});
+
+test("GET /dashboard/finance-ar-summary returns receivable summary and latest timestamp", async () => {
+  const mock = installFinanceSummaryRouteMocks(Role.FINANCE);
+  const token = signAccessToken({ id: "user-fin", role: Role.FINANCE });
+
+  try {
+    await withServer(async (baseUrl) => {
+      const response = await fetch(`${baseUrl}/dashboard/finance-ar-summary`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      assert.equal(response.status, 200);
+      const payload = (await response.json()) as Record<string, any>;
+      assert.equal(payload.metrics.totalAR, 3_830_000);
+      assert.equal(payload.metrics.totalInvoiced, 4_330_000);
+      assert.equal(payload.metrics.totalPaid, 500_000);
+      assert.equal(payload.metrics.totalInvoiceCount, 2);
+      assert.equal(payload.metrics.activeInvoiceCount, 2);
+      assert.equal(payload.topCustomers[0].namaCustomer, "PT Customer");
+      assert.equal(payload.topCustomers[0].totalOutstanding, 3_830_000);
+      assert.equal(payload.lastUpdatedAt, "2026-03-19T00:00:00.000Z");
+    });
+
+    assert.equal(mock.calls.invoiceFindMany, 1);
+    assert.equal(mock.calls.customerFindMany, 1);
+  } finally {
+    mock.restore();
+  }
+});
+
+test("GET /dashboard/finance-vendor-summary returns vendor expense summary and latest timestamp", async () => {
+  const mock = installFinanceSummaryRouteMocks(Role.FINANCE);
+  const token = signAccessToken({ id: "user-fin", role: Role.FINANCE });
+
+  try {
+    await withServer(async (baseUrl) => {
+      const response = await fetch(`${baseUrl}/dashboard/finance-vendor-summary`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      assert.equal(response.status, 200);
+      const payload = (await response.json()) as Record<string, any>;
+      assert.equal(payload.metrics.totalExpenses, 250_000);
+      assert.equal(payload.metrics.totalPending, 0);
+      assert.equal(payload.metrics.totalApproved, 50_000);
+      assert.equal(payload.metrics.totalPaid, 200_000);
+      assert.equal(payload.metrics.vendorCount, 2);
+      assert.equal(payload.metrics.activeVendorCount, 2);
+      assert.equal(payload.topVendors[0].vendorName, "Vendor A");
+      assert.equal(payload.topVendors[0].amount, 250_000);
+      assert.equal(payload.expenseByProject["Project A"], 250_000);
+      assert.equal(payload.lastUpdatedAt, "2026-03-20T00:00:00.000Z");
+    });
+
+    assert.equal(mock.calls.vendorExpenseFindMany, 1);
+    assert.equal(mock.calls.vendorFindMany, 1);
+  } finally {
+    mock.restore();
+  }
+});
+
+test("GET /dashboard/finance-budget-summary returns project budget analysis and latest timestamp", async () => {
+  const mock = installFinanceSummaryRouteMocks(Role.FINANCE);
+  const token = signAccessToken({ id: "user-fin", role: Role.FINANCE });
+
+  try {
+    await withServer(async (baseUrl) => {
+      const response = await fetch(`${baseUrl}/dashboard/finance-budget-summary`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      assert.equal(response.status, 200);
+      const payload = (await response.json()) as Record<string, any>;
+      assert.equal(payload.summary.grandTotalBudget, 660_000);
+      assert.equal(payload.summary.grandTotalActual, 250_000);
+      assert.equal(payload.summary.grandTotalVariance, -410_000);
+      assert.equal(payload.projectAnalysis.length, 2);
+      assert.equal(payload.projectAnalysis[0].projectId, "proj-1");
+      assert.equal(payload.projectAnalysis[0].totalBudget, 480_000);
+      assert.equal(payload.projectAnalysis[0].totalActual, 250_000);
+      assert.equal(payload.projectAnalysis[0].itemAnalysis[0].status, "Under");
+      assert.equal(payload.lastUpdatedAt, "2026-03-22T00:00:00.000Z");
+    });
+
+    assert.equal(mock.calls.projectFindMany, 1);
+    assert.equal(mock.calls.vendorExpenseFindMany, 1);
+  } finally {
+    mock.restore();
+  }
+});
+
+test("GET /dashboard/finance-budget-summary rejects unauthorized role before loading budget data", async () => {
+  const mock = installFinanceSummaryRouteMocks(Role.SALES);
+  const token = signAccessToken({ id: "user-sales", role: Role.SALES });
+
+  try {
+    await withServer(async (baseUrl) => {
+      const response = await fetch(`${baseUrl}/dashboard/finance-budget-summary`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      assert.equal(response.status, 403);
+      const payload = (await response.json()) as Record<string, unknown>;
+      assert.equal(payload.code, "FORBIDDEN");
+      assert.equal(payload.message, "Forbidden");
+    });
+
+    assert.equal(mock.calls.projectFindMany, 0);
+    assert.equal(mock.calls.vendorExpenseFindMany, 0);
+  } finally {
     mock.restore();
   }
 });
