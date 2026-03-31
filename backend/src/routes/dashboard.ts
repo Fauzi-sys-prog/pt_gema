@@ -2319,11 +2319,11 @@ dashboardRouter.get("/dashboard/finance-cashflow-summary", authenticate, async (
         topVendors,
       },
       lastUpdatedAt: maxDate([
-        customerInvoices[0]?.updatedAt,
-        vendorInvoices[0]?.updatedAt,
-        vendorExpenses[0]?.updatedAt,
-        vendors[0]?.updatedAt,
-        customers[0]?.updatedAt,
+        ...customerInvoices.map((row) => row.updatedAt),
+        ...vendorInvoices.map((row) => row.updatedAt),
+        ...vendorExpenses.map((row) => row.updatedAt),
+        ...vendors.map((row) => row.updatedAt),
+        ...customers.map((row) => row.updatedAt),
       ]),
     });
   } catch {
@@ -2549,10 +2549,10 @@ dashboardRouter.get("/dashboard/finance-cashflow-page-summary", authenticate, as
       pieData,
       transactionLog,
       lastUpdatedAt: maxDate([
-        invoices[0]?.updatedAt,
-        purchaseOrders[0]?.updatedAt,
-        payrolls[0]?.updatedAt,
-        vendorInvoices[0]?.updatedAt,
+        ...invoices.map((row) => row.updatedAt),
+        ...purchaseOrders.map((row) => row.updatedAt),
+        ...payrolls.map((row) => row.updatedAt),
+        ...vendorInvoices.map((row) => row.updatedAt),
       ]),
     });
   } catch {
@@ -3153,10 +3153,10 @@ dashboardRouter.get("/dashboard/finance-revenue-summary", authenticate, async (r
       },
       rows,
       lastUpdatedAt: maxDate([
-        invoices[0]?.updatedAt,
-        vendorExpenses[0]?.updatedAt,
-        quotations[0]?.updatedAt,
-        projects[0]?.updatedAt,
+        ...invoices.map((row) => row.updatedAt),
+        ...vendorExpenses.map((row) => row.updatedAt),
+        ...quotations.map((row) => row.updatedAt),
+        ...projects.map((row) => row.updatedAt),
       ]),
     });
   } catch {
@@ -3362,13 +3362,13 @@ dashboardRouter.get("/dashboard/finance-project-pl-summary", authenticate, async
       rows: analysis.sort((a, b) => b.revenue - a.revenue),
       totals,
       lastUpdatedAt: maxDate([
-        projects[0]?.updatedAt,
-        customerInvoices[0]?.updatedAt,
-        vendorInvoices[0]?.updatedAt,
-        vendorExpenses[0]?.updatedAt,
-        stockMovements[0]?.updatedAt,
-        stockItems[0]?.updatedAt,
-        attendances[0]?.updatedAt,
+        ...projects.map((row) => row.updatedAt),
+        ...customerInvoices.map((row) => row.updatedAt),
+        ...vendorInvoices.map((row) => row.updatedAt),
+        ...vendorExpenses.map((row) => row.updatedAt),
+        ...stockMovements.map((row) => row.updatedAt),
+        ...stockItems.map((row) => row.updatedAt),
+        ...attendances.map((row) => row.updatedAt),
       ]),
     });
   } catch {

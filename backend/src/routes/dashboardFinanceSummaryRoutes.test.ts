@@ -159,6 +159,189 @@ function createPayrollRecord(overrides: Record<string, unknown> = {}) {
   };
 }
 
+function createFinanceCustomerInvoiceRow(overrides: Record<string, unknown> = {}) {
+  return {
+    id: "fcinv-1",
+    projectId: "proj-1",
+    customerId: "cust-1",
+    tanggal: new Date("2026-03-01T00:00:00.000Z"),
+    dueDate: new Date("2026-03-05T00:00:00.000Z"),
+    totalAmount: 2_000_000,
+    paidAmount: 500_000,
+    outstandingAmount: 1_500_000,
+    status: "UNPAID",
+    updatedAt: new Date("2026-03-11T00:00:00.000Z"),
+    ...overrides,
+  };
+}
+
+function createFinanceVendorInvoiceRow(overrides: Record<string, unknown> = {}) {
+  return {
+    id: "fvinv-1",
+    projectId: "proj-1",
+    vendorId: "vendor-1",
+    totalAmount: 700_000,
+    paidAmount: 100_000,
+    outstandingAmount: 600_000,
+    status: "UNPAID",
+    tanggal: new Date("2026-03-02T00:00:00.000Z"),
+    dueDate: new Date("2026-03-10T00:00:00.000Z"),
+    updatedAt: new Date("2026-03-12T00:00:00.000Z"),
+    ...overrides,
+  };
+}
+
+function createFinanceVendorExpenseDirectRow(overrides: Record<string, unknown> = {}) {
+  return {
+    id: "fvexp-1",
+    projectId: "proj-1",
+    vendorId: "vendor-1",
+    totalNominal: 200_000,
+    status: "APPROVED",
+    paidAt: null,
+    tanggal: new Date("2026-03-13T00:00:00.000Z"),
+    updatedAt: new Date("2026-03-13T00:00:00.000Z"),
+    ...overrides,
+  };
+}
+
+function createVendorRow(overrides: Record<string, unknown> = {}) {
+  return {
+    id: "vendor-1",
+    kodeVendor: "VND-001",
+    namaVendor: "Vendor A",
+    kategori: "Material",
+    alamat: "Jl. Vendor",
+    kota: "Jakarta",
+    kontak: "Dewi",
+    telepon: "08123456789",
+    email: "vendor@example.com",
+    npwp: null,
+    paymentTerms: "14",
+    rating: "A",
+    status: "ACTIVE",
+    updatedAt: new Date("2026-03-09T00:00:00.000Z"),
+    ...overrides,
+  };
+}
+
+function createCustomerRow(overrides: Record<string, unknown> = {}) {
+  return {
+    id: "cust-1",
+    kodeCustomer: "CST-001",
+    namaCustomer: "PT Customer",
+    alamat: "Jl. Customer",
+    kota: "Bandung",
+    kontak: "Budi",
+    telepon: "08111111111",
+    email: "customer@example.com",
+    npwp: null,
+    paymentTerms: "30",
+    rating: "A",
+    status: "ACTIVE",
+    updatedAt: new Date("2026-03-08T00:00:00.000Z"),
+    ...overrides,
+  };
+}
+
+function createQuotationDashboardRow(overrides: Record<string, unknown> = {}) {
+  return {
+    id: "quot-1",
+    noPenawaran: "Q-001",
+    tanggal: "2026-03-01",
+    status: "APPROVED",
+    kepada: "PT Customer",
+    perihal: "Penawaran Project A",
+    grandTotal: 4_500_000,
+    dataCollectionId: "dc-1",
+    payload: {
+      projectId: "proj-1",
+    },
+    updatedAt: new Date("2026-03-17T00:00:00.000Z"),
+    ...overrides,
+  };
+}
+
+function createProjectDashboardRow(overrides: Record<string, unknown> = {}) {
+  return {
+    id: "proj-1",
+    quotationId: "quot-1",
+    customerId: "cust-1",
+    kodeProject: "PRJ-001",
+    namaProject: "Project A",
+    customerName: "PT Customer",
+    status: "Open",
+    approvalStatus: "Approved",
+    nilaiKontrak: 5_000_000,
+    progress: 45,
+    payload: {
+      id: "proj-1",
+      namaProject: "Project A",
+      customer: "PT Customer",
+      startDate: "2026-03-01",
+      endDate: "2026-06-01",
+      boq: [
+        {
+          itemKode: "MAT-001",
+          qtyEstimate: 4,
+          unitPrice: 120_000,
+        },
+      ],
+    },
+    updatedAt: new Date("2026-03-18T00:00:00.000Z"),
+    ...overrides,
+  };
+}
+
+function createInventoryItemRow(overrides: Record<string, unknown> = {}) {
+  return {
+    id: "stock-1",
+    code: "MAT-001",
+    name: "Plat Besi",
+    category: "Material",
+    unit: "pcs",
+    location: "Gudang A",
+    minStock: 1,
+    onHandQty: 10,
+    reservedQty: 0,
+    onOrderQty: 0,
+    unitPrice: 100_000,
+    supplierName: "Vendor A",
+    status: "ACTIVE",
+    lastStockUpdateAt: new Date("2026-03-12T00:00:00.000Z"),
+    metadata: null,
+    updatedAt: new Date("2026-03-12T00:00:00.000Z"),
+    ...overrides,
+  };
+}
+
+function createInventoryMovementRow(overrides: Record<string, unknown> = {}) {
+  return {
+    id: "mov-1",
+    tanggal: new Date("2026-03-14T00:00:00.000Z"),
+    direction: "OUT",
+    referenceNo: "WO-proj-1",
+    referenceType: "WORK_ORDER",
+    inventoryItemId: "stock-1",
+    itemCode: "MAT-001",
+    itemName: "Plat Besi",
+    qty: 3,
+    unit: "pcs",
+    location: "Gudang A",
+    stockBefore: 10,
+    stockAfter: 7,
+    batchNo: null,
+    expiryDate: null,
+    supplierName: "Vendor A",
+    poNumber: "PO-001",
+    createdByName: "Aji",
+    projectId: "proj-1",
+    legacyPayload: null,
+    updatedAt: new Date("2026-03-14T00:00:00.000Z"),
+    ...overrides,
+  };
+}
+
 async function withServer(run: (baseUrl: string) => Promise<void>) {
   const server = app.listen(0);
   await once(server, "listening");
@@ -186,12 +369,21 @@ function installFinanceSummaryRouteMocks(authRole: Role) {
     appEntityFindMany: [] as Array<Record<string, unknown>>,
     vendorExpenseFindMany: 0,
     vendorInvoiceFindMany: 0,
+    financeCustomerInvoiceFindMany: 0,
+    financeVendorInvoiceFindMany: 0,
+    financeVendorExpenseFindMany: 0,
+    vendorFindMany: 0,
+    customerFindMany: 0,
     pettyCashFindMany: 0,
     employeeFindMany: 0,
     attendanceFindMany: 0,
     kasbonFindMany: 0,
     purchaseOrderFindMany: 0,
     payrollFindMany: 0,
+    quotationFindMany: 0,
+    projectFindMany: 0,
+    inventoryItemFindMany: 0,
+    inventoryMovementFindMany: 0,
   };
 
   const originalRevokedFindUnique = prismaAny.revokedToken.findUnique;
@@ -200,12 +392,21 @@ function installFinanceSummaryRouteMocks(authRole: Role) {
   const originalAppEntityFindMany = prismaAny.appEntity.findMany;
   const originalVendorExpenseFindMany = prismaAny.vendorExpenseRecord?.findMany;
   const originalVendorInvoiceFindMany = prismaAny.vendorInvoiceRecord?.findMany;
+  const originalFinanceCustomerInvoiceFindMany = prismaAny.financeCustomerInvoice?.findMany;
+  const originalFinanceVendorInvoiceFindMany = prismaAny.financeVendorInvoice?.findMany;
+  const originalFinanceVendorExpenseFindMany = prismaAny.financeVendorExpense?.findMany;
+  const originalVendorFindMany = prismaAny.vendorRecord?.findMany;
+  const originalCustomerFindMany = prismaAny.customerRecord?.findMany;
   const originalPettyCashFindMany = prismaAny.financePettyCashTransactionRecord?.findMany;
   const originalEmployeeFindMany = prismaAny.employeeRecord?.findMany;
   const originalAttendanceFindMany = prismaAny.attendanceRecord?.findMany;
   const originalKasbonFindMany = prismaAny.hrKasbon?.findMany;
   const originalPurchaseOrderFindMany = prismaAny.procurementPurchaseOrder?.findMany;
   const originalPayrollFindMany = prismaAny.payrollRecord?.findMany;
+  const originalQuotationFindMany = prismaAny.quotation?.findMany;
+  const originalProjectFindMany = prismaAny.projectRecord?.findMany;
+  const originalInventoryItemFindMany = prismaAny.inventoryItem?.findMany;
+  const originalInventoryMovementFindMany = prismaAny.inventoryStockMovement?.findMany;
 
   prismaAny.revokedToken.findUnique = async () => null;
   prismaAny.user.findUnique = async () => ({
@@ -272,6 +473,9 @@ function installFinanceSummaryRouteMocks(authRole: Role) {
         totalNominal: 200_000,
         paidAt: "2026-03-12",
         date: "2026-03-12",
+        projectId: "proj-1",
+        projectName: "Project A",
+        vendorName: "Vendor A",
       }),
       createVendorExpenseRow(
         {
@@ -279,6 +483,9 @@ function installFinanceSummaryRouteMocks(authRole: Role) {
           status: "Approved",
           nominal: 50_000,
           date: "2026-03-14",
+          projectId: "proj-1",
+          projectName: "Project A",
+          vendorName: "Vendor A",
         },
         new Date("2026-03-14T00:00:00.000Z"),
       ),
@@ -455,6 +662,200 @@ function installFinanceSummaryRouteMocks(authRole: Role) {
     ];
   };
 
+  if (!prismaAny.financeCustomerInvoice) {
+    prismaAny.financeCustomerInvoice = {};
+  }
+  prismaAny.financeCustomerInvoice.findMany = async () => {
+    calls.financeCustomerInvoiceFindMany += 1;
+    return [
+      createFinanceCustomerInvoiceRow(),
+      createFinanceCustomerInvoiceRow({
+        id: "fcinv-2",
+        projectId: "proj-2",
+        customerId: "cust-2",
+        tanggal: new Date("2026-03-08T00:00:00.000Z"),
+        dueDate: new Date("2026-04-08T00:00:00.000Z"),
+        totalAmount: 1_000_000,
+        paidAmount: 1_000_000,
+        outstandingAmount: 0,
+        status: "PAID",
+        updatedAt: new Date("2026-03-23T00:00:00.000Z"),
+      }),
+    ];
+  };
+
+  if (!prismaAny.financeVendorInvoice) {
+    prismaAny.financeVendorInvoice = {};
+  }
+  prismaAny.financeVendorInvoice.findMany = async () => {
+    calls.financeVendorInvoiceFindMany += 1;
+    return [
+      createFinanceVendorInvoiceRow(),
+      createFinanceVendorInvoiceRow({
+        id: "fvinv-2",
+        projectId: "proj-2",
+        vendorId: "vendor-2",
+        totalAmount: 100_000,
+        paidAmount: 100_000,
+        outstandingAmount: 0,
+        status: "PAID",
+        tanggal: new Date("2026-03-09T00:00:00.000Z"),
+        dueDate: new Date("2026-03-18T00:00:00.000Z"),
+        updatedAt: new Date("2026-03-21T00:00:00.000Z"),
+      }),
+    ];
+  };
+
+  if (!prismaAny.financeVendorExpense) {
+    prismaAny.financeVendorExpense = {};
+  }
+  prismaAny.financeVendorExpense.findMany = async () => {
+    calls.financeVendorExpenseFindMany += 1;
+    return [
+      createFinanceVendorExpenseDirectRow(),
+      createFinanceVendorExpenseDirectRow({
+        id: "fvexp-2",
+        projectId: "proj-2",
+        vendorId: "vendor-2",
+        totalNominal: 50_000,
+        status: "PAID",
+        paidAt: new Date("2026-03-18T00:00:00.000Z"),
+        tanggal: new Date("2026-03-18T00:00:00.000Z"),
+        updatedAt: new Date("2026-03-22T00:00:00.000Z"),
+      }),
+    ];
+  };
+
+  if (!prismaAny.vendorRecord) {
+    prismaAny.vendorRecord = {};
+  }
+  prismaAny.vendorRecord.findMany = async () => {
+    calls.vendorFindMany += 1;
+    return [
+      createVendorRow(),
+      createVendorRow({
+        id: "vendor-2",
+        kodeVendor: "VND-002",
+        namaVendor: "Vendor B",
+        kontak: "Ening",
+        updatedAt: new Date("2026-03-20T00:00:00.000Z"),
+      }),
+    ];
+  };
+
+  if (!prismaAny.customerRecord) {
+    prismaAny.customerRecord = {};
+  }
+  prismaAny.customerRecord.findMany = async () => {
+    calls.customerFindMany += 1;
+    return [
+      createCustomerRow(),
+      createCustomerRow({
+        id: "cust-2",
+        kodeCustomer: "CST-002",
+        namaCustomer: "PT Customer Beta",
+        kontak: "Sari",
+        updatedAt: new Date("2026-03-19T00:00:00.000Z"),
+      }),
+    ];
+  };
+
+  if (!prismaAny.quotation) {
+    prismaAny.quotation = {};
+  }
+  prismaAny.quotation.findMany = async () => {
+    calls.quotationFindMany += 1;
+    return [
+      createQuotationDashboardRow(),
+      createQuotationDashboardRow({
+        id: "quot-2",
+        noPenawaran: "Q-002",
+        kepada: "PT Customer Beta",
+        perihal: "Penawaran Project B",
+        grandTotal: 2_000_000,
+        payload: {
+          projectId: "proj-2",
+        },
+        updatedAt: new Date("2026-03-24T00:00:00.000Z"),
+      }),
+    ];
+  };
+
+  if (!prismaAny.projectRecord) {
+    prismaAny.projectRecord = {};
+  }
+  prismaAny.projectRecord.findMany = async () => {
+    calls.projectFindMany += 1;
+    return [
+      createProjectDashboardRow(),
+      createProjectDashboardRow({
+        id: "proj-2",
+        quotationId: "quot-2",
+        customerId: "cust-2",
+        kodeProject: "PRJ-002",
+        namaProject: "Project B",
+        customerName: "PT Customer Beta",
+        nilaiKontrak: 2_000_000,
+        payload: {
+          id: "proj-2",
+          namaProject: "Project B",
+          customer: "PT Customer Beta",
+          startDate: "2026-03-05",
+          endDate: "2026-05-05",
+          boq: [
+            {
+              itemKode: "MAT-002",
+              qtyEstimate: 3,
+              unitPrice: 60_000,
+            },
+          ],
+        },
+        updatedAt: new Date("2026-03-22T00:00:00.000Z"),
+      }),
+    ];
+  };
+
+  if (!prismaAny.inventoryItem) {
+    prismaAny.inventoryItem = {};
+  }
+  prismaAny.inventoryItem.findMany = async () => {
+    calls.inventoryItemFindMany += 1;
+    return [
+      createInventoryItemRow(),
+      createInventoryItemRow({
+        id: "stock-2",
+        code: "MAT-002",
+        name: "Cat Primer",
+        unitPrice: 50_000,
+        updatedAt: new Date("2026-03-16T00:00:00.000Z"),
+      }),
+    ];
+  };
+
+  if (!prismaAny.inventoryStockMovement) {
+    prismaAny.inventoryStockMovement = {};
+  }
+  prismaAny.inventoryStockMovement.findMany = async () => {
+    calls.inventoryMovementFindMany += 1;
+    return [
+      createInventoryMovementRow(),
+      createInventoryMovementRow({
+        id: "mov-2",
+        tanggal: new Date("2026-03-15T00:00:00.000Z"),
+        referenceNo: "WO-proj-2",
+        inventoryItemId: "stock-2",
+        itemCode: "MAT-002",
+        itemName: "Cat Primer",
+        qty: 2,
+        stockBefore: 5,
+        stockAfter: 3,
+        poNumber: "PO-002",
+        projectId: "proj-2",
+        updatedAt: new Date("2026-03-15T00:00:00.000Z"),
+      }),
+    ];
+  };
+
   return {
     calls,
     restore() {
@@ -467,6 +868,21 @@ function installFinanceSummaryRouteMocks(authRole: Role) {
       }
       if (prismaAny.vendorInvoiceRecord) {
         prismaAny.vendorInvoiceRecord.findMany = originalVendorInvoiceFindMany;
+      }
+      if (prismaAny.financeCustomerInvoice) {
+        prismaAny.financeCustomerInvoice.findMany = originalFinanceCustomerInvoiceFindMany;
+      }
+      if (prismaAny.financeVendorInvoice) {
+        prismaAny.financeVendorInvoice.findMany = originalFinanceVendorInvoiceFindMany;
+      }
+      if (prismaAny.financeVendorExpense) {
+        prismaAny.financeVendorExpense.findMany = originalFinanceVendorExpenseFindMany;
+      }
+      if (prismaAny.vendorRecord) {
+        prismaAny.vendorRecord.findMany = originalVendorFindMany;
+      }
+      if (prismaAny.customerRecord) {
+        prismaAny.customerRecord.findMany = originalCustomerFindMany;
       }
       if (prismaAny.financePettyCashTransactionRecord) {
         prismaAny.financePettyCashTransactionRecord.findMany = originalPettyCashFindMany;
@@ -485,6 +901,18 @@ function installFinanceSummaryRouteMocks(authRole: Role) {
       }
       if (prismaAny.payrollRecord) {
         prismaAny.payrollRecord.findMany = originalPayrollFindMany;
+      }
+      if (prismaAny.quotation) {
+        prismaAny.quotation.findMany = originalQuotationFindMany;
+      }
+      if (prismaAny.projectRecord) {
+        prismaAny.projectRecord.findMany = originalProjectFindMany;
+      }
+      if (prismaAny.inventoryItem) {
+        prismaAny.inventoryItem.findMany = originalInventoryItemFindMany;
+      }
+      if (prismaAny.inventoryStockMovement) {
+        prismaAny.inventoryStockMovement.findMany = originalInventoryMovementFindMany;
       }
     },
   };
@@ -920,6 +1348,197 @@ test("GET /dashboard/finance-year-end-summary rejects unauthorized role before l
     assert.equal(mock.calls.purchaseOrderFindMany, 0);
     assert.equal(mock.calls.payrollFindMany, 0);
   } finally {
+    mock.restore();
+  }
+});
+
+test("GET /dashboard/finance-cashflow-summary returns working capital metrics and latest timestamp", async () => {
+  const mock = installFinanceSummaryRouteMocks(Role.FINANCE);
+  const token = signAccessToken({ id: "user-fin", role: Role.FINANCE });
+
+  try {
+    await withServer(async (baseUrl) => {
+      const response = await fetch(`${baseUrl}/dashboard/finance-cashflow-summary`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      assert.equal(response.status, 200);
+      const payload = (await response.json()) as Record<string, any>;
+      assert.equal(payload.metrics.totalAR, 1_500_000);
+      assert.equal(payload.metrics.totalAP, 800_000);
+      assert.equal(payload.metrics.netWorkingCapital, 700_000);
+      assert.equal(payload.metrics.topCustomers[0].namaCustomer, "PT Customer");
+      assert.equal(payload.metrics.topVendors[0].namaVendor, "Vendor A");
+      assert.equal(payload.lastUpdatedAt, "2026-03-23T00:00:00.000Z");
+    });
+
+    assert.equal(mock.calls.financeCustomerInvoiceFindMany, 1);
+    assert.equal(mock.calls.financeVendorInvoiceFindMany, 1);
+    assert.equal(mock.calls.financeVendorExpenseFindMany, 1);
+    assert.equal(mock.calls.vendorFindMany, 1);
+    assert.equal(mock.calls.customerFindMany, 1);
+  } finally {
+    mock.restore();
+  }
+});
+
+test("GET /dashboard/finance-cashflow-summary rejects unauthorized role before loading finance cashflow data", async () => {
+  const mock = installFinanceSummaryRouteMocks(Role.SALES);
+  const token = signAccessToken({ id: "user-sales", role: Role.SALES });
+
+  try {
+    await withServer(async (baseUrl) => {
+      const response = await fetch(`${baseUrl}/dashboard/finance-cashflow-summary`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      assert.equal(response.status, 403);
+      const payload = (await response.json()) as Record<string, unknown>;
+      assert.equal(payload.code, "FORBIDDEN");
+      assert.equal(payload.message, "Forbidden");
+    });
+
+    assert.equal(mock.calls.financeCustomerInvoiceFindMany, 0);
+    assert.equal(mock.calls.financeVendorInvoiceFindMany, 0);
+    assert.equal(mock.calls.financeVendorExpenseFindMany, 0);
+    assert.equal(mock.calls.vendorFindMany, 0);
+    assert.equal(mock.calls.customerFindMany, 0);
+  } finally {
+    mock.restore();
+  }
+});
+
+test("GET /dashboard/finance-cashflow-page-summary returns cash movement rollup and latest timestamp", async () => {
+  const mock = installFinanceSummaryRouteMocks(Role.FINANCE);
+  const token = signAccessToken({ id: "user-fin", role: Role.FINANCE });
+  const prismaAny = prisma as unknown as Record<string, any>;
+  const originalPayrollFindMany = prismaAny.payrollRecord.findMany;
+  prismaAny.payrollRecord.findMany = async () => {
+    mock.calls.payrollFindMany += 1;
+    return [
+      createPayrollRecord(),
+      createPayrollRecord({
+        month: "Februari",
+        year: 2026,
+        totalPayroll: 1_000_000,
+        updatedAt: new Date("2026-03-24T00:00:00.000Z"),
+      }),
+    ];
+  };
+
+  try {
+    await withServer(async (baseUrl) => {
+      const response = await fetch(`${baseUrl}/dashboard/finance-cashflow-page-summary`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      assert.equal(response.status, 200);
+      const payload = (await response.json()) as Record<string, any>;
+      assert.equal(payload.stats.outflowPurchases, 1_750_000);
+      assert.equal(payload.stats.outflowPayroll, 3_000_000);
+      assert.equal(payload.stats.totalOutflow, 4_750_000);
+      assert.equal(payload.stats.netCashflow, -4_750_000);
+      assert.equal(payload.lastUpdatedAt, "2026-03-24T00:00:00.000Z");
+    });
+
+    assert.equal(mock.calls.invoiceFindMany, 1);
+    assert.equal(mock.calls.purchaseOrderFindMany, 1);
+    assert.equal(mock.calls.payrollFindMany, 1);
+    assert.equal(mock.calls.vendorInvoiceFindMany, 1);
+  } finally {
+    prismaAny.payrollRecord.findMany = originalPayrollFindMany;
+    mock.restore();
+  }
+});
+
+test("GET /dashboard/finance-revenue-summary returns project revenue rollup and latest timestamp", async () => {
+  const mock = installFinanceSummaryRouteMocks(Role.FINANCE);
+  const token = signAccessToken({ id: "user-fin", role: Role.FINANCE });
+
+  try {
+    await withServer(async (baseUrl) => {
+      const response = await fetch(`${baseUrl}/dashboard/finance-revenue-summary`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      assert.equal(response.status, 200);
+      const payload = (await response.json()) as Record<string, any>;
+      assert.equal(payload.summary.totalInvoice, 4_330_000);
+      assert.equal(payload.summary.totalPaid, 500_000);
+      assert.equal(payload.summary.totalOutstanding, 3_830_000);
+      assert.equal(payload.summary.totalExpense, 250_000);
+      assert.equal(payload.rows[0].projectName, "Project A");
+      assert.equal(payload.rows[0].revenue, 4_330_000);
+      assert.equal(payload.rows[0].cost, 250_000);
+      assert.equal(payload.lastUpdatedAt, "2026-03-24T00:00:00.000Z");
+    });
+
+    assert.equal(mock.calls.invoiceFindMany, 1);
+    assert.equal(mock.calls.vendorExpenseFindMany, 1);
+    assert.equal(mock.calls.quotationFindMany, 1);
+    assert.equal(mock.calls.projectFindMany, 1);
+  } finally {
+    mock.restore();
+  }
+});
+
+test("GET /dashboard/finance-project-pl-summary returns profitability rows and latest timestamp", async () => {
+  const mock = installFinanceSummaryRouteMocks(Role.FINANCE);
+  const token = signAccessToken({ id: "user-fin", role: Role.FINANCE });
+  const prismaAny = prisma as unknown as Record<string, any>;
+  const originalAttendanceFindMany = prismaAny.attendanceRecord.findMany;
+  prismaAny.attendanceRecord.findMany = async () => {
+    mock.calls.attendanceFindMany += 1;
+    return [
+      createAttendanceRow({
+        projectId: "proj-1",
+        workHours: 8,
+        updatedAt: new Date("2026-03-20T00:00:00.000Z"),
+      }),
+      createAttendanceRow({
+        projectId: "proj-2",
+        workHours: 4,
+        updatedAt: new Date("2026-03-21T00:00:00.000Z"),
+      }),
+    ];
+  };
+
+  try {
+    await withServer(async (baseUrl) => {
+      const response = await fetch(`${baseUrl}/dashboard/finance-project-pl-summary`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      assert.equal(response.status, 200);
+      const payload = (await response.json()) as Record<string, any>;
+      assert.equal(payload.totals.revenue, 3_000_000);
+      assert.equal(payload.totals.cost, 2_100_000);
+      assert.equal(payload.totals.netProfit, 900_000);
+      assert.equal(payload.rows[0].id, "proj-1");
+      assert.equal(payload.rows[0].totalActualCost, 1_650_000);
+      assert.equal(payload.rows[0].netProfit, 350_000);
+      assert.equal(payload.lastUpdatedAt, "2026-03-23T00:00:00.000Z");
+    });
+
+    assert.equal(mock.calls.projectFindMany, 1);
+    assert.equal(mock.calls.financeCustomerInvoiceFindMany, 1);
+    assert.equal(mock.calls.financeVendorInvoiceFindMany, 1);
+    assert.equal(mock.calls.financeVendorExpenseFindMany, 1);
+    assert.equal(mock.calls.inventoryItemFindMany, 1);
+    assert.equal(mock.calls.inventoryMovementFindMany, 1);
+    assert.equal(mock.calls.attendanceFindMany, 1);
+  } finally {
+    prismaAny.attendanceRecord.findMany = originalAttendanceFindMany;
     mock.restore();
   }
 });
