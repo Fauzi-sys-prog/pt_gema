@@ -71,18 +71,34 @@ function installDashboardSystemMocks(authRole: Role) {
   const originalRevokedFindUnique = prismaAny.revokedToken.findUnique;
   const originalUserFindUnique = prismaAny.user.findUnique;
   const originalAppEntityFindMany = prismaAny.appEntity.findMany;
+  const originalAppEntityGroupBy = prismaAny.appEntity.groupBy;
   const originalQuotationFindMany = prismaAny.quotation.findMany;
   const originalQuotationCount = prismaAny.quotation.count;
   const originalDataCollectionFindMany = prismaAny.dataCollection.findMany;
+  const originalDataCollectionCount = prismaAny.dataCollection.count;
   const originalProjectFindMany = prismaAny.projectRecord.findMany;
   const originalProjectApprovalLogFindMany = prismaAny.projectApprovalLog.findMany;
   const originalQuotationApprovalLogFindMany = prismaAny.quotationApprovalLog.findMany;
+  const originalInvoiceFindMany = prismaAny.invoiceRecord?.findMany;
+  const originalProcurementPurchaseOrderFindMany = prismaAny.procurementPurchaseOrder?.findMany;
+  const originalProcurementReceivingFindMany = prismaAny.procurementReceiving?.findMany;
+  const originalInventoryItemFindMany = prismaAny.inventoryItem?.findMany;
+  const originalInventoryStockMovementFindMany = prismaAny.inventoryStockMovement?.findMany;
+  const originalInventoryStockInFindMany = prismaAny.inventoryStockIn?.findMany;
+  const originalInventoryStockOutFindMany = prismaAny.inventoryStockOut?.findMany;
+  const originalInventoryStockOpnameFindMany = prismaAny.inventoryStockOpname?.findMany;
   const originalWorkOrderFindMany = prismaAny.workOrderRecord?.findMany;
   const originalProductionMaterialRequestFindMany = prismaAny.productionMaterialRequest?.findMany;
   const originalLogisticsSuratJalanFindMany = prismaAny.logisticsSuratJalan?.findMany;
   const originalProductionTrackerFindMany = prismaAny.productionTrackerRecord?.findMany;
   const originalProductionReportFindMany = prismaAny.productionReportRecord?.findMany;
   const originalQcInspectionFindMany = prismaAny.qcInspectionRecord?.findMany;
+  const originalCustomerInvoiceFindMany = prismaAny.customerInvoiceRecord?.findMany;
+  const originalVendorExpenseFindMany = prismaAny.vendorExpenseRecord?.findMany;
+  const originalVendorInvoiceFindMany = prismaAny.vendorInvoiceRecord?.findMany;
+  const originalBeritaAcaraFindMany = prismaAny.beritaAcaraRecord?.findMany;
+  const originalProofOfDeliveryFindMany = prismaAny.logisticsProofOfDelivery?.findMany;
+  const originalSpkRecordFindMany = prismaAny.spkRecord?.findMany;
   const originalProjectSpkFindMany = prismaAny.projectSpkRecord?.findMany;
   const originalProductionWorkOrderFindMany = prismaAny.productionWorkOrder?.findMany;
 
@@ -101,6 +117,20 @@ function installDashboardSystemMocks(authRole: Role) {
 
   prismaAny.appEntity.findMany = async (args: Record<string, any>) => {
     const resource = args?.where?.resource;
+    if (resource === "projects") {
+      return [
+        {
+          entityId: "proj-1",
+          payload: { id: "proj-1", status: "IN_PROGRESS" },
+          updatedAt: new Date("2026-03-28T00:00:00.000Z"),
+        },
+        {
+          entityId: "proj-2",
+          payload: { id: "proj-2", status: "PLANNING" },
+          updatedAt: new Date("2026-03-27T00:00:00.000Z"),
+        },
+      ];
+    }
     if (resource === "material-requests") {
       return [
         {
@@ -121,9 +151,15 @@ function installDashboardSystemMocks(authRole: Role) {
     }
     return [];
   };
+  prismaAny.appEntity.groupBy = async () => [
+    { resource: "projects", _count: { _all: 2 } },
+    { resource: "work-orders", _count: { _all: 2 } },
+    { resource: "legacy-extra", _count: { _all: 4 } },
+  ];
 
   prismaAny.quotation.findMany = async () => [createQuotationRow()];
   prismaAny.quotation.count = async () => 3;
+  prismaAny.dataCollection.count = async () => 2;
   prismaAny.dataCollection.findMany = async () => [
     { id: "dc-1", status: "DRAFT", updatedAt: new Date("2026-03-20T00:00:00.000Z") },
     { id: "dc-2", status: "COMPLETED", updatedAt: new Date("2026-03-30T00:00:00.000Z") },
@@ -153,6 +189,30 @@ function installDashboardSystemMocks(authRole: Role) {
   prismaAny.quotationApprovalLog.findMany = async () => [
     { action: "SEND", createdAt: new Date("2026-03-30T10:00:00.000Z") },
   ];
+
+  if (!prismaAny.invoiceRecord) prismaAny.invoiceRecord = {};
+  prismaAny.invoiceRecord.findMany = async () => [];
+
+  if (!prismaAny.procurementPurchaseOrder) prismaAny.procurementPurchaseOrder = {};
+  prismaAny.procurementPurchaseOrder.findMany = async () => [];
+
+  if (!prismaAny.procurementReceiving) prismaAny.procurementReceiving = {};
+  prismaAny.procurementReceiving.findMany = async () => [];
+
+  if (!prismaAny.inventoryItem) prismaAny.inventoryItem = {};
+  prismaAny.inventoryItem.findMany = async () => [];
+
+  if (!prismaAny.inventoryStockMovement) prismaAny.inventoryStockMovement = {};
+  prismaAny.inventoryStockMovement.findMany = async () => [];
+
+  if (!prismaAny.inventoryStockIn) prismaAny.inventoryStockIn = {};
+  prismaAny.inventoryStockIn.findMany = async () => [];
+
+  if (!prismaAny.inventoryStockOut) prismaAny.inventoryStockOut = {};
+  prismaAny.inventoryStockOut.findMany = async () => [];
+
+  if (!prismaAny.inventoryStockOpname) prismaAny.inventoryStockOpname = {};
+  prismaAny.inventoryStockOpname.findMany = async () => [];
 
   if (!prismaAny.workOrderRecord) prismaAny.workOrderRecord = {};
   prismaAny.workOrderRecord.findMany = async () => [
@@ -201,6 +261,24 @@ function installDashboardSystemMocks(authRole: Role) {
     },
   ];
 
+  if (!prismaAny.customerInvoiceRecord) prismaAny.customerInvoiceRecord = {};
+  prismaAny.customerInvoiceRecord.findMany = async () => [];
+
+  if (!prismaAny.vendorExpenseRecord) prismaAny.vendorExpenseRecord = {};
+  prismaAny.vendorExpenseRecord.findMany = async () => [];
+
+  if (!prismaAny.vendorInvoiceRecord) prismaAny.vendorInvoiceRecord = {};
+  prismaAny.vendorInvoiceRecord.findMany = async () => [];
+
+  if (!prismaAny.beritaAcaraRecord) prismaAny.beritaAcaraRecord = {};
+  prismaAny.beritaAcaraRecord.findMany = async () => [];
+
+  if (!prismaAny.logisticsProofOfDelivery) prismaAny.logisticsProofOfDelivery = {};
+  prismaAny.logisticsProofOfDelivery.findMany = async () => [];
+
+  if (!prismaAny.spkRecord) prismaAny.spkRecord = {};
+  prismaAny.spkRecord.findMany = async () => [];
+
   if (!prismaAny.projectSpkRecord) prismaAny.projectSpkRecord = {};
   prismaAny.projectSpkRecord.findMany = async () => [
     { id: "spk-1", projectId: "proj-1", workOrderId: "wo-1", spkNumber: "SPK-001" },
@@ -241,12 +319,32 @@ function installDashboardSystemMocks(authRole: Role) {
       prismaAny.revokedToken.findUnique = originalRevokedFindUnique;
       prismaAny.user.findUnique = originalUserFindUnique;
       prismaAny.appEntity.findMany = originalAppEntityFindMany;
+      prismaAny.appEntity.groupBy = originalAppEntityGroupBy;
       prismaAny.quotation.findMany = originalQuotationFindMany;
       prismaAny.quotation.count = originalQuotationCount;
       prismaAny.dataCollection.findMany = originalDataCollectionFindMany;
+      prismaAny.dataCollection.count = originalDataCollectionCount;
       prismaAny.projectRecord.findMany = originalProjectFindMany;
       prismaAny.projectApprovalLog.findMany = originalProjectApprovalLogFindMany;
       prismaAny.quotationApprovalLog.findMany = originalQuotationApprovalLogFindMany;
+      if (prismaAny.invoiceRecord) prismaAny.invoiceRecord.findMany = originalInvoiceFindMany;
+      if (prismaAny.procurementPurchaseOrder) {
+        prismaAny.procurementPurchaseOrder.findMany = originalProcurementPurchaseOrderFindMany;
+      }
+      if (prismaAny.procurementReceiving) {
+        prismaAny.procurementReceiving.findMany = originalProcurementReceivingFindMany;
+      }
+      if (prismaAny.inventoryItem) prismaAny.inventoryItem.findMany = originalInventoryItemFindMany;
+      if (prismaAny.inventoryStockMovement) {
+        prismaAny.inventoryStockMovement.findMany = originalInventoryStockMovementFindMany;
+      }
+      if (prismaAny.inventoryStockIn) prismaAny.inventoryStockIn.findMany = originalInventoryStockInFindMany;
+      if (prismaAny.inventoryStockOut) {
+        prismaAny.inventoryStockOut.findMany = originalInventoryStockOutFindMany;
+      }
+      if (prismaAny.inventoryStockOpname) {
+        prismaAny.inventoryStockOpname.findMany = originalInventoryStockOpnameFindMany;
+      }
       if (prismaAny.workOrderRecord) prismaAny.workOrderRecord.findMany = originalWorkOrderFindMany;
       if (prismaAny.productionMaterialRequest) {
         prismaAny.productionMaterialRequest.findMany = originalProductionMaterialRequestFindMany;
@@ -257,6 +355,22 @@ function installDashboardSystemMocks(authRole: Role) {
       if (prismaAny.productionTrackerRecord) prismaAny.productionTrackerRecord.findMany = originalProductionTrackerFindMany;
       if (prismaAny.productionReportRecord) prismaAny.productionReportRecord.findMany = originalProductionReportFindMany;
       if (prismaAny.qcInspectionRecord) prismaAny.qcInspectionRecord.findMany = originalQcInspectionFindMany;
+      if (prismaAny.customerInvoiceRecord) {
+        prismaAny.customerInvoiceRecord.findMany = originalCustomerInvoiceFindMany;
+      }
+      if (prismaAny.vendorExpenseRecord) {
+        prismaAny.vendorExpenseRecord.findMany = originalVendorExpenseFindMany;
+      }
+      if (prismaAny.vendorInvoiceRecord) {
+        prismaAny.vendorInvoiceRecord.findMany = originalVendorInvoiceFindMany;
+      }
+      if (prismaAny.beritaAcaraRecord) {
+        prismaAny.beritaAcaraRecord.findMany = originalBeritaAcaraFindMany;
+      }
+      if (prismaAny.logisticsProofOfDelivery) {
+        prismaAny.logisticsProofOfDelivery.findMany = originalProofOfDeliveryFindMany;
+      }
+      if (prismaAny.spkRecord) prismaAny.spkRecord.findMany = originalSpkRecordFindMany;
       if (prismaAny.projectSpkRecord) prismaAny.projectSpkRecord.findMany = originalProjectSpkFindMany;
       if (prismaAny.productionWorkOrder) prismaAny.productionWorkOrder.findMany = originalProductionWorkOrderFindMany;
     },
@@ -317,6 +431,40 @@ test("GET /system/security-health returns approval queue health and latest activ
   }
 });
 
+test("GET /system/coverage returns tracked coverage summary and unknown resources", async () => {
+  const token = signAccessToken({ id: "user-owner", role: Role.OWNER });
+  const mocks = installDashboardSystemMocks(Role.OWNER);
+
+  try {
+    await withServer(async (baseUrl) => {
+      const response = await fetch(`${baseUrl}/system/coverage`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      assert.equal(response.status, 200);
+
+      const body = await response.json();
+      assert.equal(body.totalTrackedResources, body.coverage.length);
+      assert.equal(body.resourcesWithData, 9);
+      assert.equal(
+        body.coveragePercent,
+        Number(((body.resourcesWithData / body.totalTrackedResources) * 100).toFixed(2))
+      );
+      assert.deepEqual(body.unknownResources, ["legacy-extra"]);
+      assert.equal(body.coverage.find((row: any) => row.resource === "quotations")?.count, 3);
+      assert.equal(body.coverage.find((row: any) => row.resource === "data-collections")?.count, 2);
+      assert.equal(body.coverage.find((row: any) => row.resource === "projects")?.count, 2);
+      assert.equal(body.coverage.find((row: any) => row.resource === "work-orders")?.count, 2);
+      assert.equal(body.coverage.find((row: any) => row.resource === "material-requests")?.count, 1);
+      assert.equal(body.coverage.find((row: any) => row.resource === "surat-jalan")?.count, 1);
+      assert.equal(body.coverage.find((row: any) => row.resource === "production-trackers")?.count, 1);
+      assert.equal(body.coverage.find((row: any) => row.resource === "production-reports")?.count, 1);
+      assert.equal(body.coverage.find((row: any) => row.resource === "qc-inspections")?.count, 1);
+    });
+  } finally {
+    mocks.restore();
+  }
+});
+
 test("GET /system/spk-wo-health returns linkage issues and coverage stats", async () => {
   const token = signAccessToken({ id: "user-owner", role: Role.OWNER });
   const mocks = installDashboardSystemMocks(Role.OWNER);
@@ -354,6 +502,23 @@ test("GET /system/security-health rejects unauthorized role before loading data"
   try {
     await withServer(async (baseUrl) => {
       const response = await fetch(`${baseUrl}/system/security-health`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      assert.equal(response.status, 403);
+      assert.deepEqual(await response.json(), { error: "Forbidden" });
+    });
+  } finally {
+    mocks.restore();
+  }
+});
+
+test("GET /system/coverage rejects unauthorized role before loading data", async () => {
+  const token = signAccessToken({ id: "user-sales", role: Role.SALES });
+  const mocks = installDashboardSystemMocks(Role.SALES);
+
+  try {
+    await withServer(async (baseUrl) => {
+      const response = await fetch(`${baseUrl}/system/coverage`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       assert.equal(response.status, 403);
