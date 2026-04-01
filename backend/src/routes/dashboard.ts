@@ -1157,14 +1157,14 @@ dashboardRouter.get("/dashboard/summary", authenticate, async (_req: AuthRequest
         pendingCount: quotationSummary.pendingHighValue + pendingPurchaseOrders,
       },
       lastUpdatedAt: maxDate([
-        quotations[0]?.updatedAt,
-        dataCollections[0]?.updatedAt,
-        projects[0]?.updatedAt,
-        purchaseOrders[0]?.updatedAt,
-        invoices[0]?.updatedAt,
-        vendorInvoices[0]?.updatedAt,
-        attendances[0]?.updatedAt,
-        stockItems[0]?.updatedAt,
+        ...quotations.map((row) => row.updatedAt),
+        ...dataCollections.map((row) => row.updatedAt),
+        ...projects.map((row) => row.updatedAt),
+        ...purchaseOrders.map((row) => row.updatedAt),
+        ...invoices.map((row) => row.updatedAt),
+        ...vendorInvoices.map((row) => row.updatedAt),
+        ...attendances.map((row) => row.updatedAt),
+        ...stockItems.map((row) => row.updatedAt),
       ]),
     };
 
@@ -1703,7 +1703,10 @@ dashboardRouter.get("/dashboard/vendor-summary", authenticate, async (_req: Auth
       totalOrders: vendors.reduce((sum, vendor) => sum + vendor.totalOrders, 0),
       totalSpend: vendors.reduce((sum, vendor) => sum + vendor.totalValue, 0),
       vendors,
-      lastUpdatedAt: maxDate([purchaseOrders[0]?.updatedAt, receivings[0]?.updatedAt]),
+      lastUpdatedAt: maxDate([
+        ...purchaseOrders.map((row) => row.updatedAt),
+        ...receivings.map((row) => row.updatedAt),
+      ]),
     });
   } catch {
     return res.status(500).json({ error: "Internal server error" });
@@ -1772,7 +1775,10 @@ dashboardRouter.get("/dashboard/production-summary", authenticate, async (_req: 
         outputQty,
         rejectQty,
       },
-      lastUpdatedAt: maxDate([workOrders[0]?.updatedAt, productionReports[0]?.updatedAt]),
+      lastUpdatedAt: maxDate([
+        ...workOrders.map((row) => row.updatedAt),
+        ...productionReports.map((row) => row.updatedAt),
+      ]),
     });
   } catch {
     return res.status(500).json({ error: "Internal server error" });
@@ -1939,9 +1945,9 @@ dashboardRouter.get("/dashboard/procurement-summary", authenticate, async (_req:
       totalGapQty: demandGaps.reduce((sum, item) => sum + item.gap, 0),
       demandGaps,
       lastUpdatedAt: maxDate([
-        projects[0]?.updatedAt,
-        purchaseOrders[0]?.updatedAt,
-        stockItems[0]?.updatedAt,
+        ...projects.map((row) => row.updatedAt),
+        ...purchaseOrders.map((row) => row.updatedAt),
+        ...stockItems.map((row) => row.updatedAt),
       ]),
     });
   } catch {
@@ -2010,7 +2016,10 @@ dashboardRouter.get("/dashboard/hr-summary", authenticate, async (_req: AuthRequ
         todayAttendance,
         totalWorkHours,
       },
-      lastUpdatedAt: maxDate([employees[0]?.updatedAt, attendances[0]?.updatedAt]),
+      lastUpdatedAt: maxDate([
+        ...employees.map((row) => row.updatedAt),
+        ...attendances.map((row) => row.updatedAt),
+      ]),
     });
   } catch {
     return res.status(500).json({ error: "Internal server error" });
