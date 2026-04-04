@@ -68,9 +68,9 @@ export default function LoginPage() {
         {/* Logo & Title */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-28 h-28 bg-white rounded-full shadow-2xl mb-6 p-4 transform hover:scale-105 transition-transform duration-300">
-            <img src={logoImage} alt="GM Teknik Logo" className="w-full h-full object-contain" />
+            <img src={logoImage} alt="Logo app_gema" className="w-full h-full object-contain" />
           </div>
-          <h1 className="text-white mb-2 text-3xl">GM TEKNIK</h1>
+          <h1 className="text-white mb-2 text-3xl">app_gema</h1>
           <p className="text-red-100 text-sm">Dashboard System</p>
         </div>
 
@@ -155,7 +155,7 @@ export default function LoginPage() {
 
         {/* Footer */}
         <div className="text-center mt-6 text-red-100 text-sm">
-          © 2024 GM Teknik. All rights reserved.
+          © 2024 app_gema. All rights reserved.
         </div>
       </div>
     </div>

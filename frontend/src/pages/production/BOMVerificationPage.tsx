@@ -96,12 +96,12 @@ export default function BOMVerificationPage() {
       <div className="flex items-center gap-6 mb-10">
         <div className="w-16 h-16 bg-white border-2 border-slate-200 rounded-2xl flex items-center justify-center shadow-sm">
           <div className="text-center leading-none">
-            <span className="text-red-600 font-black text-xl block">GM</span>
-            <span className="text-slate-900 font-bold text-[8px] uppercase tracking-tighter">Teknik</span>
+            <span className="text-red-600 font-black text-xl block">app</span>
+            <span className="text-slate-900 font-bold text-[8px] uppercase tracking-tighter">gema</span>
           </div>
         </div>
         <div>
-          <h1 className="text-2xl font-black text-slate-900 uppercase italic tracking-tighter leading-none">GM TEKNIK</h1>
+          <h1 className="text-2xl font-black text-slate-900 italic tracking-tighter leading-none">app_gema</h1>
           <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em] mt-1">Dashboard System</p>
         </div>
       </div>

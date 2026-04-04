@@ -108,6 +108,10 @@ export default function App() {
   const [showSplash, setShowSplash] = useState(true);
 
   useEffect(() => {
+    document.title = "app_gema";
+  }, []);
+
+  useEffect(() => {
     const raf = window.requestAnimationFrame(() => setShowSplash(false));
     return () => window.cancelAnimationFrame(raf);
   }, []);
@@ -118,7 +122,7 @@ export default function App() {
         <div className="w-24 h-24 rounded-2xl overflow-hidden shadow-sm animate-[logoFade_1200ms_ease-in-out]">
           <img
             src={logoImage}
-            alt="GM Teknik Logo"
+            alt="Logo app_gema"
             className="w-full h-full object-contain origin-left animate-[flagWave_1200ms_ease-in-out_infinite]"
           />
         </div>

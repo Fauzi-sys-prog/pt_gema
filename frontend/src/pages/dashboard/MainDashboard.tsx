@@ -370,7 +370,7 @@ export default function MainDashboard() {
             <div className="max-w-3xl">
               <p className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-400">Dashboard {roleLabel}</p>
               <h1 className="mt-1 text-3xl sm:text-4xl font-black italic tracking-tight text-slate-900">
-                {roleDashboard.title} <span className="text-blue-600">GM Teknik</span>
+                {roleDashboard.title} <span className="text-blue-600">app_gema</span>
               </h1>
               <p className="mt-2 text-xs font-semibold uppercase tracking-widest text-slate-500">
                 Welcome, {currentUser?.name || currentUser?.username || 'User'}

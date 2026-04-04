@@ -337,10 +337,10 @@ export default function Layout({ children }: LayoutProps) {
           <div className="p-4 lg:p-6 border-b border-gray-200 flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="w-12 h-10 bg-white rounded-lg shadow-sm p-1 flex-shrink-0 flex items-center justify-center border border-gray-100">
-                <img src={logoImage} alt="GM Teknik" className="w-full h-full object-contain" />
+                <img src={logoImage} alt="Logo app_gema" className="w-full h-full object-contain" />
               </div>
               <div>
-                <h1 className="text-lg lg:text-xl font-bold text-red-600 leading-none">GM TEKNIK</h1>
+                <h1 className="text-lg lg:text-xl font-bold text-red-600 leading-none">app_gema</h1>
                 <p className="text-[10px] text-gray-500 font-bold uppercase tracking-tighter mt-1">Dashboard System</p>
               </div>
             </div>
