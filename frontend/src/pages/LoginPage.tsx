@@ -155,7 +155,7 @@ export default function LoginPage() {
 
         {/* Footer */}
         <div className="text-center mt-6 text-red-100 text-sm">
-          © 2024 app_gema. All rights reserved.
+          © 2026 app_gema. All rights reserved.
         </div>
       </div>
     </div>
