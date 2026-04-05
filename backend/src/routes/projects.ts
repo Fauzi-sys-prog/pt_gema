@@ -22,8 +22,11 @@ const PATCH_BLOCKED_FIELDS = new Set([
 const APPROVED_LOCKED_FIELDS = new Set([
   "namaProject",
   "customer",
-  "nilaiKontrak",
   "quotationId",
+]);
+const APPROVED_REVISION_FIELDS = new Set([
+  "boq",
+  "nilaiKontrak",
 ]);
 
 export const projectsRouter = Router();
@@ -271,6 +274,64 @@ function normalizeProjectPayloadForPersistence(payload: Record<string, unknown>)
   }
 
   return normalized;
+}
+
+function normalizeBoqRevisionRows(input: unknown): Array<Record<string, unknown>> {
+  if (!Array.isArray(input)) return [];
+  return input.map((raw) => {
+    const item = asRecord(raw);
+    return {
+      id: readString(item, "id"),
+      itemKode: readString(item, "itemKode"),
+      materialName: readString(item, "materialName") || readString(item, "itemDescription"),
+      unit: readString(item, "unit"),
+      category: readString(item, "category") || readString(item, "sourceCategory"),
+      qtyEstimate: toNumber(item.qtyEstimate, 0),
+      unitPrice: toNumber(item.unitPrice, 0),
+      manpowerDays: toNumber(item.manpowerDays ?? item.hari, 0),
+      manpowerPersons: toNumber(item.manpowerPersons ?? item.orang, 0),
+    };
+  });
+}
+
+function getApprovedRevisionKeys(
+  incoming: Record<string, unknown>,
+  existing: Record<string, unknown>
+): string[] {
+  const changedKeys: string[] = [];
+
+  if (Object.prototype.hasOwnProperty.call(incoming, "nilaiKontrak")) {
+    const incomingValue = toNumber(incoming.nilaiKontrak, 0);
+    const existingValue = toNumber(existing.nilaiKontrak, 0);
+    if (incomingValue !== existingValue) {
+      changedKeys.push("nilaiKontrak");
+    }
+  }
+
+  if (Object.prototype.hasOwnProperty.call(incoming, "boq")) {
+    const incomingBoq = normalizeBoqRevisionRows(incoming.boq);
+    const existingBoq = normalizeBoqRevisionRows(existing.boq);
+    if (!isDeepStrictEqual(incomingBoq, existingBoq)) {
+      changedKeys.push("boq");
+    }
+  }
+
+  return changedKeys.filter((key, index, arr) => arr.indexOf(key) === index);
+}
+
+function calculateProjectBoqContractValue(input: unknown): number {
+  if (!Array.isArray(input)) return 0;
+  return input.reduce((sum, rawItem) => {
+    const item = asRecord(rawItem);
+    const category = String(item.category || item.sourceCategory || "").trim().toLowerCase();
+    const isManpower = category === "manpower";
+    const qtyEstimate = isManpower
+      ? Math.max(1, toNumber(item.manpowerDays ?? item.hari, 1)) *
+        Math.max(1, toNumber(item.manpowerPersons ?? item.orang, 1))
+      : Math.max(0, toNumber(item.qtyEstimate, 0));
+    const unitPrice = Math.max(0, toNumber(item.unitPrice, 0));
+    return sum + qtyEstimate * unitPrice;
+  }, 0);
 }
 
 function buildProjectRecordData(payload: Record<string, unknown>) {
@@ -1137,6 +1198,10 @@ projectsRouter.patch("/projects/:id", authenticate, async (req: AuthRequest, res
     }
 
     const existingApproval = String(existingPayload.approvalStatus || "").toUpperCase();
+    const approvedRevisionKeys =
+      existingApproval === "APPROVED"
+        ? getApprovedRevisionKeys(incomingPayload, existingPayload)
+        : [];
     if (existingApproval === "APPROVED") {
       const lockedKeys = getChangedKeys(incomingPayload, existingPayload, APPROVED_LOCKED_FIELDS);
       if (lockedKeys.length > 0) {
@@ -1146,11 +1211,46 @@ projectsRouter.patch("/projects/:id", authenticate, async (req: AuthRequest, res
       }
     }
 
-    const merged = {
+    const merged: Record<string, unknown> = {
       ...existingPayload,
       ...(req.body as Record<string, unknown>),
       id,
     };
+
+    if (Object.prototype.hasOwnProperty.call(incomingPayload, "boq")) {
+      merged.nilaiKontrak = calculateProjectBoqContractValue(merged.boq);
+    }
+
+    if (approvedRevisionKeys.length > 0) {
+      Object.assign(merged, {
+        approvalStatus: "Pending",
+        approvedBy: null,
+        approvedByUserId: null,
+        approvedByRole: null,
+        approvedAt: null,
+        spvApprovedBy: null,
+        spvApprovedByUserId: null,
+        spvApprovedByRole: null,
+        spvApprovedAt: null,
+        rejectedBy: null,
+        rejectedByUserId: null,
+        rejectedByRole: null,
+        rejectedAt: null,
+        unlockBy: null,
+        unlockByUserId: null,
+        unlockByRole: null,
+        unlockAt: null,
+        unlockReason: null,
+        relockBy: null,
+        relockByUserId: null,
+        relockByRole: null,
+        relockAt: null,
+        revisedAfterApprovalAt: new Date().toISOString(),
+        revisedAfterApprovalBy: actor.actorName,
+        revisedAfterApprovalByUserId: actor.actorUserId,
+        revisedAfterApprovalByRole: actor.actorRole,
+      });
+    }
 
     const incomingApproval = (incomingPayload.approvalStatus ?? null) as unknown;
     if (incomingApproval !== null && incomingApproval !== undefined) {

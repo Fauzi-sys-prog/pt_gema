@@ -492,12 +492,40 @@ export default function ProjectManagementPage() {
     String(project?.approvalStatus || "").toUpperCase() === "APPROVED";
   const isProjectLockedForEdit = (project?: Project | null) => isProjectApproved(project);
 
+  const calculateBoqContractValue = (rows: any[]) =>
+    rows.reduce((sum, item) => {
+      const category = String(item?.category || item?.sourceCategory || "").toLowerCase();
+      const isManpower = category === "manpower";
+      const qtyEstimate = isManpower
+        ? Math.max(1, Number(item?.manpowerDays || item?.hari || 1)) *
+          Math.max(1, Number(item?.manpowerPersons || item?.orang || 1))
+        : Number(item?.qtyEstimate || 0);
+      const unitPrice = Number(item?.unitPrice || 0);
+      return sum + Math.max(0, qtyEstimate * unitPrice);
+    }, 0);
+
   const guardApprovedProject = (project?: Project | null) => {
     if (!isProjectApproved(project)) {
       toast.error("Project belum Approved oleh OWNER/SPV. Selesaikan approval project dulu.");
       return false;
     }
     return true;
+  };
+
+  const canReviseApprovedBoq = (project?: Project | null) => {
+    if (!project) return false;
+    if (isProjectApproved(project)) return true;
+    if (!project.quotationId) return true;
+    const linkedQuotationStatus = String(getQuotationStatusByProject(project) || "").toUpperCase();
+    return linkedQuotationStatus === "APPROVED";
+  };
+
+  const guardBoqRevision = (project?: Project | null) => {
+    if (canReviseApprovedBoq(project)) {
+      return true;
+    }
+    toast.error("BOQ baru bisa direvisi setelah quotation project sudah Approved.");
+    return false;
   };
 
   const canGenerateWorkOrder = (project?: Project | null) => {
@@ -894,7 +922,7 @@ export default function ProjectManagementPage() {
 
   const handleAddBOQItem = () => {
     if (!selectedProject) return;
-    if (!guardApprovedProject(selectedProject)) return;
+    if (!guardBoqRevision(selectedProject)) return;
     const isManpower = boqFormData.category === "Manpower";
     const manpowerDays = Math.max(1, Number((boqFormData as any).manpowerDays || 1));
     const manpowerPersons = Math.max(1, Number((boqFormData as any).manpowerPersons || 1));
@@ -913,15 +941,23 @@ export default function ProjectManagementPage() {
     };
     
     const updatedBOQ = [...(selectedProject.boq || []), newItem];
-    // Don't update nilaiKontrak yet, wait for approval
-    
-    updateProject(selectedProject.id, { 
-      boq: updatedBOQ
-    });
-    
-    setShowAddBOQItemModal(false);
-    setBoqFormData(createInitialVoFormData());
-    toast.info("Variation Order (VO) ditambahkan dan menunggu approval eksekutif.");
+    const nextContractValue = calculateBoqContractValue(updatedBOQ);
+
+    void (async () => {
+      const updated = await updateProject(selectedProject.id, {
+        boq: updatedBOQ,
+        nilaiKontrak: nextContractValue,
+      });
+      if (!updated) return;
+
+      setShowAddBOQItemModal(false);
+      setBoqFormData(createInitialVoFormData());
+      if (isProjectApproved(selectedProject)) {
+        toast.success("VO ditambahkan. Nilai project diperbarui dan approval kembali Pending untuk review ulang.");
+      } else {
+        toast.success("Item BOQ berhasil ditambahkan dan nilai project ikut diperbarui.");
+      }
+    })();
   };
 
   const handleOpenEditBoqItem = (row: any) => {
@@ -967,22 +1003,48 @@ export default function ProjectManagementPage() {
       unitPrice: Number(editingBoqRow.unitPrice || 0),
     } as any;
 
-    updateProject(selectedProject.id, { boq: nextBoq });
-    setShowEditBoqItemModal(false);
-    setEditingBoqRow(null);
-    toast.success("Item manpower BOQ berhasil diperbarui.");
+    const nextContractValue = calculateBoqContractValue(nextBoq);
+
+    void (async () => {
+      const updated = await updateProject(selectedProject.id, {
+        boq: nextBoq,
+        nilaiKontrak: nextContractValue,
+      });
+      if (!updated) return;
+
+      setShowEditBoqItemModal(false);
+      setEditingBoqRow(null);
+      if (isProjectApproved(selectedProject)) {
+        toast.success("BOQ direvisi. Nilai project diperbarui dan approval kembali Pending.");
+      } else {
+        toast.success("Item BOQ berhasil diperbarui.");
+      }
+    })();
   };
 
   const handleDeleteBoqItem = (row: any) => {
     if (!selectedProject) return;
     const index = Number(row?.sourceIndex ?? -1);
     if (index < 0) return;
-    const confirmed = window.confirm(`Hapus item manpower "${row?.materialName || "-"}"?`);
+    const confirmed = window.confirm(`Hapus item BOQ "${row?.materialName || "-"}"?`);
     if (!confirmed) return;
 
     const nextBoq = (selectedProject.boq || []).filter((_, i) => i !== index);
-    updateProject(selectedProject.id, { boq: nextBoq });
-    toast.success("Item manpower BOQ berhasil dihapus.");
+    const nextContractValue = calculateBoqContractValue(nextBoq);
+
+    void (async () => {
+      const updated = await updateProject(selectedProject.id, {
+        boq: nextBoq,
+        nilaiKontrak: nextContractValue,
+      });
+      if (!updated) return;
+
+      if (isProjectApproved(selectedProject)) {
+        toast.success("Item BOQ dihapus. Nilai project diperbarui dan approval kembali Pending.");
+      } else {
+        toast.success("Item BOQ berhasil dihapus.");
+      }
+    })();
   };
 
   const getProjectFinancials = (projectId: string) =>
