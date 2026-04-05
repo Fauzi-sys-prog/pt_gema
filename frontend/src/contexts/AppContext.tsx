@@ -10,7 +10,7 @@ import React, {
 } from "react";
 import { toast } from "sonner@2.0.3";
 import api from "../services/api";
-import { subscribeDataSync } from "../services/dataSyncBus";
+import { emitDataSync, subscribeDataSync } from "../services/dataSyncBus";
 import type {
   ActiveStatus,
   DocStatus,
@@ -3116,6 +3116,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         const exists = replaced.some((item) => item.id === saved.id);
         return exists ? replaced : [...replaced, saved];
       });
+      emitDataSync("quotation:create");
     } catch (err: any) {
       console.error("Failed to sync create quotation:", err);
       setQuotationList((prev) => prev.filter((item) => item.id !== optimisticId));
@@ -3143,6 +3144,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           const saved = normalizeQuotationForUi(res.data);
           setQuotationList((prev) => prev.map((q) => (q.id === id ? saved : q)));
         }
+        emitDataSync("quotation:update");
       } catch (err: any) {
         console.error("Failed to sync update quotation:", err);
         if (previousQuotation) {
@@ -3161,6 +3163,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       });
       try {
         await api.delete(`/quotations/${id}`);
+        emitDataSync("quotation:delete");
       } catch (err: any) {
         console.error("Failed to sync delete quotation:", err);
         if (deletedQuotation) {

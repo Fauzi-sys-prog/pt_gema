@@ -129,6 +129,9 @@ export default function ProjectManagementPage() {
     addProject,
     updateProject,
     deleteProject,
+    approveProject,
+    rejectProject,
+    unlockProject,
     workOrderList: ctxWorkOrderList,
     updateWorkOrder,
     addWorkOrder,
@@ -220,6 +223,13 @@ export default function ProjectManagementPage() {
   const productionReportList = serverProductionReportList ?? ctxProductionReportList;
   const fleetHealthList = serverFleetHealthList ?? [];
   const currentRole = String(currentUser?.role || "").trim().toUpperCase();
+  const canManageProjectApproval = hasRoleAccess(currentRole, ["OWNER"]);
+  const currentActorName =
+    currentUser?.fullName ||
+    currentUser?.name ||
+    currentUser?.username ||
+    currentRole ||
+    "Management";
 
   const linkedQuotationIds = new Set(
     projectList
@@ -233,6 +243,20 @@ export default function ProjectManagementPage() {
     if (!["SENT", "APPROVED"].includes(status)) return false;
     return !linkedQuotationIds.has(String(q.id || "").trim());
   });
+
+  useEffect(() => {
+    if (!selectedProject?.id) return;
+    const latest = projectList.find((project) => project.id === selectedProject.id);
+    if (!latest) return;
+
+    setSelectedProject((prev) => {
+      if (!prev || prev.id !== latest.id) return prev;
+      return {
+        ...prev,
+        ...latest,
+      };
+    });
+  }, [projectList, selectedProject?.id]);
 
   const normalizeEntityRows = <T,>(rows: any[]): T[] =>
     rows.map((row: any) => {
@@ -687,6 +711,54 @@ export default function ProjectManagementPage() {
       toast.error("Gagal memuat detail project terbaru.");
     } finally {
       setProjectDetailLoading(false);
+    }
+  };
+
+  const handleApproveSelectedProject = async () => {
+    if (!selectedProject) return;
+    if (!window.confirm(`Approve project ${selectedProject.kodeProject || selectedProject.namaProject}?`)) {
+      return;
+    }
+    try {
+      await approveProject(selectedProject.id, currentActorName);
+      toast.success("Project berhasil di-approve.");
+    } catch {
+      // Error toast already handled in AppContext.
+    }
+  };
+
+  const handleRejectSelectedProject = async () => {
+    if (!selectedProject) return;
+    const reason = window.prompt("Alasan reject project (minimal 5 karakter)", "") || "";
+    if (!reason.trim()) return;
+    if (reason.trim().length < 5) {
+      toast.error("Alasan reject minimal 5 karakter.");
+      return;
+    }
+    try {
+      await rejectProject(selectedProject.id, currentActorName, reason.trim());
+      toast.success("Project berhasil di-reject.");
+    } catch {
+      // Error toast already handled in AppContext.
+    }
+  };
+
+  const handleUnlockSelectedProject = async () => {
+    if (!selectedProject) return;
+    const reason =
+      window.prompt("Alasan unlock project (opsional)", "Perlu revisi approval") || "";
+    if (
+      !window.confirm(
+        `Unlock project ${selectedProject.kodeProject || selectedProject.namaProject} ke status Pending?`
+      )
+    ) {
+      return;
+    }
+    try {
+      await unlockProject(selectedProject.id, reason.trim() || undefined);
+      toast.success("Project berhasil di-unlock ke Pending.");
+    } catch {
+      // Error toast already handled in AppContext.
     }
   };
 
@@ -1521,6 +1593,18 @@ export default function ProjectManagementPage() {
             {(() => {
               const linkedQuotationStatus = String(getQuotationStatusByProject(selectedProject) || "").toUpperCase();
               const quotationReadyForProjectApproval = linkedQuotationStatus === "APPROVED";
+              const quotationFlowLabel =
+                linkedQuotationStatus === "APPROVED"
+                  ? "Project approval ready"
+                  : linkedQuotationStatus === "REVIEW"
+                    ? "Quotation sedang review"
+                    : linkedQuotationStatus === "SENT"
+                      ? "Quotation menunggu approval"
+                      : linkedQuotationStatus === "REJECTED"
+                        ? "Quotation ditolak, revisi dulu"
+                        : linkedQuotationStatus === "NO QUOTATION"
+                          ? "Project manual tanpa quotation"
+                          : "Approve quotation dulu";
               return (
                 <div className="mx-10 mt-6 p-3 rounded-2xl border border-slate-200 bg-slate-50">
                   <div className="flex flex-wrap items-center gap-2">
@@ -1532,7 +1616,7 @@ export default function ProjectManagementPage() {
                         ? "bg-emerald-50 text-emerald-700 border-emerald-200"
                         : "bg-rose-50 text-rose-700 border-rose-200"
                     }`}>
-                      {quotationReadyForProjectApproval ? "Project approval ready" : "Approve quotation dulu"}
+                      {quotationFlowLabel}
                     </span>
                   </div>
                 </div>
@@ -1541,52 +1625,119 @@ export default function ProjectManagementPage() {
             <div className="p-10 border-b border-slate-100 bg-white">
               <div className="flex justify-between items-start">
                 <div>
-                  <div className="flex items-center gap-4 mb-2">
-                    <span className="px-4 py-1 bg-slate-900 text-white text-[10px] font-black rounded-lg uppercase tracking-widest">{selectedProject.kodeProject}</span>
-                    <span className={`px-4 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest border ${getProjectStatusColor(selectedProject.status)}`}>
-                      {selectedProject.status}
-                    </span>
-                    <span
-                      className={`px-4 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest border ${
-                        String(selectedProject.approvalStatus || "Pending").toUpperCase() === "APPROVED"
-                          ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                          : String(selectedProject.approvalStatus || "Pending").toUpperCase() === "REJECTED"
-                            ? "bg-rose-50 text-rose-700 border-rose-200"
-                            : "bg-amber-50 text-amber-700 border-amber-200"
-                      }`}
-                    >
-                      {selectedProject.approvalStatus || "Pending"}
-                    </span>
-                  </div>
-                  <h2 className="text-4xl font-black text-slate-900 uppercase italic tracking-tighter leading-tight">{selectedProject.namaProject}</h2>
-                  <div className="flex items-center gap-6 mt-4">
-                    <div className="flex items-center gap-2 text-slate-500">
-                      <Building2 size={18} className="text-slate-400" />
-                      <span className="font-bold uppercase tracking-widest text-[10px]">{selectedProject.customer}</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-blue-600">
-                      <Receipt size={18} />
-                      <span className="font-black italic text-lg tracking-tighter">{formatCurrency(selectedProject.nilaiKontrak)}</span>
-                    </div>
-                  </div>
-                  <div className="mt-4 flex items-center gap-3">
-                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Approval Log:</span>
-                    <span className="text-[10px] font-bold text-slate-600 uppercase">
-                      {`By ${formatApprovalActor(selectedProject, "approved")}`}
-                    </span>
-                    <span className="text-[10px] font-bold text-slate-500">
-                      {formatDateTime(selectedProject.approvedAt)}
-                    </span>
-                  </div>
+                  {(() => {
+                    const projectApprovalUpper = String(selectedProject.approvalStatus || "Pending").toUpperCase();
+                    const actorKind =
+                      projectApprovalUpper === "REJECTED" ? "rejected" : "approved";
+                    const actorLabel = formatApprovalActor(selectedProject, actorKind);
+                    const actorTime =
+                      projectApprovalUpper === "REJECTED"
+                        ? formatDateTime((selectedProject as any).rejectedAt)
+                        : formatDateTime((selectedProject as any).approvedAt);
+                    const prefixLabel =
+                      projectApprovalUpper === "APPROVED"
+                        ? "Approved by"
+                        : projectApprovalUpper === "REJECTED"
+                          ? "Rejected by"
+                          : "Menunggu approval";
+                    return (
+                      <>
+                        <div className="flex items-center gap-4 mb-2">
+                          <span className="px-4 py-1 bg-slate-900 text-white text-[10px] font-black rounded-lg uppercase tracking-widest">{selectedProject.kodeProject}</span>
+                          <span className={`px-4 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest border ${getProjectStatusColor(selectedProject.status)}`}>
+                            {selectedProject.status}
+                          </span>
+                          <span
+                            className={`px-4 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest border ${
+                              String(selectedProject.approvalStatus || "Pending").toUpperCase() === "APPROVED"
+                                ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                : String(selectedProject.approvalStatus || "Pending").toUpperCase() === "REJECTED"
+                                  ? "bg-rose-50 text-rose-700 border-rose-200"
+                                  : "bg-amber-50 text-amber-700 border-amber-200"
+                            }`}
+                          >
+                            {selectedProject.approvalStatus || "Pending"}
+                          </span>
+                        </div>
+                        <h2 className="text-4xl font-black text-slate-900 uppercase italic tracking-tighter leading-tight">{selectedProject.namaProject}</h2>
+                        <div className="flex items-center gap-6 mt-4">
+                          <div className="flex items-center gap-2 text-slate-500">
+                            <Building2 size={18} className="text-slate-400" />
+                            <span className="font-bold uppercase tracking-widest text-[10px]">{selectedProject.customer}</span>
+                          </div>
+                          <div className="flex items-center gap-2 text-blue-600">
+                            <Receipt size={18} />
+                            <span className="font-black italic text-lg tracking-tighter">{formatCurrency(selectedProject.nilaiKontrak)}</span>
+                          </div>
+                        </div>
+                        <div className="mt-4 flex items-center gap-3">
+                          <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Approval Log:</span>
+                          <span className="text-[10px] font-bold text-slate-600 uppercase">
+                            {projectApprovalUpper === "PENDING" ? prefixLabel : `${prefixLabel} ${actorLabel}`}
+                          </span>
+                          {projectApprovalUpper !== "PENDING" && (
+                            <span className="text-[10px] font-bold text-slate-500">
+                              {actorTime}
+                            </span>
+                          )}
+                        </div>
+                      </>
+                    );
+                  })()}
                 </div>
                 <div className="flex gap-3">
-                  <button
-                    onClick={() => navigate('/finance/approvals')}
-                    className="px-4 py-3 rounded-2xl transition-all font-black text-[10px] uppercase tracking-widest bg-slate-50 text-slate-700 hover:bg-slate-900 hover:text-white"
-                    title="Approval/Reject project dilakukan dari Finance Approval"
-                  >
-                    Buka Finance Approval
-                  </button>
+                  {(() => {
+                    const linkedQuotationStatus = String(getQuotationStatusByProject(selectedProject) || "").toUpperCase();
+                    const quotationReadyForProjectApproval = linkedQuotationStatus === "APPROVED";
+                    const projectApprovalUpper = String(selectedProject.approvalStatus || "Pending").toUpperCase();
+
+                    return (
+                      <>
+                        {!quotationReadyForProjectApproval && selectedProject.quotationId && (
+                          <button
+                            onClick={() => navigate('/finance/approvals')}
+                            className="px-4 py-3 rounded-2xl transition-all font-black text-[10px] uppercase tracking-widest bg-slate-50 text-slate-700 hover:bg-slate-900 hover:text-white"
+                            title="Lanjutkan approval quotation dari Approval Hub"
+                          >
+                            Buka Approval Quotation
+                          </button>
+                        )}
+                        {canManageProjectApproval && quotationReadyForProjectApproval && projectApprovalUpper === "PENDING" && (
+                          <>
+                            <button
+                              onClick={() => {
+                                void handleApproveSelectedProject();
+                              }}
+                              className="px-4 py-3 rounded-2xl transition-all font-black text-[10px] uppercase tracking-widest bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-600 hover:text-white"
+                              title="Approve project dari Project Detail"
+                            >
+                              Approve Project
+                            </button>
+                            <button
+                              onClick={() => {
+                                void handleRejectSelectedProject();
+                              }}
+                              className="px-4 py-3 rounded-2xl transition-all font-black text-[10px] uppercase tracking-widest bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-600 hover:text-white"
+                              title="Reject project dari Project Detail"
+                            >
+                              Reject Project
+                            </button>
+                          </>
+                        )}
+                        {canManageProjectApproval && (projectApprovalUpper === "APPROVED" || projectApprovalUpper === "REJECTED") && (
+                          <button
+                            onClick={() => {
+                              void handleUnlockSelectedProject();
+                            }}
+                            className="px-4 py-3 rounded-2xl transition-all font-black text-[10px] uppercase tracking-widest bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-500 hover:text-white"
+                            title="Unlock project ke Pending untuk revisi approval"
+                          >
+                            Unlock Project
+                          </button>
+                        )}
+                      </>
+                    );
+                  })()}
                   <button
                     onClick={() => handleExportReport(selectedProject, "word")}
                     disabled={!isProjectApproved(selectedProject)}
