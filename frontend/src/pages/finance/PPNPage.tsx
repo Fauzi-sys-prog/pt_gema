@@ -1,6 +1,23 @@
-import { Suspense, lazy, useEffect, useState, useMemo } from 'react'; import { FileText, Search, Download, Filter, ArrowUpRight, ArrowDownLeft, Calendar, ChevronRight, Scale, ShieldCheck, ShieldAlert, Printer, FileCheck2, AlertCircle, RefreshCw } from 'lucide-react'; import { useApp } from '../../contexts/AppContext';
+import { Suspense, lazy, useEffect, useMemo, useState } from 'react';
+import {
+  AlertCircle,
+  ArrowDownLeft,
+  ArrowUpRight,
+  Calendar,
+  ChevronRight,
+  Download,
+  FileCheck2,
+  FileText,
+  Printer,
+  RefreshCw,
+  Scale,
+  Search,
+  ShieldAlert,
+  ShieldCheck,
+  TrendingUp,
+} from 'lucide-react';
+import { useApp } from '../../contexts/AppContext';
 import type { Invoice, VendorInvoice } from '../../contexts/AppContext';
-import type { Quotation } from '../../types/quotation';
 import api from '../../services/api';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner@2.0.3';
@@ -15,13 +32,12 @@ const ppnChartFallback = (
 );
 
 export default function PPNPage() {
-  const { invoiceList, vendorInvoiceList, quotationList, projectList, addAuditLog } = useApp();
+  const { invoiceList, vendorInvoiceList, addAuditLog } = useApp();
   const [activeTab, setActiveTab] = useState<'summary' | 'keluaran' | 'masukan'>('summary');
   const [searchTerm, setSearchTerm] = useState('');
   const [showCharts, setShowCharts] = useState(false);
   const [serverInvoiceList, setServerInvoiceList] = useState<Invoice[] | null>(null);
   const [serverVendorInvoiceList, setServerVendorInvoiceList] = useState<VendorInvoice[] | null>(null);
-  const [serverQuotationList, setServerQuotationList] = useState<Quotation[] | null>(null);
   const [serverPpnSummary, setServerPpnSummary] = useState<{
     totalKeluaran: number;
     totalMasukan: number;
@@ -32,15 +48,13 @@ export default function PPNPage() {
 
   const effectiveInvoiceList = serverInvoiceList ?? invoiceList;
   const effectiveVendorInvoiceList = serverVendorInvoiceList ?? vendorInvoiceList;
-  const effectiveQuotationList = serverQuotationList ?? quotationList;
   const safeInvoiceList = useMemo(() => (effectiveInvoiceList || []).filter(Boolean), [effectiveInvoiceList]);
   const safeVendorInvoiceList = useMemo(() => (effectiveVendorInvoiceList || []).filter(Boolean), [effectiveVendorInvoiceList]);
-  const safeQuotationList = useMemo(() => (effectiveQuotationList || []).filter(Boolean), [effectiveQuotationList]);
 
   const fetchPpnSources = async () => {
     try {
       setIsRefreshing(true);
-      const [ppnRes, salesRes, purchaseRes, quotationRes] = await Promise.all([
+      const [ppnRes, salesRes, purchaseRes] = await Promise.all([
         api.get<{
           summary?: {
             totalKeluaran?: number;
@@ -53,28 +67,21 @@ export default function PPNPage() {
         }>('/dashboard/finance-ppn-summary'),
         api.get('/invoices'),
         api.get('/finance/vendor-invoices'),
-        api.get('/quotations'),
       ]);
 
       const normalizeRows = <T,>(rows: any[]): T[] =>
         rows.map((row: any) => {
-          const payload = row?.payload ?? {};
-          if (payload && typeof payload === 'object' && !Array.isArray(payload) && !payload.id) {
-            return { ...payload, id: row.entityId } as T;
+          const payload = row?.payload;
+          if (payload && typeof payload === 'object' && !Array.isArray(payload)) {
+            return (!payload.id && row?.entityId ? { ...payload, id: row.entityId } : payload) as T;
           }
-          return payload as T;
+          return row as T;
         });
 
       const salesRows = Array.isArray(salesRes.data) ? salesRes.data : [];
       const purchaseRows = Array.isArray(purchaseRes.data) ? purchaseRes.data : [];
-      const quotationRows = Array.isArray(quotationRes.data)
-        ? quotationRes.data
-        : Array.isArray((quotationRes.data as { items?: unknown[] })?.items)
-          ? ((quotationRes.data as { items?: unknown[] }).items as unknown[])
-          : [];
       setServerInvoiceList(normalizeRows<Invoice>(salesRows));
       setServerVendorInvoiceList(normalizeRows<VendorInvoice>(purchaseRows));
-      setServerQuotationList(normalizeRows<Quotation>(quotationRows as any[]));
       if (ppnRes.data?.summary) {
         setServerPpnSummary({
           totalKeluaran: Number(ppnRes.data.summary.totalKeluaran || 0),
@@ -88,7 +95,6 @@ export default function PPNPage() {
     } catch {
       setServerInvoiceList(null);
       setServerVendorInvoiceList(null);
-      setServerQuotationList(null);
       setServerPpnSummary(null);
     } finally {
       setIsRefreshing(false);
@@ -144,37 +150,12 @@ export default function PPNPage() {
     }));
   }, [safeVendorInvoiceList]);
 
-  const ppnQuotation = useMemo(() => {
-    const normalizePpnAmount = (q: Quotation) => {
-      const dpp = Number(q.totalSebelumDiskon || 0);
-      const ppnRaw = Number((q as any).ppn || 0);
-      const grandTotal = Number(q.grandTotal || 0);
-      if (ppnRaw > 100) return ppnRaw;
-      if (grandTotal > dpp && dpp > 0) return grandTotal - dpp;
-      return dpp * (ppnRaw / 100);
-    };
-
-    return safeQuotationList.map((q) => ({
-      id: q.id,
-      tanggal: q.tanggal,
-      nomor: q.noPenawaran || q.nomorQuotation || q.id,
-      noFaktur: '',
-      pihak: q.kepada || q.perusahaan || q.customer?.nama || '-',
-      dpp: Number(q.totalSebelumDiskon || 0),
-      ppn: normalizePpnAmount(q),
-      status: q.status || 'Draft',
-      tipe: 'Quotation',
-      projectId: q.projectId,
-    }));
-  }, [safeQuotationList]);
-
   const totalKeluaran = useMemo(
     () =>
       serverPpnSummary
         ? Number(serverPpnSummary.totalKeluaran || 0)
-        : ppnKeluaran.reduce((sum, item) => sum + item.ppn, 0) +
-          ppnQuotation.reduce((sum, item) => sum + item.ppn, 0),
-    [ppnKeluaran, ppnQuotation, serverPpnSummary]
+        : ppnKeluaran.reduce((sum, item) => sum + item.ppn, 0),
+    [ppnKeluaran, serverPpnSummary]
   );
   const totalMasukan = useMemo(
     () => Number(serverPpnSummary?.totalMasukan ?? ppnMasukan.reduce((sum, item) => sum + item.ppn, 0)),
@@ -183,14 +164,14 @@ export default function PPNPage() {
   const netPPN = totalKeluaran - totalMasukan;
 
   const complianceStats = useMemo(() => {
-    const total = ppnKeluaran.length + ppnMasukan.length + ppnQuotation.length;
-    const withFaktur = [...ppnKeluaran, ...ppnMasukan, ...ppnQuotation].filter(i => i.noFaktur).length;
+    const total = ppnKeluaran.length + ppnMasukan.length;
+    const withFaktur = [...ppnKeluaran, ...ppnMasukan].filter(i => i.noFaktur).length;
     return {
       total,
       withFaktur,
       percentage: total > 0 ? Math.round((withFaktur / total) * 100) : 0
     };
-  }, [ppnKeluaran, ppnMasukan, ppnQuotation]);
+  }, [ppnKeluaran, ppnMasukan]);
 
   // Monthly Chart Data (Mocking monthly distribution for demo)
   const chartData = useMemo(() => [
@@ -202,11 +183,11 @@ export default function PPNPage() {
   ], [totalKeluaran, totalMasukan]);
 
   const filteredData = useMemo(() => {
-    const all = [...ppnKeluaran, ...ppnQuotation, ...ppnMasukan];
+    const all = [...ppnKeluaran, ...ppnMasukan];
     const keyword = String(searchTerm || '').toLowerCase();
     return all
       .filter(item => {
-        if (activeTab === 'keluaran') return item.tipe === 'Sales' || item.tipe === 'Quotation';
+        if (activeTab === 'keluaran') return item.tipe === 'Sales';
         if (activeTab === 'masukan') return item.tipe === 'Purchase';
         return true;
       })
@@ -216,7 +197,7 @@ export default function PPNPage() {
         String(item.noFaktur || '').toLowerCase().includes(keyword)
       )
       .sort((a, b) => new Date(b.tanggal).getTime() - new Date(a.tanggal).getTime());
-  }, [ppnKeluaran, ppnQuotation, ppnMasukan, activeTab, searchTerm]);
+  }, [ppnKeluaran, ppnMasukan, activeTab, searchTerm]);
 
   const handleExportLedger = async () => {
     if (!filteredData.length) {
@@ -321,7 +302,7 @@ export default function PPNPage() {
           <h3 className="text-3xl font-black italic text-red-600 mb-2">{formatCurrency(totalKeluaran)}</h3>
           <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400 uppercase">
              <TrendingUp size={14} className="text-emerald-500" />
-             <span>Terintegrasi dengan {ppnKeluaran.length} Invoices + {ppnQuotation.length} Quotations</span>
+             <span>Terintegrasi dengan {ppnKeluaran.length} Sales Invoices resmi</span>
           </div>
         </motion.div>
 
@@ -379,6 +360,9 @@ export default function PPNPage() {
               <h4 className="text-lg font-black uppercase italic tracking-tighter text-slate-900 mb-2">Faktur Pajak Health</h4>
               <p className="text-xs text-slate-500 font-medium leading-relaxed">
                 {complianceStats.withFaktur} dari {complianceStats.total} transaksi telah terlampir Faktur Pajak resmi.
+              </p>
+              <p className="mt-3 text-[11px] text-slate-400 font-semibold">
+                Quotation tidak dihitung di ledger PPN resmi. Halaman ini hanya membaca invoice penjualan dan vendor invoice.
               </p>
            </div>
            <div className="w-full pt-4 space-y-3">
@@ -453,7 +437,7 @@ export default function PPNPage() {
                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{item.tanggal}</span>
                        <span className="text-sm font-black text-slate-900 italic tracking-tight uppercase">{item.nomor}</span>
                        <span className={`text-[9px] font-bold mt-1 uppercase ${
-                         item.tipe === 'Sales' || item.tipe === 'Quotation' ? 'text-rose-500' : 'text-indigo-500'
+                         item.tipe === 'Sales' ? 'text-rose-500' : 'text-indigo-500'
                        }`}>
                          {item.tipe === 'Purchase' ? 'Pajak Masukan' : 'Pajak Keluaran'}
                        </span>
@@ -480,7 +464,7 @@ export default function PPNPage() {
                   </td>
                   <td className="px-10 py-8 text-right">
                     <span className={`text-sm font-black italic ${
-                      item.tipe === 'Sales' || item.tipe === 'Quotation' ? 'text-red-600' : 'text-indigo-600'
+                      item.tipe === 'Sales' ? 'text-red-600' : 'text-indigo-600'
                     }`}>
                       {formatCurrency(item.ppn)}
                     </span>
