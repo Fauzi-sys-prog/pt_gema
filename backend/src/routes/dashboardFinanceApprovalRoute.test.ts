@@ -159,6 +159,8 @@ test("POST /dashboard/finance-approval-action approves PO through authenticated 
     assert.equal(mock.calls.appUpserts.length, 1);
     assert.equal(mock.calls.auditLogs.length, 1);
     assert.equal(mock.calls.auditLogs[0]?.action, "PO_APPROVE");
+    assert.equal(mock.calls.auditLogs[0]?.userName, "Aji");
+    assert.equal(mock.calls.auditLogs[0]?.actorRole, Role.SPV);
 
     const poUpdate = mock.calls.poUpdates[0] as {
       data?: { status?: string };

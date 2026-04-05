@@ -68,7 +68,7 @@ const ASSET_ROLES = ['FINANCE', 'WAREHOUSE', 'PRODUKSI'] as const;
 const MAINTENANCE_ROLES = ['WAREHOUSE', 'PRODUKSI'] as const;
 const HUMAN_CAPITAL_ROLES = ['HR', 'FINANCE'] as const;
 const DATA_COLLECTION_ROLES = ['HR', 'SALES'] as const;
-const SETTINGS_ROLES = ['OWNER', 'ADMIN', 'MANAGER'] as const;
+const SETTINGS_ROLES = ['OWNER', 'SPV', 'ADMIN', 'MANAGER'] as const;
 
 const PATH_ACCESS_MAP: Record<string, readonly string[]> = {
   '/guide-book': GUIDE_BOOK_ROLES,

@@ -395,7 +395,8 @@ async function writeFinanceApprovalAuditLog(
   action: string,
   documentType: string,
   documentId: string,
-  metadata?: Record<string, unknown>
+  metadata?: Record<string, unknown>,
+  actorName?: string | null,
 ) {
   await prisma.auditLogEntry.create({
     data: {
@@ -412,7 +413,7 @@ async function writeFinanceApprovalAuditLog(
       actorUserId: req.user?.id ?? null,
       actorRole: req.user?.role ?? null,
       userId: req.user?.id ?? null,
-      userName: null,
+      userName: actorName || req.user?.role || "System",
       metadata: metadata ? JSON.stringify(metadata) : null,
     },
   });
@@ -459,7 +460,7 @@ dashboardRouter.post("/dashboard/finance-approval-action", authenticate, async (
       syncProjectFromQuotation: upsertProjectFromQuotationForApprovalSync,
       writeQuotationApprovalLog: writeQuotationApprovalLogSafe,
       writeAuditLog: async (action, documentType, documentId, metadata) =>
-        writeFinanceApprovalAuditLog(req, action, documentType, documentId, metadata),
+        writeFinanceApprovalAuditLog(req, action, documentType, documentId, metadata, actor.actorName),
     });
 
     return res.json(result);
