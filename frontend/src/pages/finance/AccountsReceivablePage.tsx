@@ -392,18 +392,18 @@ export default function AccountsReceivablePage() {
   };
 
   // Submit customer
-  const handleSubmitCustomer = () => {
+  const handleSubmitCustomer = async () => {
     if (!customerForm.namaCustomer || !customerForm.alamat) {
       toast.error('Lengkapi field yang diperlukan!');
       return;
     }
 
+    let ok = false;
     if (isEditMode && selectedInvoice) {
-      updateCustomer(selectedInvoice.id, {
+      ok = await updateCustomer(selectedInvoice.id, {
         ...customerForm,
         status: 'Active'
       });
-      toast.success('Customer berhasil diupdate!');
     } else {
       const newCustomer = {
         id: 'CUST-' + Date.now(),
@@ -412,9 +412,14 @@ export default function AccountsReceivablePage() {
         status: 'Active' as any,
         createdAt: new Date().toISOString()
       };
-      addCustomer(newCustomer);
+      ok = await addCustomer(newCustomer);
     }
 
+    if (!ok) return;
+
+    if (isEditMode) {
+      toast.success('Customer berhasil diupdate!');
+    }
     setShowCustomerModal(false);
     resetCustomerForm();
     setIsEditMode(false);

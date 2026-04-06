@@ -1,7 +1,7 @@
 import type { DocStatus } from "../types/auth";
 import type { Quotation } from "../types/quotation";
 
-const uid = (prefix = "ID") => `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+import { uid } from "./uid";
 
 const todayISO = () => new Date().toISOString().split("T")[0];
 

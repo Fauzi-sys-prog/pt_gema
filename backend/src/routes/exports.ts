@@ -1916,20 +1916,133 @@ function invoiceExportHtml(payload: Record<string, unknown>): string {
 
 function suratJalanExportHtml(payload: Record<string, unknown>): string {
   const items = asRecords(payload.items);
-  const signer = payload.pengirim || payload.createdBy;
-  const meta = keyValueTableHtml("Informasi Surat Jalan", [
-    { label: "ID", key: "id", value: payload.id },
-    { label: "No Surat Jalan", key: "noSuratJalan", value: payload.noSuratJalan || payload.nomor },
-    { label: "Tanggal", key: "tanggal", value: payload.tanggal },
-    { label: "Tujuan", key: "tujuan", value: payload.tujuan || payload.customer },
-    { label: "Alamat Tujuan", key: "alamatTujuan", value: payload.alamatTujuan || payload.alamat },
-    { label: "Pengirim", key: "pengirim", value: payload.pengirim },
-    { label: "Penerima", key: "penerima", value: payload.penerima },
-    { label: "Keterangan", key: "keterangan", value: payload.keterangan },
-    { label: "Status", key: "status", value: payload.status },
-  ]);
-  const itemsTable = listTable("Rincian Barang / Pekerjaan", items, ["namaBarang", "qty", "unit", "keterangan"]);
-  return `${companyLetterheadHtml("Surat Jalan")} ${meta} ${itemsTable} ${companyFooterHtml(signer)}`;
+  const number = toText(payload.noSurat || payload.noSuratJalan || payload.nomor || payload.id, "-");
+  const recipient = toText(payload.tujuan || payload.customer || payload.penerima, "-");
+  const recipientAddress = toText(payload.alamatTujuan || payload.alamat || payload.address, "");
+  const attention = toText(payload.upPerson || payload.attention, "");
+  const poOrSpk = toText(payload.noPO || payload.noSPK || payload.spkNumber || payload.projectId, "-");
+  const poOrSpkDate = formatCellByKey(
+    "tanggalPO",
+    payload.tanggalPO || payload.tanggalSpk || payload.tanggalPOorSPK || payload.tanggal
+  );
+  const vehicleNumber = toText(payload.noPolisi || payload.noKendaraan || payload.plate, "-");
+  const signer = payload.pengirim || payload.createdBy || "Management";
+  const paddedRows = Array.from({ length: Math.max(items.length, 10) }, (_, index) => {
+    const item = items[index] || {};
+    const itemName = toText(item.namaBarang || item.namaItem || item.nama || item.deskripsi, "");
+    const qtyValue = numFromUnknown(item.qty ?? item.jumlah);
+    const unit = toText(item.unit || item.satuan, "").trim();
+    const quantityLabel =
+      qtyValue !== null
+        ? `${qtyValue.toLocaleString("id-ID")}${unit ? ` ${unit}` : ""}`.trim()
+        : unit || "";
+    const itemNote = toText(item.keterangan || item.catatan || item.batchNo, "");
+    return {
+      quantity: quantityLabel,
+      description: [itemName, itemNote].filter(Boolean).join(itemNote && itemName ? " - " : ""),
+    };
+  });
+  const itemsRows = paddedRows
+    .map(
+      (row) => `
+        <tr>
+          <td style="border:1px solid #111;padding:8px 10px;height:28px;font-size:12px;">${escapeHtml(row.quantity || "")}</td>
+          <td style="border:1px solid #111;padding:8px 10px;height:28px;font-size:12px;">${escapeHtml(row.description || "")}</td>
+        </tr>
+      `
+    )
+    .join("");
+
+  return `
+    <div style="width:100%;color:#111;">
+      <table style="width:100%;border-collapse:collapse;margin-bottom:10px;">
+        <tr>
+          <td style="width:120px;vertical-align:top;padding-right:10px;">
+            <div style="width:100px;height:72px;display:flex;align-items:center;justify-content:center;">
+              <img src="${COMPANY_LOGO_DATA_URI}" alt="Logo Gema Teknik" style="max-width:98px;max-height:68px;object-fit:contain;" />
+            </div>
+          </td>
+          <td style="vertical-align:top;">
+            <div style="font-family:'Times New Roman',serif;font-size:26px;font-style:italic;font-weight:700;line-height:1.05;">
+              GEMA TEKNIK PERKASA
+            </div>
+            <div style="font-size:12px;line-height:1.35;margin-top:4px;">
+              Jl. Nurushoba II No. 170 Kav. Pondok Muslim<br/>
+              Setia Mekar Tambun Selatan Bekasi 17510<br/>
+              Phone : 88354139, 085100420221 &nbsp; Fax : 021.88354139<br/>
+              Email : gemateknik@gmail.com &nbsp; Website : gemateknik.co.id
+            </div>
+          </td>
+          <td style="width:280px;vertical-align:top;padding-left:12px;">
+            <div style="font-size:12px;text-align:left;margin-top:6px;">
+              <span style="display:inline-block;width:32px;">No.</span>: ${escapeHtml(number)}
+            </div>
+          </td>
+        </tr>
+      </table>
+
+      <table style="width:100%;border-collapse:collapse;margin-bottom:12px;">
+        <tr>
+          <td style="width:46%;border:1px solid #111;vertical-align:top;padding:10px 12px;">
+            <div style="font-weight:700;font-size:13px;margin-bottom:6px;">Kepada :</div>
+            <div style="font-size:12px;line-height:1.6;min-height:86px;">
+              ${escapeHtml(recipient)}<br/>
+              ${recipientAddress ? `${escapeHtml(recipientAddress)}<br/>` : ""}
+              ${attention ? `UP: ${escapeHtml(attention)}` : ""}
+            </div>
+          </td>
+          <td style="width:54%;vertical-align:top;padding-left:12px;">
+            <div style="text-align:center;font-family:'Times New Roman',serif;font-size:22px;font-weight:700;letter-spacing:.4px;margin:8px 0 6px;">
+              SURAT JALAN
+            </div>
+            <table style="width:100%;border-collapse:collapse;border:1px solid #111;">
+              <tr>
+                <td style="width:44%;padding:6px 10px 4px;font-size:12px;">Tanggal</td>
+                <td style="padding:6px 10px 4px;font-size:12px;">: ${escapeHtml(formatCellByKey("tanggal", payload.tanggal))}</td>
+              </tr>
+              <tr>
+                <td style="padding:4px 10px;font-size:12px;">SPK / PO No.</td>
+                <td style="padding:4px 10px;font-size:12px;">: ${escapeHtml(poOrSpk)}</td>
+              </tr>
+              <tr>
+                <td style="padding:4px 10px;font-size:12px;">Tanggal PO / SPK</td>
+                <td style="padding:4px 10px;font-size:12px;">: ${escapeHtml(poOrSpkDate)}</td>
+              </tr>
+              <tr>
+                <td style="padding:4px 10px 8px;font-size:12px;">No. Kend.</td>
+                <td style="padding:4px 10px 8px;font-size:12px;">: ${escapeHtml(vehicleNumber)}</td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+      </table>
+
+      <table style="width:100%;border-collapse:collapse;margin-bottom:18px;">
+        <thead>
+          <tr>
+            <th style="width:28%;border:1px solid #111;padding:8px 10px;font-size:13px;text-align:left;background:#fff;">Banyaknya</th>
+            <th style="border:1px solid #111;padding:8px 10px;font-size:13px;text-align:left;background:#fff;">Keterangan</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${itemsRows}
+        </tbody>
+      </table>
+
+      <table style="width:100%;border-collapse:collapse;margin-top:34px;font-size:13px;">
+        <tr>
+          <td style="width:50%;text-align:center;padding-top:18px;">
+            <div style="font-weight:700;margin-bottom:70px;">Diterima,</div>
+            <div style="font-weight:700;">( ${escapeHtml(toText(payload.penerima || "", "")) || "........................"} )</div>
+          </td>
+          <td style="width:50%;text-align:center;padding-top:18px;">
+            <div style="font-weight:700;margin-bottom:70px;">Hormat kami,</div>
+            <div style="font-weight:700;">( ${escapeHtml(toText(signer, "")) || "........................"} )</div>
+          </td>
+        </tr>
+      </table>
+    </div>
+  `;
 }
 
 function proofOfDeliveryExportHtml(payload: Record<string, unknown>): string {
