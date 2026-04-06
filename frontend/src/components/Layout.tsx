@@ -36,6 +36,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { getRoleLabel, hasRoleAccess, isOwnerLike } from '../utils/roles';
+import { getAccountHomePath, hasAccountPathOverride } from '../utils/accountAccess';
 import logoImage from 'figma:asset/661f558dc14c79fa090b7039a885f26b843f5c04.png';
 
 // Using a standard URL or SVG for local build compatibility
@@ -157,14 +158,24 @@ export default function Layout({ children }: LayoutProps) {
   }, [location.pathname, isMobile]);
 
   const role = String(currentUser?.role || '').toUpperCase();
+  const username = String(currentUser?.username || '').trim().toLowerCase();
   const hasPrivilegedAccess = role === 'ADMIN' || role === 'MANAGER' || isOwnerLike(role);
 
   const hasAccessToPath = (path?: string): boolean => {
     if (!currentUser || !path) return false;
+    const accountOverride = hasAccountPathOverride(username, path);
+    if (accountOverride !== null) return accountOverride;
     if (hasPrivilegedAccess) return true;
     const allowedRoles = PATH_ACCESS_MAP[path];
     return Array.isArray(allowedRoles) ? hasRoleAccess(role, allowedRoles) : false;
   };
+
+  useEffect(() => {
+    if (!currentUser) return;
+    if (location.pathname === '/login') return;
+    if (hasAccessToPath(location.pathname)) return;
+    navigate(getAccountHomePath(username), { replace: true });
+  }, [currentUser, location.pathname, navigate, username]);
 
   const getVisibleSubmenu = (submenu?: MenuItem['submenu']) =>
     (submenu || []).filter((subItem) => hasAccessToPath(subItem.path));

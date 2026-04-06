@@ -16,6 +16,7 @@ import type { Project } from '../../contexts/AppContext';
 import api from '../../services/api';
 import FlowHintBar from '../../components/ui/FlowHintBar';
 import { getRoleLabel, hasRoleAccess, isOwnerLike } from '../../utils/roles';
+import { isFinancePoOnlyUser } from '../../utils/accountAccess';
 
 function safeArray<T>(value: T[] | null | undefined): T[] {
   return Array.isArray(value) ? value.filter(Boolean) : [];
@@ -123,6 +124,7 @@ export default function MainDashboard() {
 
   const topProjects = projects.slice(0, 4);
   const roleLabel = getRoleLabel(currentRole);
+  const restrictedFinancePoUser = isFinancePoOnlyUser(currentUser?.username);
 
   const roleDashboard = useMemo(() => {
     const base = {
@@ -147,6 +149,33 @@ export default function MainDashboard() {
         { label: 'Panduan Sistem', path: '/guide-book', tone: 'bg-white border border-slate-200 text-slate-700' },
       ],
     };
+
+    if (restrictedFinancePoUser) {
+      return {
+        title: 'Finance, Penagihan, dan Purchase Order',
+        description: 'Fokus akun ini dibatasi untuk pekerjaan finance harian dan pembuatan purchase order, jadi jalur kerjanya sengaja dibuat lebih sempit dan langsung ke modul inti.',
+        badges: [
+          { label: `${unpaidInvoices} invoice terbuka`, tone: unpaidInvoices > 0 ? 'warning' as const : 'neutral' as const },
+          { label: `${openPurchaseOrders} PO aktif`, tone: openPurchaseOrders > 0 ? 'info' as const : 'neutral' as const },
+          { label: `${formatRupiah(totalRevenue)} revenue`, tone: 'success' as const },
+        ],
+        checks: [
+          { label: 'Invoice terbuka', value: String(unpaidInvoices) },
+          { label: 'PO aktif', value: String(openPurchaseOrders) },
+          { label: 'Revenue', value: formatRupiah(totalRevenue) },
+        ],
+        focusItems: [
+          'Mulai dari approval finance dan tagihan yang masih terbuka.',
+          'Purchase order tetap bisa dibuat dari akun ini untuk kebutuhan finance-procurement.',
+          'Jalur menu lain sengaja disembunyikan supaya pekerjaan tetap fokus dan tidak nyasar modul.',
+        ],
+        quickLinks: [
+          { label: 'Finance Approval', path: '/finance/approvals', tone: 'bg-slate-900 text-white' },
+          { label: 'Accounts Receivable', path: '/finance/accounts-receivable', tone: 'bg-blue-600 text-white' },
+          { label: 'Purchase Order', path: '/purchasing/purchase-order', tone: 'bg-white border border-slate-200 text-slate-700' },
+        ],
+      };
+    }
 
     if (isOwnerLike(currentRole) || ['SPV', 'ADMIN', 'MANAGER'].includes(currentRole)) {
       return {
@@ -357,6 +386,7 @@ export default function MainDashboard() {
     attendanceToday,
     employees.length,
     totalHours,
+    restrictedFinancePoUser,
   ]);
 
   return (
