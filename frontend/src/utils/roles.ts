@@ -48,9 +48,9 @@ export function getRoleLabel(role?: string | null): string {
   const normalized = normalizeRole(role);
   switch (normalized) {
     case "OWNER":
-      return "Pimpinan (Owner)";
+      return "Owner";
     case "SPV":
-      return "Pimpinan (SPV)";
+      return "SPV";
     case "ADMIN":
       return "Administrator";
     case "SALES":
