@@ -306,32 +306,34 @@ export default function ApprovalCenterPage() {
   const getQuotationAuditLabel = (q: ApprovalQuotationItem) => {
     if (q.auditStatus) return q.auditStatus;
     const status = normalizeStatus(q.status);
-    if (status === "DRAFT") return "Ready to Send";
-    if (status === "SENT") return "Management Approval";
-    if (status === "REVIEW") return "Management Review";
-    if (status === "REJECTED") return "Rejected";
-    if (status === "APPROVED") return "Approved";
-    return "Processed";
+    if (status === "DRAFT") return "Draft";
+    if (status === "SENT") return "Menunggu Approval";
+    if (status === "REVIEW") return "Sedang Direview";
+    if (status === "REJECTED") return "Ditolak";
+    if (status === "APPROVED") return "Disetujui";
+    return status ? status.replace(/_/g, " ") : "Status Belum Diketahui";
   };
   const getQuotationAuditTrail = (q: ApprovalQuotationItem) => {
     if (q.auditTrail) return q.auditTrail;
     const status = normalizeStatus(q.status);
     if (status === "REVIEW") {
       const actor = q.spvApprovedBy ? `${q.spvApprovedBy}${q.spvApprovedByRole ? ` (${q.spvApprovedByRole})` : ""}` : "SPV";
-      return `SPV reviewed by ${actor}`;
+      return `Sedang direview oleh ${actor}`;
     }
     if (status === "APPROVED") {
       const actor = q.approvedBy ? `${q.approvedBy}${q.approvedByRole ? ` (${q.approvedByRole})` : ""}` : "Management";
-      return `Approved by ${actor}`;
+      return `Disetujui oleh ${actor}`;
     }
     if (status === "REJECTED") {
       const actor = q.rejectedBy ? `${q.rejectedBy}${q.rejectedByRole ? ` (${q.rejectedByRole})` : ""}` : "Reviewer";
-      return `Rejected by ${actor}`;
+      return `Ditolak oleh ${actor}`;
     }
     if (status === "SENT") {
-      return q.sentBy ? `Sent by ${q.sentBy}` : "Waiting management approval";
+      return q.sentBy
+        ? `Sudah dikirim oleh ${q.sentBy} dan menunggu approval OWNER / SPV`
+        : "Sudah dikirim dan menunggu approval OWNER / SPV";
     }
-    return "Draft quotation";
+    return "Quotation masih draft dan belum dikirim ke approval.";
   };
   const canResendRejectedQuotation = (q: ApprovalQuotationItem) =>
     Array.isArray(q.availableActions)
@@ -703,7 +705,7 @@ export default function ApprovalCenterPage() {
                   <tr className="bg-slate-50/50 border-b border-slate-100">
                     <th className="px-10 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Document Details</th>
                     <th className="px-10 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Value Impact</th>
-                    <th className="px-10 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Audit Status</th>
+                    <th className="px-10 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Status Approval</th>
                     <th className="px-10 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Command</th>
                   </tr>
                 </thead>
@@ -972,11 +974,11 @@ export default function ApprovalCenterPage() {
               </div>
               <div className="px-8 py-6 grid grid-cols-1 md:grid-cols-4 gap-4 border-b border-slate-100 bg-slate-50/40">
                 <div className="rounded-2xl border border-slate-100 bg-white px-5 py-4">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Audit Status</p>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Status Approval</p>
                   <p className="text-sm font-black italic text-slate-900 mt-2">{getQuotationAuditLabel(selectedQuotationDetail)}</p>
                 </div>
                 <div className="rounded-2xl border border-slate-100 bg-white px-5 py-4">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Audit Trail</p>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Ringkasan Approval</p>
                   <p className="text-sm font-bold text-slate-700 mt-2">{getQuotationAuditTrail(selectedQuotationDetail)}</p>
                 </div>
                 <div className="rounded-2xl border border-slate-100 bg-white px-5 py-4">
@@ -989,6 +991,12 @@ export default function ApprovalCenterPage() {
                 </div>
               </div>
               <div className="px-8 py-6">
+                <div className="mb-6 rounded-[1.5rem] border border-indigo-100 bg-indigo-50 px-5 py-4">
+                  <p className="text-[10px] font-black uppercase tracking-[0.25em] text-indigo-500">Flow Quotation</p>
+                  <p className="mt-2 text-sm font-bold text-indigo-900">
+                    Quotation bergerak dari Draft, lalu Sent, lalu Approved atau Rejected. Setelah quotation disetujui, project otomatis dibuat atau disinkronkan lalu masuk approval project terpisah.
+                  </p>
+                </div>
                 <div className="overflow-x-auto rounded-[1.5rem] border border-slate-100">
                   <table className="w-full text-left">
                     <thead className="bg-slate-50 border-b border-slate-100">
