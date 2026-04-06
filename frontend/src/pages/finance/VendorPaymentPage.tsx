@@ -868,7 +868,11 @@ export default function VendorPaymentPage() {
                               className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
                               title={vendor.status === 'Active' ? 'Deactivate' : 'Activate'}
                             >
-                              <Edit className="w-4 h-4" />
+                              {vendor.status === 'Active' ? (
+                                <XCircle className="w-4 h-4" />
+                              ) : (
+                                <CheckCircle className="w-4 h-4" />
+                              )}
                             </button>
                             <button
                               onClick={async () => {

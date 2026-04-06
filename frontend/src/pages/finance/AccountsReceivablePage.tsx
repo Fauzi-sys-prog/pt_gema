@@ -24,7 +24,8 @@ import {
   Ban,
   BarChart3,
   Users,
-  Wallet
+  Wallet,
+  Trash2
 } from 'lucide-react';
 import { toast } from 'sonner@2.0.3';
 
@@ -50,6 +51,7 @@ export default function AccountsReceivablePage() {
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState<any>(null);
+  const [selectedCustomer, setSelectedCustomer] = useState<any>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('All');
   const [filterCustomer, setFilterCustomer] = useState<string>('All');
@@ -399,8 +401,8 @@ export default function AccountsReceivablePage() {
     }
 
     let ok = false;
-    if (isEditMode && selectedInvoice) {
-      ok = await updateCustomer(selectedInvoice.id, {
+    if (isEditMode && selectedCustomer) {
+      ok = await updateCustomer(selectedCustomer.id, {
         ...customerForm,
         status: 'Active'
       });
@@ -420,9 +422,52 @@ export default function AccountsReceivablePage() {
     if (isEditMode) {
       toast.success('Customer berhasil diupdate!');
     }
-    setShowCustomerModal(false);
+    closeCustomerModal();
     resetCustomerForm();
     setIsEditMode(false);
+  };
+
+  const closeCustomerModal = () => {
+    setShowCustomerModal(false);
+    setSelectedCustomer(null);
+    setIsEditMode(false);
+    resetCustomerForm();
+  };
+
+  const openCreateCustomerModal = () => {
+    setSelectedCustomer(null);
+    setIsEditMode(false);
+    resetCustomerForm();
+    setShowCustomerModal(true);
+  };
+
+  const openEditCustomerModal = (customer: any) => {
+    setSelectedCustomer(customer);
+    setIsEditMode(true);
+    setCustomerForm({
+      kodeCustomer: customer.kodeCustomer || '',
+      namaCustomer: customer.namaCustomer || '',
+      alamat: customer.alamat || '',
+      kota: customer.kota || '',
+      kontak: customer.kontak || '',
+      telepon: customer.telepon || '',
+      email: customer.email || '',
+      npwp: customer.npwp || '',
+      paymentTerms: customer.paymentTerms || 'NET 30',
+      rating: Number(customer.rating || 5)
+    });
+    setShowCustomerModal(true);
+  };
+
+  const handleDeleteCustomer = async (customer: any) => {
+    if (customer.invoiceCount > 0) {
+      toast.error('Customer masih punya invoice terkait. Hapus atau pindahkan invoice dulu.');
+      return;
+    }
+    if (!window.confirm(`Hapus customer ${customer.namaCustomer}?`)) return;
+    const ok = await deleteCustomer(customer.id);
+    if (!ok) return;
+    toast.success('Customer berhasil dihapus!');
   };
 
   // Send invoice
@@ -876,30 +921,51 @@ export default function AccountsReceivablePage() {
                         <td className="px-4 py-3">
                           <div className="flex items-center justify-center gap-2">
                             {invoice.status === 'Draft' && (
-                              <button
-                                onClick={() => handleSendInvoice(invoice.id)}
-                                disabled={invoice.isCustomerMissing}
-                                className="p-1 hover:bg-blue-50 rounded text-blue-600 disabled:opacity-40 disabled:cursor-not-allowed"
-                                title={invoice.isCustomerMissing ? 'Customer invoice ini tidak valid di master customer' : 'Kirim Invoice'}
-                              >
-                                <Send className="w-4 h-4" />
-                              </button>
+                              <>
+                                <button
+                                  onClick={() => handleSendInvoice(invoice.id)}
+                                  disabled={invoice.isCustomerMissing}
+                                  className="p-1 hover:bg-blue-50 rounded text-blue-600 disabled:opacity-40 disabled:cursor-not-allowed"
+                                  title={invoice.isCustomerMissing ? 'Customer invoice ini tidak valid di master customer' : 'Kirim Invoice'}
+                                >
+                                  <Send className="w-4 h-4" />
+                                </button>
+                                <button
+                                  onClick={async () => {
+                                    if (!window.confirm(`Hapus draft invoice ${invoice.noInvoice}?`)) return;
+                                    await deleteCustomerInvoice(invoice.id);
+                                  }}
+                                  className="p-1 hover:bg-red-50 rounded text-red-600"
+                                  title="Hapus Draft Invoice"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </>
                             )}
                             {(invoice.status === 'Sent' || invoice.status === 'Partial Paid' || invoice.status === 'Overdue') && (
-                              <button
-                                onClick={() => {
-                                  setSelectedInvoice(invoice);
-                                  setShowPaymentModal(true);
-                                  setPaymentForm(prev => ({
-                                    ...prev,
-                                    nominal: invoice.outstandingAmount
-                                  }));
-                                }}
-                                className="p-1 hover:bg-green-50 rounded text-green-600"
-                                title="Catat Pembayaran"
-                              >
-                                <Wallet className="w-4 h-4" />
-                              </button>
+                              <>
+                                <button
+                                  onClick={() => {
+                                    setSelectedInvoice(invoice);
+                                    setShowPaymentModal(true);
+                                    setPaymentForm(prev => ({
+                                      ...prev,
+                                      nominal: invoice.outstandingAmount
+                                    }));
+                                  }}
+                                  className="p-1 hover:bg-green-50 rounded text-green-600"
+                                  title="Catat Pembayaran"
+                                >
+                                  <Wallet className="w-4 h-4" />
+                                </button>
+                                <button
+                                  onClick={() => handleCancelInvoice(invoice.id)}
+                                  className="p-1 hover:bg-amber-50 rounded text-amber-600"
+                                  title="Batalkan Invoice"
+                                >
+                                  <Ban className="w-4 h-4" />
+                                </button>
+                              </>
                             )}
                             <button
                               onClick={() => {
@@ -928,11 +994,7 @@ export default function AccountsReceivablePage() {
         <div>
           <div className="flex gap-3 mb-6">
             <button
-              onClick={() => {
-                setShowCustomerModal(true);
-                setIsEditMode(false);
-                resetCustomerForm();
-              }}
+              onClick={openCreateCustomerModal}
               className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2"
             >
               <Plus className="w-4 h-4" />
@@ -998,6 +1060,23 @@ export default function AccountsReceivablePage() {
                       <span className="font-medium">Terms:</span>
                       <span>{customer.paymentTerms || 'NET 30'}</span>
                     </div>
+                  </div>
+                  <div className="mt-4 flex items-center justify-end gap-2">
+                    <button
+                      onClick={() => openEditCustomerModal(customer)}
+                      className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                      title="Edit customer"
+                    >
+                      <Edit className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => handleDeleteCustomer(customer)}
+                      disabled={customer.invoiceCount > 0}
+                      className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                      title={customer.invoiceCount > 0 ? 'Customer masih dipakai invoice' : 'Hapus customer'}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
                   </div>
                 </div>
               </motion.div>
@@ -1588,7 +1667,7 @@ export default function AccountsReceivablePage() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
-            onClick={() => setShowCustomerModal(false)}
+            onClick={closeCustomerModal}
           >
             <motion.div
               initial={{ scale: 0.95 }}
@@ -1602,7 +1681,7 @@ export default function AccountsReceivablePage() {
                   {isEditMode ? 'Edit Customer' : 'Tambah Customer'}
                 </h2>
                 <button
-                  onClick={() => setShowCustomerModal(false)}
+                  onClick={closeCustomerModal}
                   className="p-2 hover:bg-gray-100 rounded-lg"
                 >
                   <X className="w-5 h-5" />
@@ -1719,7 +1798,7 @@ export default function AccountsReceivablePage() {
                   {isEditMode ? 'Update' : 'Simpan'} Customer
                 </button>
                 <button
-                  onClick={() => setShowCustomerModal(false)}
+                  onClick={closeCustomerModal}
                   className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
                 >
                   Batal
