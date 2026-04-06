@@ -944,7 +944,7 @@ export default function ApprovalCenterPage() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 bg-slate-950/45 backdrop-blur-sm flex items-center justify-center p-6"
+            className="fixed inset-0 z-50 bg-slate-950/45 backdrop-blur-sm flex items-start justify-center overflow-y-auto p-6"
             onClick={() => setSelectedQuotationDetail(null)}
           >
             <motion.div
@@ -952,7 +952,7 @@ export default function ApprovalCenterPage() {
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 8, scale: 0.98 }}
               transition={{ duration: 0.18 }}
-              className="w-full max-w-5xl bg-white rounded-[2rem] border border-slate-200 shadow-2xl overflow-hidden"
+              className="my-6 flex max-h-[calc(100vh-3rem)] w-full max-w-5xl flex-col overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-2xl"
               onClick={(event) => event.stopPropagation()}
             >
               <div className="px-8 py-6 border-b border-slate-100 flex items-start justify-between gap-6">
@@ -972,32 +972,33 @@ export default function ApprovalCenterPage() {
                   Close
                 </button>
               </div>
-              <div className="px-8 py-6 grid grid-cols-1 md:grid-cols-4 gap-4 border-b border-slate-100 bg-slate-50/40">
-                <div className="rounded-2xl border border-slate-100 bg-white px-5 py-4">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Status Approval</p>
-                  <p className="text-sm font-black italic text-slate-900 mt-2">{getQuotationAuditLabel(selectedQuotationDetail)}</p>
+              <div className="overflow-y-auto">
+                <div className="px-8 py-6 grid grid-cols-1 md:grid-cols-4 gap-4 border-b border-slate-100 bg-slate-50/40">
+                  <div className="rounded-2xl border border-slate-100 bg-white px-5 py-4">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Status Approval</p>
+                    <p className="text-sm font-black italic text-slate-900 mt-2">{getQuotationAuditLabel(selectedQuotationDetail)}</p>
+                  </div>
+                  <div className="rounded-2xl border border-slate-100 bg-white px-5 py-4">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Ringkasan Approval</p>
+                    <p className="text-sm font-bold text-slate-700 mt-2">{getQuotationAuditTrail(selectedQuotationDetail)}</p>
+                  </div>
+                  <div className="rounded-2xl border border-slate-100 bg-white px-5 py-4">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Tanggal</p>
+                    <p className="text-sm font-bold text-slate-700 mt-2">{selectedQuotationDetail.tanggal || "-"}</p>
+                  </div>
+                  <div className="rounded-2xl border border-slate-100 bg-white px-5 py-4">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Grand Total</p>
+                    <p className="text-sm font-black italic text-indigo-600 mt-2">Rp {(selectedQuotationDetail.grandTotal || 0).toLocaleString('id-ID')}</p>
+                  </div>
                 </div>
-                <div className="rounded-2xl border border-slate-100 bg-white px-5 py-4">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Ringkasan Approval</p>
-                  <p className="text-sm font-bold text-slate-700 mt-2">{getQuotationAuditTrail(selectedQuotationDetail)}</p>
-                </div>
-                <div className="rounded-2xl border border-slate-100 bg-white px-5 py-4">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Tanggal</p>
-                  <p className="text-sm font-bold text-slate-700 mt-2">{selectedQuotationDetail.tanggal || "-"}</p>
-                </div>
-                <div className="rounded-2xl border border-slate-100 bg-white px-5 py-4">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Grand Total</p>
-                  <p className="text-sm font-black italic text-indigo-600 mt-2">Rp {(selectedQuotationDetail.grandTotal || 0).toLocaleString('id-ID')}</p>
-                </div>
-              </div>
-              <div className="px-8 py-6">
-                <div className="mb-6 rounded-[1.5rem] border border-indigo-100 bg-indigo-50 px-5 py-4">
-                  <p className="text-[10px] font-black uppercase tracking-[0.25em] text-indigo-500">Flow Quotation</p>
-                  <p className="mt-2 text-sm font-bold text-indigo-900">
-                    Quotation bergerak dari Draft, lalu Sent, lalu Approved atau Rejected. Setelah quotation disetujui, project otomatis dibuat atau disinkronkan lalu masuk approval project terpisah.
-                  </p>
-                </div>
-                <div className="overflow-x-auto rounded-[1.5rem] border border-slate-100">
+                <div className="px-8 py-6">
+                  <div className="mb-6 rounded-[1.5rem] border border-indigo-100 bg-indigo-50 px-5 py-4">
+                    <p className="text-[10px] font-black uppercase tracking-[0.25em] text-indigo-500">Flow Quotation</p>
+                    <p className="mt-2 text-sm font-bold text-indigo-900">
+                      Quotation bergerak dari Draft, lalu Sent, lalu Approved atau Rejected. Setelah quotation disetujui, project otomatis dibuat atau disinkronkan lalu masuk approval project terpisah.
+                    </p>
+                  </div>
+                  <div className="overflow-x-auto rounded-[1.5rem] border border-slate-100">
                   <table className="w-full text-left">
                     <thead className="bg-slate-50 border-b border-slate-100">
                       <tr>
@@ -1028,55 +1029,56 @@ export default function ApprovalCenterPage() {
                       )}
                     </tbody>
                   </table>
-                </div>
-                {selectedQuotationDetail.rejectReason && (
-                  <div className="mt-6 rounded-2xl border border-rose-100 bg-rose-50 px-5 py-4">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-rose-500 mb-2">Reject Reason</p>
-                    <p className="text-sm font-bold text-rose-700">{selectedQuotationDetail.rejectReason}</p>
                   </div>
-                )}
-                <div className="mt-6 rounded-[1.5rem] border border-slate-100 bg-slate-50/50 px-6 py-5">
-                  <div className="flex items-center justify-between gap-4 mb-4">
-                    <div>
-                      <p className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-400">Approval Timeline</p>
-                      <p className="text-sm font-bold text-slate-600 mt-1">Timeline ini langsung diambil dari tabel approval log quotation.</p>
-                    </div>
-                  </div>
-                  {quotationTimelineLoading ? (
-                    <div className="text-sm font-bold text-slate-500">Loading timeline...</div>
-                  ) : quotationTimelineError ? (
-                    <div className="text-sm font-bold text-rose-600">{quotationTimelineError}</div>
-                  ) : quotationTimeline.length === 0 ? (
-                    <div className="text-sm font-bold text-slate-500">Belum ada audit trail quotation ini.</div>
-                  ) : (
-                    <div className="space-y-3">
-                      {quotationTimeline.map((row: any) => (
-                        <div key={row.id} className="rounded-2xl border border-slate-100 bg-white px-5 py-4">
-                          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-                            <div>
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <span className="px-3 py-1 rounded-full bg-indigo-50 border border-indigo-100 text-[10px] font-black uppercase tracking-widest text-indigo-700">
-                                  {row?.action || "-"}
-                                </span>
-                                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                                  {row?.createdAt ? new Date(row.createdAt).toLocaleString('id-ID') : "-"}
-                                </span>
-                              </div>
-                              <p className="text-sm font-bold text-slate-700 mt-2">
-                                {getApprovalActorLabel(row)} ({getApprovalRoleLabel(row?.actorRole)})
-                              </p>
-                            </div>
-                            <div className="text-sm font-bold text-slate-600">
-                              {row?.fromStatus || "-"} → {row?.toStatus || "-"}
-                            </div>
-                          </div>
-                          {row?.reason ? (
-                            <p className="mt-3 text-sm font-bold text-rose-600">Reason: {row.reason}</p>
-                          ) : null}
-                        </div>
-                      ))}
+                  {selectedQuotationDetail.rejectReason && (
+                    <div className="mt-6 rounded-2xl border border-rose-100 bg-rose-50 px-5 py-4">
+                      <p className="text-[10px] font-black uppercase tracking-widest text-rose-500 mb-2">Reject Reason</p>
+                      <p className="text-sm font-bold text-rose-700">{selectedQuotationDetail.rejectReason}</p>
                     </div>
                   )}
+                  <div className="mt-6 rounded-[1.5rem] border border-slate-100 bg-slate-50/50 px-6 py-5">
+                    <div className="flex items-center justify-between gap-4 mb-4">
+                      <div>
+                        <p className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-400">Approval Timeline</p>
+                        <p className="text-sm font-bold text-slate-600 mt-1">Timeline ini langsung diambil dari tabel approval log quotation.</p>
+                      </div>
+                    </div>
+                    {quotationTimelineLoading ? (
+                      <div className="text-sm font-bold text-slate-500">Loading timeline...</div>
+                    ) : quotationTimelineError ? (
+                      <div className="text-sm font-bold text-rose-600">{quotationTimelineError}</div>
+                    ) : quotationTimeline.length === 0 ? (
+                      <div className="text-sm font-bold text-slate-500">Belum ada audit trail quotation ini.</div>
+                    ) : (
+                      <div className="space-y-3">
+                        {quotationTimeline.map((row: any) => (
+                          <div key={row.id} className="rounded-2xl border border-slate-100 bg-white px-5 py-4">
+                            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                              <div>
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className="px-3 py-1 rounded-full bg-indigo-50 border border-indigo-100 text-[10px] font-black uppercase tracking-widest text-indigo-700">
+                                    {row?.action || "-"}
+                                  </span>
+                                  <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                                    {row?.createdAt ? new Date(row.createdAt).toLocaleString('id-ID') : "-"}
+                                  </span>
+                                </div>
+                                <p className="text-sm font-bold text-slate-700 mt-2">
+                                  {getApprovalActorLabel(row)} ({getApprovalRoleLabel(row?.actorRole)})
+                                </p>
+                              </div>
+                              <div className="text-sm font-bold text-slate-600">
+                                {row?.fromStatus || "-"} → {row?.toStatus || "-"}
+                              </div>
+                            </div>
+                            {row?.reason ? (
+                              <p className="mt-3 text-sm font-bold text-rose-600">Reason: {row.reason}</p>
+                            ) : null}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             </motion.div>
