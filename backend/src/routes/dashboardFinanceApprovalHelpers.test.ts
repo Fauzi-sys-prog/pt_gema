@@ -151,7 +151,8 @@ test("buildPendingQuotations maps actors and actions for management review", () 
 
   assert.equal(rows.length, 1);
   assert.equal(rows[0]?.sentBy, "Angesti");
-  assert.equal(rows[0]?.auditStatus, "Management Approval");
+  assert.equal(rows[0]?.auditStatus, "Menunggu Approval");
+  assert.equal(rows[0]?.auditTrail, "Sudah dikirim oleh Angesti dan menunggu approval OWNER / SPV");
   assert.deepEqual(rows[0]?.availableActions, ["APPROVE", "REJECT", "VIEW"]);
   assert.equal(rows[0]?.items[0]?.total, 2_500_000);
 });

@@ -1270,7 +1270,7 @@ export default function ProjectManagementPage() {
         ]}
         helper="Project idealnya lahir dari quotation yang sudah disetujui. Export final project hanya aktif saat approvalStatus = Approved."
         actions={[
-          { label: "Buka Approval Hub", onClick: () => navigate("/finance/approvals") },
+          { label: "Buka Approval Quotation", onClick: () => navigate("/sales/approvals") },
           { label: "Buka Quotation", onClick: () => navigate("/sales/quotation") },
         ]}
       />
@@ -1757,9 +1757,9 @@ export default function ProjectManagementPage() {
                       <>
                         {!quotationReadyForProjectApproval && selectedProject.quotationId && (
                           <button
-                            onClick={() => navigate('/finance/approvals')}
+                            onClick={() => navigate('/sales/approvals')}
                             className="px-4 py-3 rounded-2xl transition-all font-black text-[10px] uppercase tracking-widest bg-slate-50 text-slate-700 hover:bg-slate-900 hover:text-white"
-                            title="Lanjutkan approval quotation dari Approval Hub"
+                            title="Lanjutkan approval quotation dari halaman Approval Quotation"
                           >
                             Buka Approval Quotation
                           </button>

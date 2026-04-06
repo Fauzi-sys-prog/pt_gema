@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   FileText,
   DollarSign,
@@ -106,15 +107,23 @@ type ApprovalMaterialRequestItem = {
   availableActions?: string[];
 };
 
-export default function ApprovalCenterPage() {
+type ApprovalCenterMode = "finance" | "quotation";
+type ApprovalTab = "po" | "quotation" | "invoice" | "warehouse";
+
+type ApprovalCenterPageProps = {
+  mode?: ApprovalCenterMode;
+};
+
+export function ApprovalCenterPage({ mode = "finance" }: ApprovalCenterPageProps) {
   const { 
     currentUser,
     addAuditLog
   } = useApp();
+  const navigate = useNavigate();
+  const isQuotationMode = mode === "quotation";
 
-  const [activeTab, setActiveTab] = useState<'po' | 'rab' | 'invoice' | 'warehouse'>('po');
+  const [activeTab, setActiveTab] = useState<ApprovalTab>(isQuotationMode ? "quotation" : "po");
   const [searchTerm, setSearchTerm] = useState('');
-  const [terminologyMode, setTerminologyMode] = useState<'RAB' | 'SOW'>('RAB');
   const [syncing, setSyncing] = useState(false);
   const [serverPOs, setServerPOs] = useState<ApprovalPoItem[]>([]);
   const [serverQuotations, setServerQuotations] = useState<ApprovalQuotationItem[]>([]);
@@ -140,6 +149,20 @@ export default function ApprovalCenterPage() {
   const canApproveRejectMr = isActualOwner || isSpv;
   const canIssueMr = isOwner || isAdmin || currentRole === "SUPPLY_CHAIN" || currentRole === "WAREHOUSE" || currentRole === "PRODUKSI";
   const canApprovePo = () => isActualOwner || isSpv;
+
+  useEffect(() => {
+    setActiveTab(isQuotationMode ? "quotation" : "po");
+  }, [isQuotationMode]);
+
+  useEffect(() => {
+    if (mode === "finance" && currentRole === "SALES") {
+      navigate("/sales/approvals", { replace: true });
+      return;
+    }
+    if (mode === "quotation" && currentRole === "FINANCE") {
+      navigate("/finance/approvals", { replace: true });
+    }
+  }, [currentRole, mode, navigate]);
   const getPoAuditLabel = (po: ApprovalPoItem) => {
     if (po.auditStatus) return po.auditStatus;
     const status = normalizeStatus(po.status);
@@ -479,6 +502,50 @@ export default function ApprovalCenterPage() {
   };
 
   const stats = serverStats || { total: 0, highValue: 0 };
+  const visiblePendingTotal = isQuotationMode
+    ? pendingQuotations.length
+    : pendingPOs.length + pendingInvoices.length + pendingRequests.length;
+  const tabConfigs = isQuotationMode
+    ? [
+        {
+          type: "quotation" as const,
+          label: "Quotation Menunggu Approval",
+          count: pendingQuotations.length,
+          icon: <FileText />,
+          activeCard: "border-amber-500 ring-4 ring-amber-50",
+          activeIcon: "bg-amber-500 text-white",
+          idleIcon: "bg-amber-50 text-amber-500",
+        },
+      ]
+    : [
+        {
+          type: "po" as const,
+          label: "Purchase Orders",
+          count: pendingPOs.length,
+          icon: <DollarSign />,
+          activeCard: "border-indigo-500 ring-4 ring-indigo-50",
+          activeIcon: "bg-indigo-500 text-white",
+          idleIcon: "bg-indigo-50 text-indigo-500",
+        },
+        {
+          type: "invoice" as const,
+          label: "Invoices",
+          count: pendingInvoices.length,
+          icon: <UserCheck />,
+          activeCard: "border-emerald-500 ring-4 ring-emerald-50",
+          activeIcon: "bg-emerald-500 text-white",
+          idleIcon: "bg-emerald-50 text-emerald-500",
+        },
+        {
+          type: "warehouse" as const,
+          label: "Material Request",
+          count: pendingRequests.length,
+          icon: <ArrowRightLeft />,
+          activeCard: "border-rose-500 ring-4 ring-rose-50",
+          activeIcon: "bg-rose-500 text-white",
+          idleIcon: "bg-rose-50 text-rose-500",
+        },
+      ];
   const lastSyncLabel = useMemo(() => {
     if (!lastSyncedAt) return "Belum ada sync";
     return new Date(lastSyncedAt).toLocaleString("id-ID", {
@@ -500,20 +567,30 @@ export default function ApprovalCenterPage() {
             <ShieldCheck size={40} />
           </div>
           <div>
-            <h1 className="text-4xl font-black text-slate-900 tracking-tighter uppercase italic leading-none">Approval Command Center</h1>
+            <h1 className="text-4xl font-black text-slate-900 tracking-tighter uppercase italic leading-none">
+              {isQuotationMode ? "Quotation Approval Center" : "Finance Approval Center"}
+            </h1>
             <div className="flex items-center gap-3 mt-3">
-              <span className="px-3 py-1 bg-emerald-100 text-emerald-700 text-[9px] font-black rounded-lg uppercase tracking-widest border border-emerald-200">System Secure</span>
-              <p className="text-xs text-slate-400 font-bold uppercase tracking-[0.2em] italic">PT GTP Fiscal & Operational Control</p>
+              <span className={`px-3 py-1 text-[9px] font-black rounded-lg uppercase tracking-widest border ${isQuotationMode ? "bg-amber-100 text-amber-700 border-amber-200" : "bg-emerald-100 text-emerald-700 border-emerald-200"}`}>
+                {isQuotationMode ? "Commercial Review" : "Fiscal & Warehouse Control"}
+              </span>
+              <p className="text-xs text-slate-400 font-bold uppercase tracking-[0.2em] italic">
+                {isQuotationMode ? "PT GTP Quotation & Project Handover" : "PT GTP Finance, Procurement & Warehouse"}
+              </p>
             </div>
           </div>
         </div>
 
         <div className="flex items-center gap-6 relative z-10">
            <div className="text-right">
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 italic">Pending Tasks</p>
-              <h3 className="text-4xl font-black text-slate-900 italic tracking-tighter">{stats.total} <span className="text-sm font-bold not-italic text-slate-300 uppercase ml-1">Docs</span></h3>
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 italic">
+                {isQuotationMode ? "Quotation Queue" : "Pending Tasks"}
+              </p>
+              <h3 className="text-4xl font-black text-slate-900 italic tracking-tighter">
+                {visiblePendingTotal} <span className="text-sm font-bold not-italic text-slate-300 uppercase ml-1">{isQuotationMode ? "Docs" : "Docs"}</span>
+              </h3>
            </div>
-           {stats.highValue > 0 && (
+           {!isQuotationMode && stats.highValue > 0 && (
              <div className="px-6 py-3 bg-amber-50 border border-amber-200 rounded-2xl flex items-center gap-3">
                 <AlertTriangle className="text-amber-500" size={18} />
                 <span className="text-[10px] font-black text-amber-700 uppercase tracking-widest italic">{stats.highValue} High-Value POs</span>
@@ -523,119 +600,144 @@ export default function ApprovalCenterPage() {
       </div>
 
       <FlowHintBar
-        title="Alur Approval Terpusat:"
-        badges={[
-          { label: "PO", tone: "info" },
-          { label: "Quotation", tone: "warning" },
-          { label: "Invoice", tone: "success" },
-          { label: "Material Request", tone: "danger" },
-        ]}
-        helper="Semua approval utama dipusatkan di halaman ini untuk menghindari alur yang terpecah."
+        title={isQuotationMode ? "Alur Approval Quotation:" : "Alur Approval Finance & Gudang:"}
+        badges={
+          isQuotationMode
+            ? [
+                { label: "Draft", tone: "neutral" as const },
+                { label: "Sent ke Approval", tone: "info" as const },
+                { label: "Approved = Siap Jadi Project", tone: "success" as const },
+                { label: "Rejected", tone: "danger" as const },
+              ]
+            : [
+                { label: "PO", tone: "info" as const },
+                { label: "Invoice", tone: "success" as const },
+                { label: "Material Request", tone: "danger" as const },
+              ]
+        }
+        helper={
+          isQuotationMode
+            ? "Quotation disetujui dulu di sini. Setelah approved, project otomatis dibuat atau disinkronkan lalu lanjut ke approval project terpisah."
+            : "Halaman ini sekarang fokus untuk approval finance, procurement, dan warehouse supaya quotation tidak tercampur dengan dokumen penagihan."
+        }
       />
 
       <StatusGuideCard
-        title="Panduan Status Approval"
-        helper="Gunakan panduan ini untuk cepat membaca posisi dokumen sebelum menekan approve, reject, verify, atau issue."
-        sections={[
-          {
-            title: "Quotation",
-            items: [
-              {
-                label: "Draft",
-                tone: "neutral",
-                description: "Dokumen masih disusun sales dan belum dikirim untuk keputusan manajemen.",
-              },
-              {
-                label: "Sent / Review",
-                tone: "warning",
-                description: "Quotation sudah masuk meja approval dan tinggal menunggu keputusan OWNER atau SPV.",
-              },
-              {
-                label: "Approved",
-                tone: "success",
-                description: "Quotation sudah disetujui dan aman dilanjutkan ke tahap project atau pekerjaan berikutnya.",
-              },
-              {
-                label: "Rejected",
-                tone: "danger",
-                description: "Quotation ditolak dan harus diperbaiki atau dikirim ulang sebelum lanjut.",
-              },
-            ],
-          },
-          {
-            title: "Purchase Order",
-            items: [
-              {
-                label: "Draft",
-                tone: "neutral",
-                description: "PO masih disusun dan belum siap diproses vendor atau receiving.",
-              },
-              {
-                label: "Sent",
-                tone: "info",
-                description: "PO sudah diterbitkan dan biasanya menunggu review atau tindak lanjut proses barang masuk.",
-              },
-              {
-                label: "Partial / Received",
-                tone: "success",
-                description: "Barang datang sebagian atau sudah diterima penuh, jadi tim gudang bisa lanjut cek receiving.",
-              },
-            ],
-          },
-          {
-            title: "Invoice & Material Request",
-            items: [
-              {
-                label: "Unpaid",
-                tone: "warning",
-                description: "Invoice belum diverifikasi lunas, jadi finance masih perlu cek pembayaran masuk.",
-              },
-              {
-                label: "Paid",
-                tone: "success",
-                description: "Pembayaran sudah tervalidasi dan invoice tidak butuh tindak lanjut operasional.",
-              },
-              {
-                label: "Pending / Approved / Issued",
-                tone: "info",
-                description: "Material request bergerak dari menunggu review, siap issue, lalu selesai dikeluarkan untuk lapangan.",
-              },
-              {
-                label: "Rejected",
-                tone: "danger",
-                description: "Permintaan material ditolak dan perlu koreksi kebutuhan sebelum diajukan ulang.",
-              },
-            ],
-          },
-        ]}
+        title={isQuotationMode ? "Panduan Status Quotation" : "Panduan Status Approval"}
+        helper={
+          isQuotationMode
+            ? "Gunakan panduan ini supaya sales, SPV, dan owner baca posisi quotation dengan istilah yang sama."
+            : "Gunakan panduan ini untuk cepat membaca posisi dokumen sebelum menekan approve, reject, verify, atau issue."
+        }
+        sections={
+          isQuotationMode
+            ? [
+                {
+                  title: "Quotation",
+                  items: [
+                    {
+                      label: "Draft",
+                      tone: "neutral",
+                      description: "Dokumen masih disusun sales dan belum dikirim untuk keputusan manajemen.",
+                    },
+                    {
+                      label: "Sent / Review",
+                      tone: "warning",
+                      description: "Quotation sudah masuk meja approval dan tinggal menunggu keputusan OWNER atau SPV.",
+                    },
+                    {
+                      label: "Approved",
+                      tone: "success",
+                      description: "Quotation sudah disetujui dan aman dilanjutkan ke project baseline untuk dirapikan sebelum approval project.",
+                    },
+                    {
+                      label: "Rejected",
+                      tone: "danger",
+                      description: "Quotation ditolak dan harus diperbaiki atau dikirim ulang sebelum lanjut.",
+                    },
+                  ],
+                },
+                {
+                  title: "Handoff ke Project",
+                  items: [
+                    {
+                      label: "Project Draft Baseline",
+                      tone: "info",
+                      description: "Setelah quotation approved, project dibuat atau disinkronkan lalu BOQ, material, dan nilai kontrak bisa dirapikan dulu.",
+                    },
+                    {
+                      label: "Project Pending Approval",
+                      tone: "warning",
+                      description: "Begitu baseline project sudah final, project masuk approval terpisah sebelum operasional dibuka penuh.",
+                    },
+                  ],
+                },
+              ]
+            : [
+                {
+                  title: "Purchase Order",
+                  items: [
+                    {
+                      label: "Draft",
+                      tone: "neutral",
+                      description: "PO masih disusun dan belum siap diproses vendor atau receiving.",
+                    },
+                    {
+                      label: "Sent",
+                      tone: "info",
+                      description: "PO sudah diterbitkan dan biasanya menunggu review atau tindak lanjut proses barang masuk.",
+                    },
+                    {
+                      label: "Partial / Received",
+                      tone: "success",
+                      description: "Barang datang sebagian atau sudah diterima penuh, jadi tim gudang bisa lanjut cek receiving.",
+                    },
+                  ],
+                },
+                {
+                  title: "Invoice & Material Request",
+                  items: [
+                    {
+                      label: "Unpaid",
+                      tone: "warning",
+                      description: "Invoice belum diverifikasi lunas, jadi finance masih perlu cek pembayaran masuk.",
+                    },
+                    {
+                      label: "Paid",
+                      tone: "success",
+                      description: "Pembayaran sudah tervalidasi dan invoice tidak butuh tindak lanjut operasional.",
+                    },
+                    {
+                      label: "Pending / Approved / Issued",
+                      tone: "info",
+                      description: "Material request bergerak dari menunggu review, siap issue, lalu selesai dikeluarkan untuk lapangan.",
+                    },
+                    {
+                      label: "Rejected",
+                      tone: "danger",
+                      description: "Permintaan material ditolak dan perlu koreksi kebutuhan sebelum diajukan ulang.",
+                    },
+                  ],
+                },
+              ]
+        }
       />
 
       {/* Grid Summary */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {(['po', 'rab', 'invoice', 'warehouse'] as const).map((type) => {
-          const count = type === 'po' ? pendingPOs.length : type === 'rab' ? pendingQuotations.length : type === 'invoice' ? pendingInvoices.length : pendingRequests.length;
-          const label = type === 'po' ? 'Purchase Orders' : type === 'rab' ? 'Quotation' : type === 'invoice' ? 'Invoices' : 'Material Request';
-          const icon = type === 'po' ? <DollarSign /> : type === 'rab' ? <FileText /> : type === 'invoice' ? <UserCheck /> : <ArrowRightLeft />;
-          const tone = type === "po"
-            ? { activeCard: "border-indigo-500 ring-4 ring-indigo-50", activeIcon: "bg-indigo-500 text-white", idleIcon: "bg-indigo-50 text-indigo-500" }
-            : type === "rab"
-              ? { activeCard: "border-amber-500 ring-4 ring-amber-50", activeIcon: "bg-amber-500 text-white", idleIcon: "bg-amber-50 text-amber-500" }
-              : type === "invoice"
-                ? { activeCard: "border-emerald-500 ring-4 ring-emerald-50", activeIcon: "bg-emerald-500 text-white", idleIcon: "bg-emerald-50 text-emerald-500" }
-                : { activeCard: "border-rose-500 ring-4 ring-rose-50", activeIcon: "bg-rose-500 text-white", idleIcon: "bg-rose-50 text-rose-500" };
-          
+        {tabConfigs.map((tab) => {
           return (
             <motion.div 
-              key={type}
+              key={tab.type}
               whileHover={{ y: -5 }}
-              onClick={() => setActiveTab(type)}
-              className={`p-8 rounded-[2.5rem] border bg-white shadow-sm cursor-pointer transition-all ${activeTab === type ? tone.activeCard : "border-slate-100"}`}
+              onClick={() => setActiveTab(tab.type)}
+              className={`p-8 rounded-[2.5rem] border bg-white shadow-sm cursor-pointer transition-all ${activeTab === tab.type ? tab.activeCard : "border-slate-100"}`}
             >
-              <div className={`w-14 h-14 rounded-2xl flex items-center justify-center mb-6 ${activeTab === type ? tone.activeIcon : tone.idleIcon}`}>
-                {icon}
+              <div className={`w-14 h-14 rounded-2xl flex items-center justify-center mb-6 ${activeTab === tab.type ? tab.activeIcon : tab.idleIcon}`}>
+                {tab.icon}
               </div>
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">{label}</p>
-              <h4 className="text-2xl font-black italic text-slate-900 leading-none">{count} Pending</h4>
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">{tab.label}</p>
+              <h4 className="text-2xl font-black italic text-slate-900 leading-none">{tab.count} Pending</h4>
             </motion.div>
           )
         })}
@@ -644,33 +746,11 @@ export default function ApprovalCenterPage() {
       {/* Main Approval Table */}
       <div className="bg-white rounded-[3.5rem] border border-slate-200 shadow-sm overflow-hidden">
         <div className="p-10 border-b border-slate-50 flex flex-col md:flex-row md:items-center justify-between gap-6 bg-slate-50/30">
-           {activeTab === 'rab' ? (
-             <div className="flex bg-white p-1.5 rounded-2xl border border-slate-200 shadow-sm">
-                <button 
-                  onClick={() => setTerminologyMode('RAB')}
-                  className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${terminologyMode === 'RAB' ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-400'}`}
-                >
-                  RAB Terminology
-                </button>
-                <button 
-                  onClick={() => setTerminologyMode('SOW')}
-                  className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${terminologyMode === 'SOW' ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-400'}`}
-                >
-                  SOW Terminology
-                </button>
-             </div>
-           ) : (
-             <div className="px-5 py-3 bg-white rounded-2xl border border-slate-200 shadow-sm text-[10px] font-black uppercase tracking-widest text-slate-500">
-               Last Sync: {lastSyncLabel}
-             </div>
-           )}
+           <div className="px-5 py-3 bg-white rounded-2xl border border-slate-200 shadow-sm text-[10px] font-black uppercase tracking-widest text-slate-500">
+             Last Sync: {lastSyncLabel}
+           </div>
            
            <div className="flex items-center gap-3">
-              {activeTab === 'rab' && (
-                <div className="px-4 py-3 bg-white border border-slate-200 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-500">
-                  Last Sync: {lastSyncLabel}
-                </div>
-              )}
               <button
                 onClick={() => fetchApprovalCenterData(false)}
                 disabled={syncing}
@@ -808,7 +888,7 @@ export default function ApprovalCenterPage() {
                   ))}
 
                   {/* Quotation Tab */}
-                  {activeTab === 'rab' && pendingQuotations.map(q => (
+                  {activeTab === 'quotation' && pendingQuotations.map(q => (
                     <tr key={q.id} className="hover:bg-slate-50/50 transition-colors group">
                        <td className="px-10 py-8">
                           <div className="flex flex-col">
@@ -1090,11 +1170,15 @@ export default function ApprovalCenterPage() {
 
   function countActiveTab() {
     if (activeTab === 'po') return pendingPOs.length;
-    if (activeTab === 'rab') return pendingQuotations.length;
+    if (activeTab === 'quotation') return pendingQuotations.length;
     if (activeTab === 'invoice') return pendingInvoices.length;
     if (activeTab === 'warehouse') return pendingRequests.length;
     return 0;
   }
+}
+
+export default function FinanceApprovalCenterPage() {
+  return <ApprovalCenterPage mode="finance" />;
 }
 
 function getApprovalActorLabel(row: any) {

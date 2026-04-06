@@ -236,28 +236,28 @@ export function buildPendingQuotations(
         quotationActorMap.get(readString(payload, "rejectedBy") || "");
       const auditStatus =
         effectiveStatus === "DRAFT"
-          ? "Ready to Send"
+          ? "Draft"
           : effectiveStatus === "SENT"
-            ? "Management Approval"
+            ? "Menunggu Approval"
             : effectiveStatus === "REVIEW"
-              ? "Management Review"
+              ? "Sedang Direview"
               : effectiveStatus === "REJECTED"
-                ? "Rejected"
+                ? "Ditolak"
                 : effectiveStatus === "APPROVED"
-                  ? "Approved"
-                  : "Processed";
+                  ? "Disetujui"
+                  : "Status Tidak Diketahui";
       const auditTrail =
         effectiveStatus === "REVIEW"
-          ? `SPV reviewed by ${spvActor?.name || readString(payload, "spvApprovedBy") || "SPV"}${spvActor?.role || readString(payload, "spvApprovedByRole") ? ` (${spvActor?.role || readString(payload, "spvApprovedByRole")})` : ""}`
+          ? `Sedang direview oleh ${spvActor?.name || readString(payload, "spvApprovedBy") || "SPV"}${spvActor?.role || readString(payload, "spvApprovedByRole") ? ` (${spvActor?.role || readString(payload, "spvApprovedByRole")})` : ""}`
           : effectiveStatus === "APPROVED"
-            ? `Approved by ${approvedActor?.name || readString(payload, "approvedBy") || "Management"}${approvedActor?.role || readString(payload, "approvedByRole") ? ` (${approvedActor?.role || readString(payload, "approvedByRole")})` : ""}`
+            ? `Disetujui oleh ${approvedActor?.name || readString(payload, "approvedBy") || "Management"}${approvedActor?.role || readString(payload, "approvedByRole") ? ` (${approvedActor?.role || readString(payload, "approvedByRole")})` : ""}`
             : effectiveStatus === "REJECTED"
-              ? `Rejected by ${rejectedActor?.name || readString(payload, "rejectedBy") || "Reviewer"}${rejectedActor?.role || readString(payload, "rejectedByRole") ? ` (${rejectedActor?.role || readString(payload, "rejectedByRole")})` : ""}`
+              ? `Ditolak oleh ${rejectedActor?.name || readString(payload, "rejectedBy") || "Reviewer"}${rejectedActor?.role || readString(payload, "rejectedByRole") ? ` (${rejectedActor?.role || readString(payload, "rejectedByRole")})` : ""}`
               : effectiveStatus === "SENT"
                 ? sentActor?.name || readString(payload, "sentBy")
-                  ? `Sent by ${sentActor?.name || readString(payload, "sentBy")}`
-                  : "Waiting management approval"
-                : "Draft quotation";
+                  ? `Sudah dikirim oleh ${sentActor?.name || readString(payload, "sentBy")} dan menunggu approval OWNER / SPV`
+                  : "Sudah dikirim dan menunggu approval OWNER / SPV"
+                : "Quotation masih draft dan belum dikirim ke approval.";
       const owner = isOwnerLike(role);
       const canManageQuotationApproval = role === "SPV" || owner;
       const availableActions = toActionList(

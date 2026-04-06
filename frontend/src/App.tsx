@@ -71,6 +71,7 @@ const SuratKeluarPage = lazy(() => import("./pages/correspondence/SuratKeluarPag
 const BeritaAcaraPage = lazy(() => import("./pages/correspondence/BeritaAcaraPage"));
 const SuratJalanPage = lazy(() => import("./pages/correspondence/SuratJalanPage"));
 const QuotationPage = lazy(() => import("./pages/sales/QuotationPage"));
+const QuotationApprovalPage = lazy(() => import("./pages/sales/QuotationApprovalPage"));
 const LogisticsCommandCenter = lazy(() => import("./pages/logistics/LogisticsCommandCenter"));
 const DeliveryTrackingPage = lazy(() => import("./pages/logistics/DeliveryTrackingPage"));
 const FleetMaintenancePage = lazy(() => import("./pages/asset/FleetMaintenancePage"));
@@ -593,6 +594,16 @@ export default function App() {
                 <ProtectedRoute>
                   <Layout>
                     <QuotationPage />
+                  </Layout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/sales/approvals"
+              element={
+                <ProtectedRoute>
+                  <Layout>
+                    <QuotationApprovalPage />
                   </Layout>
                 </ProtectedRoute>
               }

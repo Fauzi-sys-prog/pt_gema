@@ -59,6 +59,7 @@ const PRODUCTION_ROLES = ['PRODUKSI'] as const;
 const INVENTORY_ROLES = ['SUPPLY_CHAIN', 'PRODUKSI', 'FINANCE'] as const;
 const PROCUREMENT_ROLES = ['PURCHASING', 'WAREHOUSE', 'FINANCE', 'PRODUKSI'] as const;
 const SALES_ROLES = ['SALES', 'FINANCE'] as const;
+const COMMERCIAL_APPROVAL_ROLES = ['SALES'] as const;
 const FINANCE_ROLES = ['FINANCE'] as const;
 const CORRESPONDENCE_ROLES = ['HR', 'SALES', 'WAREHOUSE', 'FINANCE', 'PRODUKSI'] as const;
 const SURAT_JALAN_ROLES = ['WAREHOUSE', 'SALES', 'PRODUKSI'] as const;
@@ -85,6 +86,7 @@ const PATH_ACCESS_MAP: Record<string, readonly string[]> = {
   '/inventory/aging': INVENTORY_ROLES,
   '/inventory/stock-report': INVENTORY_ROLES,
   '/sales/quotation': SALES_ROLES,
+  '/sales/approvals': COMMERCIAL_APPROVAL_ROLES,
   '/sales/invoice': SALES_ROLES,
   '/sales/analytics': SALES_ROLES,
   '/finance/executive-dashboard': FINANCE_ROLES,
@@ -212,6 +214,7 @@ export default function Layout({ children }: LayoutProps) {
       icon: <Calculator size={20} />,
       submenu: [
         { title: 'Quotation', path: '/sales/quotation' },
+        { title: 'Approval Quotation', path: '/sales/approvals' },
         { title: 'Invoicing & Penagihan', path: '/sales/invoice' },
         { title: 'Sales Analytics', path: '/sales/analytics' }
       ]
@@ -221,7 +224,7 @@ export default function Layout({ children }: LayoutProps) {
       icon: <Wallet size={20} />,
       submenu: [
         { title: 'Executive Command Center', path: '/finance/executive-dashboard' },
-        { title: 'Approval Hub (PO/Quo/Inv/MR)', path: '/finance/approvals' },
+        { title: 'Approval Finance (PO/Inv/MR)', path: '/finance/approvals' },
         { title: 'AR/AP Cash Flow Command', path: '/finance/cashflow-command' },
         { title: 'Project Profit & Loss', path: '/finance/project-analysis' },
         { title: 'Cashflow Statement', path: '/finance/cashflow' },

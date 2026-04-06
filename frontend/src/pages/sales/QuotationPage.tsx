@@ -1115,7 +1115,7 @@ export default function QuotationPage() {
           helper="Quotation paling aman dibuat dari Data Collection yang sudah lengkap. Begitu approved, quotation siap dipakai untuk pembentukan project dan export final."
           actions={[
             { label: "Buka Data Collection", onClick: () => navigate('/data-collection') },
-            { label: "Buka Approval Hub", onClick: () => navigate('/finance/approvals') },
+            { label: "Buka Approval Quotation", onClick: () => navigate('/sales/approvals') },
             { label: "Buka Project Ledger", onClick: () => navigate('/project') },
           ]}
         />

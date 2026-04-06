@@ -163,14 +163,14 @@ export default function MainDashboard() {
           { label: 'WO aktif', value: String(activeWorkOrders) },
         ],
         focusItems: [
-          'Buka Approval Hub untuk project, quotation, invoice, dan material request yang tertahan.',
+          'Pisahkan review quotation dari approval finance supaya keputusan bisnis tidak tercampur.',
           'Pastikan quotation approved cepat dikonversi jadi project yang siap jalan.',
           'Pantau surat jalan delivered yang belum ditutup dengan Berita Acara.',
         ],
         quickLinks: [
-          { label: 'Approval Hub', path: '/finance/approvals', tone: 'bg-slate-900 text-white' },
+          { label: 'Approval Quotation', path: '/sales/approvals', tone: 'bg-slate-900 text-white' },
+          { label: 'Finance Approval', path: '/finance/approvals', tone: 'bg-white border border-slate-200 text-slate-700' },
           { label: 'Project', path: '/project', tone: 'bg-blue-600 text-white' },
-          { label: 'Audit Trail', path: '/settings/audit-trail', tone: 'bg-white border border-slate-200 text-slate-700' },
         ],
       };
     }
@@ -197,7 +197,7 @@ export default function MainDashboard() {
         quickLinks: [
           { label: 'Survey Lapangan', path: '/data-collection', tone: 'bg-slate-900 text-white' },
           { label: 'Quotation', path: '/sales/quotation', tone: 'bg-blue-600 text-white' },
-          { label: 'Invoice', path: '/sales/invoice', tone: 'bg-white border border-slate-200 text-slate-700' },
+          { label: 'Approval Quotation', path: '/sales/approvals', tone: 'bg-white border border-slate-200 text-slate-700' },
         ],
       };
     }
@@ -222,7 +222,7 @@ export default function MainDashboard() {
           'Cashflow, PPN, dan ledger dipakai untuk menutup loop finance harian.',
         ],
         quickLinks: [
-          { label: 'Approval Hub', path: '/finance/approvals', tone: 'bg-slate-900 text-white' },
+          { label: 'Finance Approval', path: '/finance/approvals', tone: 'bg-slate-900 text-white' },
           { label: 'Vendor Payment', path: '/finance/vendor-payment', tone: 'bg-blue-600 text-white' },
           { label: 'Cashflow', path: '/finance/cashflow-command', tone: 'bg-white border border-slate-200 text-slate-700' },
         ],
