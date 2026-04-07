@@ -2417,11 +2417,12 @@ function payrollSlipExportHtml(payload: Record<string, unknown>): string {
 
   const earningHtml = earningsRows
     .map(
-      (row) => `
+      (row, index) => `
         <tr>
+          <td style="padding:7px 8px;border:1px solid #111;text-align:center;width:42px;">${index + 1}</td>
           <td style="padding:7px 8px;border:1px solid #111;">${escapeHtml(row.label)}</td>
           <td style="padding:7px 8px;border:1px solid #111;">${escapeHtml(row.detail)}</td>
-          <td style="padding:7px 8px;border:1px solid #111;text-align:right;">Rp ${idr(row.value)}</td>
+          <td style="padding:7px 8px;border:1px solid #111;text-align:right;white-space:nowrap;">Rp ${idr(row.value)}</td>
         </tr>
       `,
     )
@@ -2429,18 +2430,19 @@ function payrollSlipExportHtml(payload: Record<string, unknown>): string {
 
   const deductionHtml = deductionRows
     .map(
-      (row) => `
+      (row, index) => `
         <tr>
+          <td style="padding:7px 8px;border:1px solid #111;text-align:center;width:42px;">${index + 1}</td>
           <td style="padding:7px 8px;border:1px solid #111;">${escapeHtml(row.label)}</td>
           <td style="padding:7px 8px;border:1px solid #111;">${escapeHtml(row.detail)}</td>
-          <td style="padding:7px 8px;border:1px solid #111;text-align:right;">Rp ${idr(row.value)}</td>
+          <td style="padding:7px 8px;border:1px solid #111;text-align:right;white-space:nowrap;">Rp ${idr(row.value)}</td>
         </tr>
       `,
     )
     .join("");
 
   return `
-    <div style="font-family:Arial, Helvetica, sans-serif;color:#111;font-size:12px;">
+    <div style="font-family:Arial, Helvetica, sans-serif;color:#111;font-size:12px;line-height:1.35;">
       <table style="width:100%;border-collapse:collapse;border:1.6px solid #111;margin-bottom:0;">
         <tr>
           <td style="width:68%;padding:12px 14px;border-right:1.6px solid #111;vertical-align:top;">
@@ -2461,30 +2463,31 @@ function payrollSlipExportHtml(payload: Record<string, unknown>): string {
           </td>
           <td style="width:32%;padding:12px 14px;vertical-align:top;text-align:center;">
             <div style="font-size:16px;font-weight:700;letter-spacing:.5px;">SLIP GAJI</div>
-            <div style="margin-top:6px;font-size:12px;">Periode ${escapeHtml(periodLabel)}</div>
+            <div style="margin-top:6px;font-size:12px;">Periode: ${escapeHtml(periodLabel)}</div>
             <div style="margin-top:4px;font-size:11px;color:#333;">Dicetak ${escapeHtml(formatTanggalIndonesia(generatedAt))}</div>
           </td>
         </tr>
+      </table>
+
+      <table style="width:100%;border-collapse:collapse;border:1.6px solid #111;border-top:none;margin-bottom:0;">
         <tr>
-          <td style="padding:0;border-top:1.6px solid #111;border-right:1.6px solid #111;vertical-align:top;">
+          <td style="padding:0;border-right:1.6px solid #111;vertical-align:top;width:55%;">
             <table style="width:100%;border-collapse:collapse;">
               <tr><td style="padding:8px 10px;width:34%;border-right:1px solid #111;">Nama</td><td style="padding:8px 10px;">${escapeHtml(employeeName)}</td></tr>
               <tr><td style="padding:8px 10px;border-top:1px solid #111;border-right:1px solid #111;">NIK / ID</td><td style="padding:8px 10px;border-top:1px solid #111;">${escapeHtml(employeeId)}</td></tr>
               <tr><td style="padding:8px 10px;border-top:1px solid #111;border-right:1px solid #111;">Jabatan</td><td style="padding:8px 10px;border-top:1px solid #111;">${escapeHtml(position)}</td></tr>
               <tr><td style="padding:8px 10px;border-top:1px solid #111;border-right:1px solid #111;">Departemen</td><td style="padding:8px 10px;border-top:1px solid #111;">${escapeHtml(department)}</td></tr>
               <tr><td style="padding:8px 10px;border-top:1px solid #111;border-right:1px solid #111;">Tipe Karyawan</td><td style="padding:8px 10px;border-top:1px solid #111;">${escapeHtml(employmentType)}</td></tr>
-            </table>
-          </td>
-          <td style="padding:0;border-top:1.6px solid #111;vertical-align:top;">
-            <table style="width:100%;border-collapse:collapse;">
-              <tr><td style="padding:8px 10px;width:55%;border-right:1px solid #111;">Hari Hadir</td><td style="padding:8px 10px;text-align:right;">${presentCount.toLocaleString("id-ID")}</td></tr>
-              <tr><td style="padding:8px 10px;border-top:1px solid #111;border-right:1px solid #111;">Total Record Absensi</td><td style="padding:8px 10px;border-top:1px solid #111;text-align:right;">${attendanceCount.toLocaleString("id-ID")}</td></tr>
-              <tr><td style="padding:8px 10px;border-top:1px solid #111;border-right:1px solid #111;">Hari Kerja Dibayar</td><td style="padding:8px 10px;border-top:1px solid #111;text-align:right;">${paidAttendanceCount.toLocaleString("id-ID")}</td></tr>
-              <tr><td style="padding:8px 10px;border-top:1px solid #111;border-right:1px solid #111;">Jam Kerja</td><td style="padding:8px 10px;border-top:1px solid #111;text-align:right;">${totalHours.toLocaleString("id-ID")}</td></tr>
-              <tr><td style="padding:8px 10px;border-top:1px solid #111;border-right:1px solid #111;">Lembur</td><td style="padding:8px 10px;border-top:1px solid #111;text-align:right;">${totalOvertime.toLocaleString("id-ID")} jam</td></tr>
               <tr><td style="padding:8px 10px;border-top:1px solid #111;border-right:1px solid #111;">Bank</td><td style="padding:8px 10px;border-top:1px solid #111;">${escapeHtml(bank)}</td></tr>
               <tr><td style="padding:8px 10px;border-top:1px solid #111;border-right:1px solid #111;">No. Rekening</td><td style="padding:8px 10px;border-top:1px solid #111;">${escapeHtml(bankAccount)}</td></tr>
             </table>
+          </td>
+          <td style="padding:10px 12px;vertical-align:top;width:45%;">
+            <div style="font-weight:700;letter-spacing:.5px;margin-bottom:6px;">REKAP KEHADIRAN</div>
+            <div style="font-size:12px;">Hadir: ${presentCount.toLocaleString("id-ID")} | Terlambat: ${lateCount.toLocaleString("id-ID")} | Alpha: ${absentCount.toLocaleString("id-ID")}</div>
+            <div style="font-size:12px;margin-top:4px;">Izin: ${permissionCount.toLocaleString("id-ID")} | Sakit: ${sickCount.toLocaleString("id-ID")} | Cuti: ${leaveCount.toLocaleString("id-ID")}</div>
+            <div style="font-size:12px;margin-top:8px;">Jam Kerja: ${totalHours.toLocaleString("id-ID")} | Lembur: ${totalOvertime.toLocaleString("id-ID")} jam</div>
+            <div style="font-size:11px;color:#444;margin-top:6px;">Hari kerja dibayar: ${paidAttendanceCount.toLocaleString("id-ID")} | Total record absensi: ${attendanceCount.toLocaleString("id-ID")}</div>
           </td>
         </tr>
       </table>
@@ -2495,7 +2498,8 @@ function payrollSlipExportHtml(payload: Record<string, unknown>): string {
             <table style="width:100%;border-collapse:collapse;">
               <thead>
                 <tr>
-                  <th style="padding:8px;border-bottom:1.6px solid #111;border-right:1px solid #111;text-align:left;">Pendapatan</th>
+                  <th style="padding:8px;border-bottom:1.6px solid #111;border-right:1px solid #111;text-align:center;width:42px;">No</th>
+                  <th style="padding:8px;border-bottom:1.6px solid #111;border-right:1px solid #111;text-align:left;">PENDAPATAN</th>
                   <th style="padding:8px;border-bottom:1.6px solid #111;border-right:1px solid #111;text-align:left;">Keterangan</th>
                   <th style="padding:8px;border-bottom:1.6px solid #111;text-align:right;">Nominal</th>
                 </tr>
@@ -2503,7 +2507,7 @@ function payrollSlipExportHtml(payload: Record<string, unknown>): string {
               <tbody>
                 ${earningHtml}
                 <tr>
-                  <td colspan="2" style="padding:8px;border:1px solid #111;font-weight:700;">Total Pendapatan Kotor</td>
+                  <td colspan="3" style="padding:8px;border:1px solid #111;font-weight:700;">Total Pendapatan Kotor</td>
                   <td style="padding:8px;border:1px solid #111;text-align:right;font-weight:700;">Rp ${idr(totalIncome)}</td>
                 </tr>
               </tbody>
@@ -2513,7 +2517,8 @@ function payrollSlipExportHtml(payload: Record<string, unknown>): string {
             <table style="width:100%;border-collapse:collapse;">
               <thead>
                 <tr>
-                  <th style="padding:8px;border-bottom:1.6px solid #111;border-right:1px solid #111;text-align:left;">Potongan</th>
+                  <th style="padding:8px;border-bottom:1.6px solid #111;border-right:1px solid #111;text-align:center;width:42px;">No</th>
+                  <th style="padding:8px;border-bottom:1.6px solid #111;border-right:1px solid #111;text-align:left;">POTONGAN</th>
                   <th style="padding:8px;border-bottom:1.6px solid #111;border-right:1px solid #111;text-align:left;">Keterangan</th>
                   <th style="padding:8px;border-bottom:1.6px solid #111;text-align:right;">Nominal</th>
                 </tr>
@@ -2521,43 +2526,8 @@ function payrollSlipExportHtml(payload: Record<string, unknown>): string {
               <tbody>
                 ${deductionHtml}
                 <tr>
-                  <td colspan="2" style="padding:8px;border:1px solid #111;font-weight:700;">Total Potongan</td>
+                  <td colspan="3" style="padding:8px;border:1px solid #111;font-weight:700;">Total Potongan</td>
                   <td style="padding:8px;border:1px solid #111;text-align:right;font-weight:700;">Rp ${idr(totalDeductions)}</td>
-                </tr>
-                <tr>
-                  <td style="padding:8px;border:1px solid #111;font-weight:700;">Dokumen</td>
-                  <td colspan="2" style="padding:8px;border:1px solid #111;">NPWP: ${escapeHtml(npwp)}<br/>BPJS Kes: ${escapeHtml(bpjsKesehatan)}<br/>BPJS TK: ${escapeHtml(bpjsKetenagakerjaan)}</td>
-                </tr>
-              </tbody>
-            </table>
-          </td>
-        </tr>
-      </table>
-
-      <table style="width:100%;border-collapse:collapse;border:1.6px solid #111;border-top:none;margin-bottom:0;">
-        <tr>
-          <td style="padding:0;">
-            <table style="width:100%;border-collapse:collapse;">
-              <thead>
-                <tr>
-                  <th style="padding:8px;border-right:1px solid #111;border-bottom:1.6px solid #111;text-align:left;">Rekap Kehadiran</th>
-                  <th style="padding:8px;border-right:1px solid #111;border-bottom:1.6px solid #111;text-align:center;">Hadir</th>
-                  <th style="padding:8px;border-right:1px solid #111;border-bottom:1.6px solid #111;text-align:center;">Terlambat</th>
-                  <th style="padding:8px;border-right:1px solid #111;border-bottom:1.6px solid #111;text-align:center;">Alpha</th>
-                  <th style="padding:8px;border-right:1px solid #111;border-bottom:1.6px solid #111;text-align:center;">Izin</th>
-                  <th style="padding:8px;border-right:1px solid #111;border-bottom:1.6px solid #111;text-align:center;">Sakit</th>
-                  <th style="padding:8px;border-bottom:1.6px solid #111;text-align:center;">Cuti</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td style="padding:8px;border-right:1px solid #111;">Jumlah Hari / Status</td>
-                  <td style="padding:8px;border-right:1px solid #111;text-align:center;">${presentCount.toLocaleString("id-ID")}</td>
-                  <td style="padding:8px;border-right:1px solid #111;text-align:center;">${lateCount.toLocaleString("id-ID")}</td>
-                  <td style="padding:8px;border-right:1px solid #111;text-align:center;">${absentCount.toLocaleString("id-ID")}</td>
-                  <td style="padding:8px;border-right:1px solid #111;text-align:center;">${permissionCount.toLocaleString("id-ID")}</td>
-                  <td style="padding:8px;border-right:1px solid #111;text-align:center;">${sickCount.toLocaleString("id-ID")}</td>
-                  <td style="padding:8px;text-align:center;">${leaveCount.toLocaleString("id-ID")}</td>
                 </tr>
               </tbody>
             </table>
@@ -2569,14 +2539,15 @@ function payrollSlipExportHtml(payload: Record<string, unknown>): string {
         <tr>
           <td style="padding:12px 14px;width:62%;border-right:1.6px solid #111;vertical-align:top;">
             <div style="font-size:11px;line-height:1.6;">
-              <div><b>Catatan Payroll:</b></div>
-              <div>1. Slip ini mengikuti payroll wave 1.</div>
-              <div>2. PPh21 masih menggunakan nominal manual per karyawan.</div>
-              <div>3. Uang makan dihitung dari ${attendanceCount.toLocaleString("id-ID")} hari hadir dengan tarif Rp ${idr(mealAllowanceRate)} / hari.</div>
+              <div style="font-weight:700;margin-bottom:4px;">Catatan:</div>
+              <div>- Slip ini dihitung dari data absensi, lembur, kasbon, dan setting payroll.</div>
+              <div>- PPh21 saat ini masih manual per karyawan.</div>
+              <div>- Uang makan dihitung dari ${paidAttendanceCount.toLocaleString("id-ID")} hari hadir dengan tarif Rp ${idr(mealAllowanceRate)} / hari.</div>
+              <div>- NPWP: ${escapeHtml(npwp)} | BPJS Kes: ${escapeHtml(bpjsKesehatan)} | BPJS TK: ${escapeHtml(bpjsKetenagakerjaan)}</div>
             </div>
           </td>
           <td style="padding:10px 14px;width:38%;vertical-align:top;">
-            <div style="font-size:11px;color:#333;">Take Home Pay</div>
+            <div style="font-size:11px;color:#333;letter-spacing:.4px;">TAKE HOME PAY</div>
             <div style="font-size:24px;font-weight:700;margin-top:4px;">Rp ${idr(netSalary)}</div>
             <div style="font-size:11px;margin-top:6px;">Gaji Bersih Diterima</div>
           </td>

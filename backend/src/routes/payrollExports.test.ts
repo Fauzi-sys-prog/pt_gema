@@ -102,7 +102,9 @@ test("POST /exports/payroll-slip/word returns employee slip document", async () 
       const body = await response.text();
       assert.match(body, /Slip Gaji/i);
       assert.match(body, /Ening/i);
-      assert.match(body, /Gaji Bersih Diterima/i);
+      assert.match(body, /PENDAPATAN/i);
+      assert.match(body, /POTONGAN/i);
+      assert.match(body, /TAKE HOME PAY/i);
       assert.match(body, /Rekap Kehadiran/i);
       assert.match(body, /Alpha/i);
       assert.match(body, /Cuti/i);
