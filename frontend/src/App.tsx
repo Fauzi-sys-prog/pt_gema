@@ -12,8 +12,6 @@ import logoImage from "figma:asset/661f558dc14c79fa090b7039a885f26b843f5c04.png"
 const MainDashboard = lazy(() => import("./pages/dashboard/MainDashboard"));
 const DataCollection = lazy(() => import("./pages/data-collection/DataCollection"));
 const ProjectManagementPage = lazy(() => import("./pages/ProjectManagementPage"));
-const PenawaranPage = lazy(() => import("./pages/sales/PenawaranPage"));
-const PenawaranDetailPage = lazy(() => import("./pages/sales/PenawaranDetailPage"));
 const RABProjectPage = lazy(() => import("./pages/sales/RABProjectPage"));
 const InvoicePage = lazy(() => import("./pages/sales/InvoicePage"));
 const SalesAnalyticsPage = lazy(() => import("./pages/sales/SalesAnalyticsPage"));
@@ -252,7 +250,7 @@ export default function App() {
               element={
                 <ProtectedRoute>
                   <Layout>
-                    <PenawaranPage />
+                    <Navigate to="/sales/quotation" replace />
                   </Layout>
                 </ProtectedRoute>
               }
@@ -262,7 +260,7 @@ export default function App() {
               element={
                 <ProtectedRoute>
                   <Layout>
-                    <PenawaranDetailPage />
+                    <Navigate to="/sales/quotation" replace />
                   </Layout>
                 </ProtectedRoute>
               }

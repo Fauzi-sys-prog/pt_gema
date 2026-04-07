@@ -87,8 +87,11 @@ const PATH_ACCESS_MAP: Record<string, readonly string[]> = {
   '/inventory/aging': INVENTORY_ROLES,
   '/inventory/stock-report': INVENTORY_ROLES,
   '/sales/quotation': SALES_ROLES,
+  '/sales/quotation-hub': SALES_ROLES,
+  '/sales/penawaran': SALES_ROLES,
   '/sales/approvals': COMMERCIAL_APPROVAL_ROLES,
   '/sales/invoice': SALES_ROLES,
+  '/sales/auto-invoice': SALES_ROLES,
   '/sales/analytics': SALES_ROLES,
   '/finance/executive-dashboard': FINANCE_ROLES,
   '/finance/approvals': FINANCE_ROLES,
@@ -166,7 +169,13 @@ export default function Layout({ children }: LayoutProps) {
     const accountOverride = hasAccountPathOverride(username, path);
     if (accountOverride !== null) return accountOverride;
     if (hasPrivilegedAccess) return true;
-    const allowedRoles = PATH_ACCESS_MAP[path];
+    const allowedRoles =
+      PATH_ACCESS_MAP[path] ||
+      PATH_ACCESS_MAP[
+        Object.keys(PATH_ACCESS_MAP)
+          .filter((key) => path.startsWith(`${key}/`))
+          .sort((a, b) => b.length - a.length)[0] || ""
+      ];
     return Array.isArray(allowedRoles) ? hasRoleAccess(role, allowedRoles) : false;
   };
 

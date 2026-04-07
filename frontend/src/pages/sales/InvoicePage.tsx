@@ -96,6 +96,7 @@ export default function InvoicePage() {
   const { invoiceList, addAuditLog, addArchiveEntry, currentUser } = useApp();
   const [serverInvoiceList, setServerInvoiceList] = useState<NormalizedInvoice[] | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [exportingInvoiceId, setExportingInvoiceId] = useState<string | null>(null);
   const [selectedInvoice, setSelectedInvoice] = useState<NormalizedInvoice | null>(null);
   const [viewKwitansi, setViewKwitansi] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -146,6 +147,42 @@ export default function InvoicePage() {
   useEffect(() => {
     void fetchInvoices();
   }, []);
+
+  const handleExportInvoice = async (invoice: NormalizedInvoice, format: 'word' | 'excel' = 'word') => {
+    const invoiceId = String(invoice?.id || '').trim();
+    if (!invoiceId) {
+      toast.error('ID invoice tidak valid');
+      return;
+    }
+
+    const exportPath =
+      invoice.resource === 'customer-invoices'
+        ? `/exports/customer-invoices/${invoiceId}/${format}`
+        : `/exports/invoices/${invoiceId}/${format}`;
+
+    try {
+      setExportingInvoiceId(`${invoice.resource}:${invoiceId}:${format}`);
+      const response = await api.get(exportPath, { responseType: 'blob' });
+      const blob = new Blob([response.data], {
+        type: format === 'excel' ? 'application/vnd.ms-excel' : 'application/msword',
+      });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      const safeNo = String(invoice.noInvoice || invoiceId).replace(/[^a-zA-Z0-9-_]+/g, '_');
+      link.href = url;
+      link.download = `${safeNo}.${format === 'excel' ? 'xls' : 'doc'}`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      toast.success(`Export invoice ${format === 'excel' ? 'Excel' : 'Word'} berhasil`);
+    } catch (error) {
+      console.error('Failed to export invoice:', error);
+      toast.error(`Gagal export invoice ${format === 'excel' ? 'Excel' : 'Word'}`);
+    } finally {
+      setExportingInvoiceId(null);
+    }
+  };
 
   const isOverdue = (inv: NormalizedInvoice) => {
     if (inv.status === 'Paid') return false;
@@ -312,7 +349,7 @@ export default function InvoicePage() {
           className="hidden"
           onChange={(e) => void handleProofFileChange(e)}
         />
-        <div className="max-w-6xl mx-auto mb-6 flex flex-wrap justify-between items-center gap-4 print:hidden">
+          <div className="max-w-6xl mx-auto mb-6 flex flex-wrap justify-between items-center gap-4 print:hidden">
           <button 
             onClick={() => setSelectedInvoice(null)}
             className="flex items-center gap-2 text-slate-600 hover:text-slate-900 font-bold text-sm transition-colors"
@@ -320,6 +357,20 @@ export default function InvoicePage() {
             <ArrowLeft size={18} /> Kembali ke Daftar
           </button>
           <div className="flex flex-wrap gap-3">
+            <button
+              onClick={() => void handleExportInvoice(selectedInvoice, 'word')}
+              disabled={exportingInvoiceId === `${selectedInvoice.resource}:${selectedInvoice.id}:word`}
+              className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-600 rounded-xl text-sm font-bold hover:bg-slate-50 transition-all disabled:opacity-60"
+            >
+              <Download size={16} /> {exportingInvoiceId === `${selectedInvoice.resource}:${selectedInvoice.id}:word` ? 'Exporting...' : 'Export Word'}
+            </button>
+            <button
+              onClick={() => void handleExportInvoice(selectedInvoice, 'excel')}
+              disabled={exportingInvoiceId === `${selectedInvoice.resource}:${selectedInvoice.id}:excel`}
+              className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-600 rounded-xl text-sm font-bold hover:bg-slate-50 transition-all disabled:opacity-60"
+            >
+              <Download size={16} /> {exportingInvoiceId === `${selectedInvoice.resource}:${selectedInvoice.id}:excel` ? 'Exporting...' : 'Export Excel'}
+            </button>
             <button 
               onClick={handleToggleReminder}
               className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-600 rounded-xl text-sm font-bold hover:bg-slate-50 transition-all"
@@ -663,9 +714,23 @@ export default function InvoicePage() {
                     </span>
                   </td>
                   <td className="px-6 py-5 text-right">
-                    <button className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all">
-                      <ChevronRight size={18} />
-                    </button>
+                    <div className="flex items-center justify-end gap-2">
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          void handleExportInvoice(inv, 'word');
+                        }}
+                        disabled={exportingInvoiceId === `${inv.resource}:${inv.id}:word`}
+                        className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-all disabled:opacity-50"
+                        title="Export Invoice Word"
+                      >
+                        <Download size={16} />
+                      </button>
+                      <button className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all">
+                        <ChevronRight size={18} />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
