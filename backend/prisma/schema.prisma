@@ -235,6 +235,14 @@ model EmployeeRecord {
   emergencyContact String?
   emergencyPhone String?
   salary      Float?
+  transportAllowance Float?
+  mealAllowancePerDay Float?
+  attendanceIncentive Float?
+  overtimeRateMultiplier Float?
+  bpjsHealthEmployeePercent Float?
+  jhtEmployeePercent Float?
+  jpEmployeePercent Float?
+  pph21Amount Float?
   status      String
   bank        String?
   bankAccount String?

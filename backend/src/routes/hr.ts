@@ -67,6 +67,14 @@ function mapEmployee(row: {
   emergencyContact: string | null;
   emergencyPhone: string | null;
   salary: number | null;
+  transportAllowance: number | null;
+  mealAllowancePerDay: number | null;
+  attendanceIncentive: number | null;
+  overtimeRateMultiplier: number | null;
+  bpjsHealthEmployeePercent: number | null;
+  jhtEmployeePercent: number | null;
+  jpEmployeePercent: number | null;
+  pph21Amount: number | null;
   status: string;
   bank: string | null;
   bankAccount: string | null;
@@ -101,6 +109,14 @@ function mapEmployee(row: {
     emergencyContact: row.emergencyContact ?? "",
     emergencyPhone: row.emergencyPhone ?? "",
     salary: row.salary ?? 0,
+    transportAllowance: row.transportAllowance ?? undefined,
+    mealAllowancePerDay: row.mealAllowancePerDay ?? undefined,
+    attendanceIncentive: row.attendanceIncentive ?? undefined,
+    overtimeRateMultiplier: row.overtimeRateMultiplier ?? undefined,
+    bpjsHealthEmployeePercent: row.bpjsHealthEmployeePercent ?? undefined,
+    jhtEmployeePercent: row.jhtEmployeePercent ?? undefined,
+    jpEmployeePercent: row.jpEmployeePercent ?? undefined,
+    pph21Amount: row.pph21Amount ?? undefined,
     status: row.status,
     bank: row.bank ?? undefined,
     bankAccount: row.bankAccount ?? undefined,
@@ -168,6 +184,14 @@ function sanitizeEmployeePayload(id: string, payload: Record<string, unknown>) {
     emergencyContact: typeof payload.emergencyContact === "string" ? payload.emergencyContact : null,
     emergencyPhone: typeof payload.emergencyPhone === "string" ? payload.emergencyPhone : null,
     salary: payload.salary == null ? null : Number(payload.salary || 0),
+    transportAllowance: payload.transportAllowance == null ? null : Number(payload.transportAllowance || 0),
+    mealAllowancePerDay: payload.mealAllowancePerDay == null ? null : Number(payload.mealAllowancePerDay || 0),
+    attendanceIncentive: payload.attendanceIncentive == null ? null : Number(payload.attendanceIncentive || 0),
+    overtimeRateMultiplier: payload.overtimeRateMultiplier == null ? null : Number(payload.overtimeRateMultiplier || 0),
+    bpjsHealthEmployeePercent: payload.bpjsHealthEmployeePercent == null ? null : Number(payload.bpjsHealthEmployeePercent || 0),
+    jhtEmployeePercent: payload.jhtEmployeePercent == null ? null : Number(payload.jhtEmployeePercent || 0),
+    jpEmployeePercent: payload.jpEmployeePercent == null ? null : Number(payload.jpEmployeePercent || 0),
+    pph21Amount: payload.pph21Amount == null ? null : Number(payload.pph21Amount || 0),
     status: typeof payload.status === "string" && payload.status.trim() ? payload.status.trim() : "Active",
     bank: typeof payload.bank === "string" ? payload.bank : null,
     bankAccount: typeof payload.bankAccount === "string" ? payload.bankAccount : null,

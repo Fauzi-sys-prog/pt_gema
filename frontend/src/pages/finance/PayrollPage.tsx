@@ -14,9 +14,12 @@ export default function PayrollPage() {
   const [serverPayrollRows, setServerPayrollRows] = useState<any[]>([]);
   const [serverPayrollStats, setServerPayrollStats] = useState<{
     totalNetPayroll: number;
+    totalGrossPayroll: number;
     totalManHours: number;
     totalOvertime: number;
     totalKasbon: number;
+    totalStatutoryDeductions: number;
+    totalDeductions: number;
     employeeCount: number;
   } | null>(null);
   const [activeTab, setActiveTab] = useState<'summary' | 'thl-detail' | 'project-allocation'>('summary');
@@ -45,9 +48,12 @@ export default function PayrollPage() {
       const payrollRes = await api.get<{
         summary?: {
           totalNetPayroll?: number;
+          totalGrossPayroll?: number;
           totalManHours?: number;
           totalOvertime?: number;
           totalKasbon?: number;
+          totalStatutoryDeductions?: number;
+          totalDeductions?: number;
           employeeCount?: number;
         };
         rows?: any[];
@@ -58,9 +64,12 @@ export default function PayrollPage() {
       setServerPayrollRows(Array.isArray(payrollRes.data?.rows) ? payrollRes.data.rows : []);
       setServerPayrollStats(payrollRes.data?.summary ? {
         totalNetPayroll: Number(payrollRes.data.summary.totalNetPayroll || 0),
+        totalGrossPayroll: Number(payrollRes.data.summary.totalGrossPayroll || 0),
         totalManHours: Number(payrollRes.data.summary.totalManHours || 0),
         totalOvertime: Number(payrollRes.data.summary.totalOvertime || 0),
         totalKasbon: Number(payrollRes.data.summary.totalKasbon || 0),
+        totalStatutoryDeductions: Number(payrollRes.data.summary.totalStatutoryDeductions || 0),
+        totalDeductions: Number(payrollRes.data.summary.totalDeductions || 0),
         employeeCount: Number(payrollRes.data.summary.employeeCount || 0),
       } : null);
       if (!silent) toast.success('Payroll data berhasil disinkronkan.');
@@ -164,6 +173,15 @@ export default function PayrollPage() {
     }).format(val);
   };
 
+  const getAllowanceTotal = (row: any) =>
+    Number(row.transportAllowance || 0) +
+    Number(row.mealAllowance || 0) +
+    Number(row.attendanceIncentive || 0) +
+    Number(row.overtimePay || 0);
+
+  const getDeductionTotal = (row: any) =>
+    Number(row.totalDeductions ?? row.totalKasbon ?? 0);
+
   const handleExportRecap = async () => {
     if (payrollSummary.length === 0) {
       toast.info('Belum ada data payroll untuk diekspor.');
@@ -177,8 +195,19 @@ export default function PayrollPage() {
       totalHours: p.totalHours,
       totalOvertime: p.totalOvertime,
       salary: p.salary,
-      allowanceAndOvertime: Number(p.overtimePay || 0) + Number(p.mealAllowance || 0),
+      transportAllowance: Number(p.transportAllowance || 0),
+      mealAllowance: Number(p.mealAllowance || 0),
+      attendanceIncentive: Number(p.attendanceIncentive || 0),
+      overtimePay: Number(p.overtimePay || 0),
+      allowanceAndOvertime: getAllowanceTotal(p),
+      bpjsHealthDeduction: Number(p.bpjsHealthDeduction || 0),
+      jhtDeduction: Number(p.jhtDeduction || 0),
+      jpDeduction: Number(p.jpDeduction || 0),
+      pph21Amount: Number(p.pph21Amount || 0),
+      statutoryDeduction: Number(p.statutoryDeduction || 0),
       totalKasbon: p.totalKasbon,
+      totalDeductions: getDeductionTotal(p),
+      grossSalary: Number(p.grossSalary || 0),
       netSalary: p.netSalary,
     }));
     const dateKey = new Date().toISOString().slice(0, 10);
@@ -187,9 +216,12 @@ export default function PayrollPage() {
       generatedAt: new Date().toISOString(),
       summary: {
         totalNetPayroll: Number(serverPayrollStats?.totalNetPayroll || 0),
+        totalGrossPayroll: Number(serverPayrollStats?.totalGrossPayroll || 0),
         totalManHours: Number(serverPayrollStats?.totalManHours || 0),
         totalOvertime: Number(serverPayrollStats?.totalOvertime || 0),
         totalKasbon: Number(serverPayrollStats?.totalKasbon || 0),
+        totalStatutoryDeductions: Number(serverPayrollStats?.totalStatutoryDeductions || 0),
+        totalDeductions: Number(serverPayrollStats?.totalDeductions || 0),
         employeeCount: Number(serverPayrollStats?.employeeCount || payrollSummary.length),
       },
       rows: exportRows,
@@ -244,7 +276,7 @@ export default function PayrollPage() {
             <Wallet className="text-emerald-600" size={36} />
             Command <span className="text-emerald-600">Payroll</span>
           </h1>
-          <p className="text-slate-500 font-bold text-sm uppercase italic tracking-wide">Otomasi Upah Berdasarkan Absensi & Kasbon Lapangan</p>
+          <p className="text-slate-500 font-bold text-sm uppercase italic tracking-wide">Otomasi Upah, BPJS Karyawan, dan PPh21 Manual</p>
         </div>
         <div className="flex gap-3">
            <button
@@ -275,7 +307,7 @@ export default function PayrollPage() {
            { label: 'Total Net Payroll', val: formatCurrency(totalPayroll), icon: Wallet, color: 'text-emerald-600' },
            { label: 'Staff Count', val: `${Number(serverPayrollStats?.employeeCount || serverEmployees.length)} Personel`, icon: Users, color: 'text-blue-600' },
            { label: 'Total Man-Hours', val: `${Number(serverPayrollStats?.totalManHours || 0)} Hrs`, icon: Clock, color: 'text-slate-900' },
-           { label: 'Labor/Revenue Ratio', val: '18.5%', icon: TrendingUp, color: 'text-amber-600' },
+           { label: 'Total Potongan', val: formatCurrency(Number(serverPayrollStats?.totalDeductions || 0)), icon: TrendingUp, color: 'text-rose-600' },
          ].map((stat, i) => (
            <div key={i} className="bg-white rounded-[2rem] p-6 border-2 border-slate-100 shadow-sm group">
              <div className="flex justify-between items-start mb-4">
@@ -288,6 +320,13 @@ export default function PayrollPage() {
              <h3 className={`text-xl font-black tracking-tight ${stat.color}`}>{stat.val}</h3>
            </div>
          ))}
+      </div>
+
+      <div className="bg-blue-50 border border-blue-100 rounded-2xl p-4">
+        <p className="text-xs font-bold text-blue-900 leading-relaxed">
+          Payroll wave 1 sekarang menghitung gaji pokok, transport, uang makan per hari, insentif kehadiran, lembur, kasbon, BPJS karyawan, dan PPh21 manual.
+          PPh21 otomatis penuh masih belum diaktifkan, jadi nominal PPh21 masih diatur per karyawan.
+        </p>
       </div>
 
       {/* Tabs */}
@@ -324,8 +363,8 @@ export default function PayrollPage() {
                     <th className="px-8 py-6">Status/Tipe</th>
                     <th className="px-8 py-6 text-center">Kehadiran</th>
                     <th className="px-8 py-6 text-right">Gaji Pokok</th>
-                    <th className="px-8 py-6 text-right">Tunjangan/Lembur</th>
-                    <th className="px-8 py-6 text-right text-rose-500">Potongan/Kasbon</th>
+                    <th className="px-8 py-6 text-right">Tunjangan & Komponen</th>
+                    <th className="px-8 py-6 text-right text-rose-500">Total Potongan</th>
                     <th className="px-8 py-6 text-right font-black text-slate-900 bg-slate-100/30">Gaji Bersih (Net)</th>
                   </tr>
                 </thead>
@@ -359,12 +398,15 @@ export default function PayrollPage() {
                       <td className="px-8 py-5 text-right font-black text-slate-600">{formatCurrency(p.salary)}</td>
                       <td className="px-8 py-5 text-right font-black text-emerald-600">
                          <div className="flex flex-col">
-                            <span>{formatCurrency(p.overtimePay + p.mealAllowance)}</span>
-                            <span className="text-[8px] uppercase tracking-tighter opacity-60">incl. Meal & OT</span>
+                            <span>{formatCurrency(getAllowanceTotal(p))}</span>
+                            <span className="text-[8px] uppercase tracking-tighter opacity-60">transport, makan, insentif, OT</span>
                          </div>
                       </td>
                       <td className="px-8 py-5 text-right font-black text-rose-500">
-                        {p.totalKasbon > 0 ? `-${formatCurrency(p.totalKasbon)}` : '-'}
+                        <div className="flex flex-col">
+                          <span>{getDeductionTotal(p) > 0 ? `-${formatCurrency(getDeductionTotal(p))}` : '-'}</span>
+                          <span className="text-[8px] uppercase tracking-tighter opacity-60">kasbon, BPJS, PPh21</span>
+                        </div>
                       </td>
                       <td className="px-8 py-5 text-right font-black text-slate-900 bg-slate-100/30 group-hover:bg-emerald-50 transition-colors">
                         {formatCurrency(p.netSalary)}

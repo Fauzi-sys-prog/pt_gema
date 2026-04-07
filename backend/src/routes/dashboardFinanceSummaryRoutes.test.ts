@@ -81,6 +81,14 @@ function createEmployeeRow(overrides: Record<string, unknown> = {}) {
     department: "Produksi",
     employmentType: "Tetap",
     salary: 3_460_000,
+    transportAllowance: undefined,
+    mealAllowancePerDay: undefined,
+    attendanceIncentive: undefined,
+    overtimeRateMultiplier: undefined,
+    bpjsHealthEmployeePercent: undefined,
+    jhtEmployeePercent: undefined,
+    jpEmployeePercent: undefined,
+    pph21Amount: undefined,
     updatedAt: new Date("2026-03-20T00:00:00.000Z"),
     ...overrides,
   };
@@ -1219,6 +1227,111 @@ test("GET /dashboard/finance-payroll-summary returns payroll summary and derived
     assert.equal(mock.calls.employeeFindMany, 1);
     assert.equal(mock.calls.attendanceFindMany, 1);
     assert.equal(mock.calls.kasbonFindMany, 1);
+  } finally {
+    mock.restore();
+  }
+});
+
+test("GET /dashboard/finance-payroll-summary applies configured payroll components and deductions", async () => {
+  const mock = installFinanceSummaryRouteMocks(Role.FINANCE);
+  const token = signAccessToken({ id: "user-fin", role: Role.FINANCE });
+
+  try {
+    const prismaAny = prisma as unknown as Record<string, any>;
+    const originalEmployeeFindMany = prismaAny.employeeRecord.findMany;
+    const originalAttendanceFindMany = prismaAny.attendanceRecord.findMany;
+    const originalKasbonFindMany = prismaAny.hrKasbon.findMany;
+
+    prismaAny.employeeRecord.findMany = async () => {
+      mock.calls.employeeFindMany += 1;
+      return [
+        createEmployeeRow({
+          id: "emp-pay-1",
+          employeeId: "EMP-PAY-001",
+          name: "Ening",
+          position: "Finance",
+          department: "Finance",
+          employmentType: "Permanent",
+          salary: 1_730_000,
+          transportAllowance: 100_000,
+          mealAllowancePerDay: 50_000,
+          attendanceIncentive: 200_000,
+          overtimeRateMultiplier: 2,
+          bpjsHealthEmployeePercent: 1,
+          jhtEmployeePercent: 2,
+          jpEmployeePercent: 1,
+          pph21Amount: 25_000,
+          updatedAt: new Date("2026-03-25T00:00:00.000Z"),
+        }),
+      ];
+    };
+
+    prismaAny.attendanceRecord.findMany = async () => {
+      mock.calls.attendanceFindMany += 1;
+      return [
+        createAttendanceRow({
+          employeeId: "emp-pay-1",
+          workHours: 8,
+          overtime: 2,
+          status: "PRESENT",
+          updatedAt: new Date("2026-03-24T00:00:00.000Z"),
+        }),
+        createAttendanceRow({
+          employeeId: "emp-pay-1",
+          workHours: 8,
+          overtime: 0,
+          status: "MASUK",
+          updatedAt: new Date("2026-03-24T08:00:00.000Z"),
+        }),
+      ];
+    };
+
+    prismaAny.hrKasbon.findMany = async () => {
+      mock.calls.kasbonFindMany += 1;
+      return [
+        createKasbonRow({
+          employeeId: "emp-pay-1",
+          amount: 100_000,
+          status: "APPROVED",
+          approved: true,
+          updatedAt: new Date("2026-03-26T00:00:00.000Z"),
+        }),
+      ];
+    };
+
+    await withServer(async (baseUrl) => {
+      const response = await fetch(`${baseUrl}/dashboard/finance-payroll-summary`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      assert.equal(response.status, 200);
+      const payload = (await response.json()) as Record<string, any>;
+      assert.equal(payload.summary.employeeCount, 1);
+      assert.equal(payload.summary.totalGrossPayroll, 2_170_000);
+      assert.equal(payload.summary.totalKasbon, 100_000);
+      assert.equal(payload.summary.totalStatutoryDeductions, 94_200);
+      assert.equal(payload.summary.totalDeductions, 194_200);
+      assert.equal(payload.summary.totalNetPayroll, 1_975_800);
+      assert.equal(payload.rows[0].transportAllowance, 100_000);
+      assert.equal(payload.rows[0].mealAllowance, 100_000);
+      assert.equal(payload.rows[0].attendanceIncentive, 200_000);
+      assert.equal(payload.rows[0].overtimePay, 40_000);
+      assert.equal(payload.rows[0].bpjsHealthDeduction, 17_300);
+      assert.equal(payload.rows[0].jhtDeduction, 34_600);
+      assert.equal(payload.rows[0].jpDeduction, 17_300);
+      assert.equal(payload.rows[0].pph21Amount, 25_000);
+      assert.equal(payload.rows[0].statutoryDeduction, 94_200);
+      assert.equal(payload.rows[0].totalDeductions, 194_200);
+      assert.equal(payload.rows[0].grossSalary, 2_170_000);
+      assert.equal(payload.rows[0].netSalary, 1_975_800);
+      assert.equal(payload.lastUpdatedAt, "2026-03-26T00:00:00.000Z");
+    });
+
+    prismaAny.employeeRecord.findMany = originalEmployeeFindMany;
+    prismaAny.attendanceRecord.findMany = originalAttendanceFindMany;
+    prismaAny.hrKasbon.findMany = originalKasbonFindMany;
   } finally {
     mock.restore();
   }

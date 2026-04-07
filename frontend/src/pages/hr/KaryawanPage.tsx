@@ -52,6 +52,14 @@ export default function KaryawanPage() {
     emergencyContact: '',
     emergencyPhone: '',
     salary: 0,
+    transportAllowance: 0,
+    mealAllowancePerDay: 38000,
+    attendanceIncentive: 0,
+    overtimeRateMultiplier: 1.5,
+    bpjsHealthEmployeePercent: 0,
+    jhtEmployeePercent: 0,
+    jpEmployeePercent: 0,
+    pph21Amount: 0,
     status: 'Active',
     leaveQuota: 12
   });
@@ -110,6 +118,14 @@ export default function KaryawanPage() {
       emergencyContact: '',
       emergencyPhone: '',
       salary: 0,
+      transportAllowance: 0,
+      mealAllowancePerDay: 38000,
+      attendanceIncentive: 0,
+      overtimeRateMultiplier: 1.5,
+      bpjsHealthEmployeePercent: 0,
+      jhtEmployeePercent: 0,
+      jpEmployeePercent: 0,
+      pph21Amount: 0,
       status: 'Active'
     });
     setShowModal(true);
@@ -627,6 +643,99 @@ export default function KaryawanPage() {
                 </div>
               </div>
 
+              <div>
+                <h3 className="text-gray-900 mb-4">Pengaturan Payroll</h3>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-gray-700 mb-2">Tunjangan Transport Bulanan</label>
+                    <input
+                      type="number"
+                      value={formData.transportAllowance ?? 0}
+                      onChange={(e) => setFormData({ ...formData, transportAllowance: Number(e.target.value) })}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                      min={0}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-gray-700 mb-2">Uang Makan Per Hari</label>
+                    <input
+                      type="number"
+                      value={formData.mealAllowancePerDay ?? 38000}
+                      onChange={(e) => setFormData({ ...formData, mealAllowancePerDay: Number(e.target.value) })}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                      min={0}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-gray-700 mb-2">Insentif Kehadiran Bulanan</label>
+                    <input
+                      type="number"
+                      value={formData.attendanceIncentive ?? 0}
+                      onChange={(e) => setFormData({ ...formData, attendanceIncentive: Number(e.target.value) })}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                      min={0}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-gray-700 mb-2">Multiplier Lembur</label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      value={formData.overtimeRateMultiplier ?? 1.5}
+                      onChange={(e) => setFormData({ ...formData, overtimeRateMultiplier: Number(e.target.value) })}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                      min={0}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-gray-700 mb-2">BPJS Kesehatan Karyawan (%)</label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      value={formData.bpjsHealthEmployeePercent ?? 0}
+                      onChange={(e) => setFormData({ ...formData, bpjsHealthEmployeePercent: Number(e.target.value) })}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                      min={0}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-gray-700 mb-2">JHT Karyawan (%)</label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      value={formData.jhtEmployeePercent ?? 0}
+                      onChange={(e) => setFormData({ ...formData, jhtEmployeePercent: Number(e.target.value) })}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                      min={0}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-gray-700 mb-2">JP Karyawan (%)</label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      value={formData.jpEmployeePercent ?? 0}
+                      onChange={(e) => setFormData({ ...formData, jpEmployeePercent: Number(e.target.value) })}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                      min={0}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-gray-700 mb-2">PPh21 Manual Per Bulan</label>
+                    <input
+                      type="number"
+                      value={formData.pph21Amount ?? 0}
+                      onChange={(e) => setFormData({ ...formData, pph21Amount: Number(e.target.value) })}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                      min={0}
+                    />
+                  </div>
+                </div>
+                <p className="text-xs text-gray-500 mt-3">
+                  Wave 1: sistem menghitung BPJS/JHT/JP dan PPh21 manual dari konfigurasi ini. PPh21 otomatis penuh belum diaktifkan.
+                </p>
+              </div>
+
               {/* Emergency Contact */}
               <div>
                 <h3 className="text-gray-900 mb-4">Kontak Darurat</h3>
@@ -795,6 +904,44 @@ export default function KaryawanPage() {
                     <div className="text-gray-500 text-xs mt-1">
                       {selectedEmployee.employmentType === 'THL' ? 'per hari' : 'per bulan'}
                     </div>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <h3 className="text-gray-900 mb-4">Pengaturan Payroll</h3>
+                <div className="grid grid-cols-2 gap-6">
+                  <div>
+                    <div className="text-gray-600 mb-1">Tunjangan Transport</div>
+                    <div className="text-gray-900">{formatCurrency(selectedEmployee.transportAllowance ?? 0)}</div>
+                  </div>
+                  <div>
+                    <div className="text-gray-600 mb-1">Uang Makan / Hari</div>
+                    <div className="text-gray-900">{formatCurrency(selectedEmployee.mealAllowancePerDay ?? 38_000)}</div>
+                  </div>
+                  <div>
+                    <div className="text-gray-600 mb-1">Insentif Kehadiran</div>
+                    <div className="text-gray-900">{formatCurrency(selectedEmployee.attendanceIncentive ?? 0)}</div>
+                  </div>
+                  <div>
+                    <div className="text-gray-600 mb-1">Multiplier Lembur</div>
+                    <div className="text-gray-900">{selectedEmployee.overtimeRateMultiplier ?? 1.5}x</div>
+                  </div>
+                  <div>
+                    <div className="text-gray-600 mb-1">BPJS Kesehatan Karyawan</div>
+                    <div className="text-gray-900">{selectedEmployee.bpjsHealthEmployeePercent ?? 0}%</div>
+                  </div>
+                  <div>
+                    <div className="text-gray-600 mb-1">JHT Karyawan</div>
+                    <div className="text-gray-900">{selectedEmployee.jhtEmployeePercent ?? 0}%</div>
+                  </div>
+                  <div>
+                    <div className="text-gray-600 mb-1">JP Karyawan</div>
+                    <div className="text-gray-900">{selectedEmployee.jpEmployeePercent ?? 0}%</div>
+                  </div>
+                  <div>
+                    <div className="text-gray-600 mb-1">PPh21 Manual</div>
+                    <div className="text-gray-900">{formatCurrency(selectedEmployee.pph21Amount ?? 0)}</div>
                   </div>
                 </div>
               </div>

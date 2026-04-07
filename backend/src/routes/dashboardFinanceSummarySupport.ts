@@ -1558,6 +1558,14 @@ export async function buildFinancePayrollSummaryPayload() {
         department: true,
         employmentType: true,
         salary: true,
+        transportAllowance: true,
+        mealAllowancePerDay: true,
+        attendanceIncentive: true,
+        overtimeRateMultiplier: true,
+        bpjsHealthEmployeePercent: true,
+        jhtEmployeePercent: true,
+        jpEmployeePercent: true,
+        pph21Amount: true,
         updatedAt: true,
       },
       orderBy: { updatedAt: "desc" },
@@ -1603,11 +1611,30 @@ export async function buildFinancePayrollSummaryPayload() {
       .reduce((sum, item) => sum + Number(item.amount || 0), 0);
 
     const baseSalary = emp.salary ?? 0;
+    const transportAllowance = emp.transportAllowance ?? 0;
+    const mealAllowanceRate = emp.mealAllowancePerDay ?? 38_000;
+    const attendanceIncentive = emp.attendanceIncentive ?? 0;
+    const overtimeRateMultiplier = emp.overtimeRateMultiplier ?? 1.5;
+    const bpjsHealthEmployeePercent = emp.bpjsHealthEmployeePercent ?? 0;
+    const jhtEmployeePercent = emp.jhtEmployeePercent ?? 0;
+    const jpEmployeePercent = emp.jpEmployeePercent ?? 0;
+    const pph21Amount = emp.pph21Amount ?? 0;
     const hourlyRate = baseSalary > 0 ? baseSalary / 173 : 0;
-    const overtimePay = totalOvertime * hourlyRate * 1.5;
-    const mealAllowance = presentCount * 38000;
-    const grossSalary = baseSalary + overtimePay + mealAllowance;
-    const netSalary = grossSalary - totalKasbon;
+    const overtimePay = totalOvertime * hourlyRate * overtimeRateMultiplier;
+    const mealAllowance = presentCount * mealAllowanceRate;
+    const bpjsHealthDeduction = baseSalary * (bpjsHealthEmployeePercent / 100);
+    const jhtDeduction = baseSalary * (jhtEmployeePercent / 100);
+    const jpDeduction = baseSalary * (jpEmployeePercent / 100);
+    const statutoryDeduction =
+      bpjsHealthDeduction + jhtDeduction + jpDeduction + pph21Amount;
+    const totalDeductions = totalKasbon + statutoryDeduction;
+    const grossSalary =
+      baseSalary +
+      transportAllowance +
+      mealAllowance +
+      attendanceIncentive +
+      overtimePay;
+    const netSalary = grossSalary - totalDeductions;
 
     return {
       id: employeeId,
@@ -1623,24 +1650,46 @@ export async function buildFinancePayrollSummaryPayload() {
       attendanceCount: empAttendance.length,
       totalKasbon,
       overtimePay,
+      transportAllowance,
+      mealAllowanceRate,
       mealAllowance,
+      attendanceIncentive,
+      overtimeRateMultiplier,
+      bpjsHealthEmployeePercent,
+      jhtEmployeePercent,
+      jpEmployeePercent,
+      pph21Amount,
+      bpjsHealthDeduction,
+      jhtDeduction,
+      jpDeduction,
+      statutoryDeduction,
+      totalDeductions,
       grossSalary,
       netSalary,
     };
   });
 
   const totalNetPayroll = payrollRows.reduce((sum, row) => sum + row.netSalary, 0);
+  const totalGrossPayroll = payrollRows.reduce((sum, row) => sum + row.grossSalary, 0);
   const totalManHours = payrollRows.reduce((sum, row) => sum + row.totalHours, 0);
   const totalOvertime = payrollRows.reduce((sum, row) => sum + row.totalOvertime, 0);
   const totalKasbon = payrollRows.reduce((sum, row) => sum + row.totalKasbon, 0);
+  const totalStatutoryDeductions = payrollRows.reduce(
+    (sum, row) => sum + row.statutoryDeduction,
+    0,
+  );
+  const totalDeductions = payrollRows.reduce((sum, row) => sum + row.totalDeductions, 0);
 
   return {
     generatedAt: new Date().toISOString(),
     summary: {
       totalNetPayroll,
+      totalGrossPayroll,
       totalManHours,
       totalOvertime,
       totalKasbon,
+      totalStatutoryDeductions,
+      totalDeductions,
       employeeCount: payrollRows.length,
     },
     rows: payrollRows.sort((a, b) => b.netSalary - a.netSalary),

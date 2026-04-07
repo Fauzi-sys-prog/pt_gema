@@ -753,6 +753,14 @@ export interface Employee {
   emergencyContact: string;
   emergencyPhone: string;
   salary: number;
+  transportAllowance?: number;
+  mealAllowancePerDay?: number;
+  attendanceIncentive?: number;
+  overtimeRateMultiplier?: number;
+  bpjsHealthEmployeePercent?: number;
+  jhtEmployeePercent?: number;
+  jpEmployeePercent?: number;
+  pph21Amount?: number;
   status: "Active" | "Inactive" | "Resigned";
   bank?: string;
   bankAccount?: string;
