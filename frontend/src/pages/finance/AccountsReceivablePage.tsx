@@ -56,6 +56,7 @@ export default function AccountsReceivablePage() {
   const [filterStatus, setFilterStatus] = useState<string>('All');
   const [filterCustomer, setFilterCustomer] = useState<string>('All');
   const [isEditMode, setIsEditMode] = useState(false);
+  const [exportingInvoiceId, setExportingInvoiceId] = useState('');
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [summaryMetrics, setSummaryMetrics] = useState<{
     totalAR: number;
@@ -391,6 +392,40 @@ export default function AccountsReceivablePage() {
     setShowPaymentModal(false);
     resetPaymentForm();
     setSelectedInvoice(null);
+  };
+
+  const handleExportInvoice = async (invoice: any, format: 'word' | 'excel' = 'word') => {
+    const invoiceId = String(invoice?.id || '');
+    if (!invoiceId) {
+      toast.error('ID invoice tidak valid');
+      return;
+    }
+
+    try {
+      setExportingInvoiceId(invoiceId);
+      const response = await api.get(`/exports/customer-invoices/${invoiceId}/${format}`, {
+        responseType: 'blob',
+      });
+
+      const blob = new Blob([response.data], {
+        type: format === 'excel' ? 'application/vnd.ms-excel' : 'application/msword',
+      });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      const safeNo = String(invoice?.noInvoice || invoiceId).replace(/[^a-zA-Z0-9-_]+/g, '_');
+      link.href = url;
+      link.download = `${safeNo}.${format === 'excel' ? 'xls' : 'doc'}`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      toast.success(`Export invoice ${format === 'excel' ? 'Excel' : 'Word'} berhasil`);
+    } catch (error) {
+      console.error('Failed to export customer invoice:', error);
+      toast.error(`Gagal export invoice ${format === 'excel' ? 'Excel' : 'Word'}`);
+    } finally {
+      setExportingInvoiceId('');
+    }
   };
 
   // Submit customer
@@ -976,6 +1011,14 @@ export default function AccountsReceivablePage() {
                               title="Lihat Detail"
                             >
                               <Eye className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => handleExportInvoice(invoice, 'word')}
+                              disabled={exportingInvoiceId === String(invoice.id)}
+                              className="p-1 hover:bg-indigo-50 rounded text-indigo-600 disabled:opacity-40"
+                              title="Export Invoice Word"
+                            >
+                              <Download className="w-4 h-4" />
                             </button>
                           </div>
                         </td>
@@ -1828,12 +1871,30 @@ export default function AccountsReceivablePage() {
             >
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-2xl font-bold">Detail Invoice</h2>
-                <button
-                  onClick={() => setShowPreviewModal(false)}
-                  className="p-2 hover:bg-gray-100 rounded-lg"
-                >
-                  <X className="w-5 h-5" />
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => handleExportInvoice(selectedInvoice, 'word')}
+                    disabled={exportingInvoiceId === String(selectedInvoice.id)}
+                    className="px-3 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 flex items-center gap-2"
+                  >
+                    <Download className="w-4 h-4" />
+                    Word
+                  </button>
+                  <button
+                    onClick={() => handleExportInvoice(selectedInvoice, 'excel')}
+                    disabled={exportingInvoiceId === String(selectedInvoice.id)}
+                    className="px-3 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50 flex items-center gap-2"
+                  >
+                    <Download className="w-4 h-4" />
+                    Excel
+                  </button>
+                  <button
+                    onClick={() => setShowPreviewModal(false)}
+                    className="p-2 hover:bg-gray-100 rounded-lg"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
               </div>
 
               <div className="space-y-6">

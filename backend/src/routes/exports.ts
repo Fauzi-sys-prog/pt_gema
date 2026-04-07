@@ -416,6 +416,72 @@ async function getAppEntityPayload(resource: string, id: string): Promise<Record
     }
   }
 
+  if (resource === "customer-invoices") {
+    const invoice = await prisma.financeCustomerInvoice.findUnique({
+      where: { id },
+      include: {
+        items: {
+          orderBy: { id: "asc" },
+        },
+        payments: {
+          orderBy: { tanggal: "asc" },
+        },
+      },
+    });
+
+    if (invoice) {
+      return {
+        id: invoice.id,
+        projectId: invoice.projectId ?? undefined,
+        customerId: invoice.customerId ?? undefined,
+        noInvoice: invoice.number,
+        tanggal: invoice.tanggal.toISOString().slice(0, 10),
+        jatuhTempo: invoice.dueDate ? invoice.dueDate.toISOString().slice(0, 10) : undefined,
+        dueDate: invoice.dueDate ? invoice.dueDate.toISOString().slice(0, 10) : undefined,
+        customer: invoice.customerName,
+        customerName: invoice.customerName,
+        alamat: undefined,
+        noPO: invoice.noPO ?? undefined,
+        subtotal: invoice.subtotal,
+        ppn: invoice.ppn,
+        pph: invoice.pph,
+        totalBayar: invoice.totalAmount,
+        totalNominal: invoice.totalAmount,
+        paidAmount: invoice.paidAmount,
+        outstandingAmount: invoice.outstandingAmount,
+        status: invoice.status,
+        projectName: invoice.projectName ?? undefined,
+        perihal: invoice.perihal ?? undefined,
+        termin: invoice.termin ?? undefined,
+        buktiTransfer: invoice.buktiTransfer ?? undefined,
+        noKwitansi: invoice.noKwitansi ?? undefined,
+        tanggalBayar: invoice.tanggalBayar ? invoice.tanggalBayar.toISOString().slice(0, 10) : undefined,
+        remark: invoice.remark ?? undefined,
+        createdBy: invoice.createdBy ?? undefined,
+        sentAt: invoice.sentAt ? invoice.sentAt.toISOString() : undefined,
+        items: invoice.items.map((item) => ({
+          deskripsi: item.description,
+          qty: item.qty,
+          unit: item.unit,
+          hargaSatuan: item.unitPrice,
+          jumlah: item.amount,
+          total: item.amount,
+        })),
+        paymentHistory: invoice.payments.map((item) => ({
+          id: item.id,
+          tanggal: item.tanggal.toISOString().slice(0, 10),
+          nominal: item.nominal,
+          metodeBayar: item.method,
+          noBukti: item.proofNo ?? undefined,
+          bankName: item.bankName ?? undefined,
+          remark: item.remark ?? undefined,
+          createdBy: item.createdBy ?? undefined,
+          createdAt: item.paidAt ? item.paidAt.toISOString() : undefined,
+        })),
+      };
+    }
+  }
+
   if (resource === "purchase-orders") {
     const purchaseOrder = await prisma.procurementPurchaseOrder.findUnique({
       where: { id },
@@ -3173,6 +3239,18 @@ exportsRouter.get("/exports/invoices/:id/excel", authenticate, async (req: AuthR
   const payload = await getAppEntityPayload("invoices", req.params.id);
   if (!payload) return res.status(404).json({ error: "Invoice not found" });
   return sendExcel(res, `invoice-${req.params.id}`, invoiceExportHtml(payload));
+});
+
+exportsRouter.get("/exports/customer-invoices/:id/word", authenticate, async (req: AuthRequest, res: Response) => {
+  const payload = await getAppEntityPayload("customer-invoices", req.params.id);
+  if (!payload) return res.status(404).json({ error: "Customer invoice not found" });
+  return sendWord(res, `customer-invoice-${req.params.id}`, invoiceExportHtml(payload));
+});
+
+exportsRouter.get("/exports/customer-invoices/:id/excel", authenticate, async (req: AuthRequest, res: Response) => {
+  const payload = await getAppEntityPayload("customer-invoices", req.params.id);
+  if (!payload) return res.status(404).json({ error: "Customer invoice not found" });
+  return sendExcel(res, `customer-invoice-${req.params.id}`, invoiceExportHtml(payload));
 });
 
 exportsRouter.get("/exports/surat-jalan/:id/word", authenticate, async (req: AuthRequest, res: Response) => {
