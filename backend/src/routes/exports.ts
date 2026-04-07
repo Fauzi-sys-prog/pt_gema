@@ -2334,6 +2334,137 @@ function payrollReportExportHtml(payload: Record<string, unknown>): string {
   `;
 }
 
+function payrollSlipExportHtml(payload: Record<string, unknown>): string {
+  const periodLabel = toText(payload.periodLabel || payload.period, "-");
+  const generatedAt = payload.generatedAt || new Date().toISOString();
+  const generatedBy = toText(payload.generatedBy, "Finance/HR");
+  const employeeName = toText(payload.name || payload.employeeName, "-");
+  const employeeId = toText(payload.employeeId, "-");
+  const position = toText(payload.position, "-");
+  const department = toText(payload.department, "-");
+  const employmentType = toText(payload.employmentType, "-");
+  const attendanceCount = toNum(payload.attendanceCount);
+  const totalHours = toNum(payload.totalHours);
+  const totalOvertime = toNum(payload.totalOvertime);
+  const baseSalary = toNum(payload.baseSalary || payload.salary);
+  const transportAllowance = toNum(payload.transportAllowance);
+  const mealAllowanceRate = toNum(payload.mealAllowanceRate);
+  const mealAllowance = toNum(payload.mealAllowance);
+  const attendanceIncentive = toNum(payload.attendanceIncentive);
+  const overtimePay = toNum(payload.overtimePay);
+  const grossSalary = toNum(payload.grossSalary);
+  const totalKasbon = toNum(payload.totalKasbon);
+  const bpjsHealthDeduction = toNum(payload.bpjsHealthDeduction);
+  const jhtDeduction = toNum(payload.jhtDeduction);
+  const jpDeduction = toNum(payload.jpDeduction);
+  const pph21Amount = toNum(payload.pph21Amount);
+  const totalDeductions =
+    toNum(payload.totalDeductions) ||
+    totalKasbon + bpjsHealthDeduction + jhtDeduction + jpDeduction + pph21Amount;
+  const netSalary = toNum(payload.netSalary);
+  const bank = toText(payload.bank, "-");
+  const bankAccount = toText(payload.bankAccount, "-");
+  const npwp = toText(payload.npwp, "-");
+  const bpjsKesehatan = toText(payload.bpjsKesehatan, "-");
+  const bpjsKetenagakerjaan = toText(payload.bpjsKetenagakerjaan, "-");
+
+  const earningsRows = [
+    { label: "Gaji Pokok", value: baseSalary },
+    { label: "Tunjangan Transport", value: transportAllowance },
+    { label: `Uang Makan (${attendanceCount.toLocaleString("id-ID")} hari)`, value: mealAllowance },
+    { label: "Insentif Kehadiran", value: attendanceIncentive },
+    { label: `Lembur (${totalOvertime.toLocaleString("id-ID")} jam)`, value: overtimePay },
+  ];
+
+  const deductionRows = [
+    { label: "Kasbon", value: totalKasbon },
+    { label: "BPJS Kesehatan Karyawan", value: bpjsHealthDeduction },
+    { label: "JHT Karyawan", value: jhtDeduction },
+    { label: "JP Karyawan", value: jpDeduction },
+    { label: "PPh21 Manual", value: pph21Amount },
+  ];
+
+  const earningHtml = earningsRows
+    .map(
+      (row) => `
+        <tr>
+          <td style="padding:6px 8px;border:1px solid #b8bec7;">${escapeHtml(row.label)}</td>
+          <td style="padding:6px 8px;border:1px solid #b8bec7;text-align:right;">Rp ${idr(row.value)}</td>
+        </tr>
+      `,
+    )
+    .join("");
+
+  const deductionHtml = deductionRows
+    .map(
+      (row) => `
+        <tr>
+          <td style="padding:6px 8px;border:1px solid #b8bec7;">${escapeHtml(row.label)}</td>
+          <td style="padding:6px 8px;border:1px solid #b8bec7;text-align:right;">Rp ${idr(row.value)}</td>
+        </tr>
+      `,
+    )
+    .join("");
+
+  return `
+    ${companyLetterheadHtml("Slip Gaji")}
+    ${keyValueTableHtml("Informasi Karyawan", [
+      { label: "Periode Payroll", key: "periodLabel", value: periodLabel },
+      { label: "Nama Karyawan", key: "name", value: employeeName },
+      { label: "NIK / ID", key: "employeeId", value: employeeId },
+      { label: "Jabatan", key: "position", value: position },
+      { label: "Department", key: "department", value: department },
+      { label: "Tipe Karyawan", key: "employmentType", value: employmentType },
+      { label: "Hari Hadir", key: "attendanceCount", value: attendanceCount },
+      { label: "Jam Kerja", key: "totalHours", value: totalHours },
+      { label: "Lembur", key: "totalOvertime", value: totalOvertime },
+    ])}
+    <table border="1" cellspacing="0" cellpadding="0" style="border-collapse:collapse;width:100%;font-size:12px;margin-bottom:14px;">
+      <thead>
+        <tr>
+          <th style="padding:8px;border:1px solid #b8bec7;background:#eef2f7;text-align:left;">Pendapatan</th>
+          <th style="padding:8px;border:1px solid #b8bec7;background:#eef2f7;text-align:right;">Nominal</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${earningHtml}
+        <tr>
+          <td style="padding:8px;border:1px solid #b8bec7;background:#f8fafc;font-weight:700;">Total Pendapatan Kotor</td>
+          <td style="padding:8px;border:1px solid #b8bec7;background:#f8fafc;text-align:right;font-weight:700;">Rp ${idr(grossSalary)}</td>
+        </tr>
+      </tbody>
+    </table>
+    <table border="1" cellspacing="0" cellpadding="0" style="border-collapse:collapse;width:100%;font-size:12px;margin-bottom:14px;">
+      <thead>
+        <tr>
+          <th style="padding:8px;border:1px solid #b8bec7;background:#fff1f2;text-align:left;">Potongan</th>
+          <th style="padding:8px;border:1px solid #b8bec7;background:#fff1f2;text-align:right;">Nominal</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${deductionHtml}
+        <tr>
+          <td style="padding:8px;border:1px solid #b8bec7;background:#fff7ed;font-weight:700;">Total Potongan</td>
+          <td style="padding:8px;border:1px solid #b8bec7;background:#fff7ed;text-align:right;font-weight:700;">Rp ${idr(totalDeductions)}</td>
+        </tr>
+      </tbody>
+    </table>
+    ${keyValueTableHtml("Take Home Pay", [
+      { label: "Gaji Bersih Diterima", key: "netSalary", value: netSalary },
+      { label: "Bank", key: "bank", value: bank },
+      { label: "No Rekening", key: "bankAccount", value: bankAccount },
+      { label: "NPWP", key: "npwp", value: npwp },
+      { label: "BPJS Kesehatan", key: "bpjsKesehatan", value: bpjsKesehatan },
+      { label: "BPJS Ketenagakerjaan", key: "bpjsKetenagakerjaan", value: bpjsKetenagakerjaan },
+      { label: "Generated By", key: "generatedBy", value: generatedBy },
+      { label: "Generated At", key: "generatedAt", value: generatedAt },
+      { label: "Uang Makan / Hari", key: "mealAllowanceRate", value: mealAllowanceRate },
+    ])}
+    <p><b>Catatan:</b> Slip ini mengikuti payroll wave 1. PPh21 masih menggunakan nominal manual per karyawan dan belum dihitung otomatis penuh.</p>
+    ${companyFooterHtml(generatedBy)}
+  `;
+}
+
 function receivableReportExportHtml(payload: Record<string, unknown>): string {
   const rows = asRecords(payload.rows);
   const summary = asRecord(payload.summary);
@@ -3088,6 +3219,32 @@ exportsRouter.post("/exports/payroll-report/excel", authenticate, async (req: Au
     .replace(/[^\w.-]+/g, "-")
     .toLowerCase();
   return sendExcel(res, `payroll-report-${periodSlug}`, payrollReportExportHtml(payload));
+});
+
+exportsRouter.post("/exports/payroll-slip/word", authenticate, async (req: AuthRequest, res: Response) => {
+  const payload = asRecord(req.body);
+  const employeeName = toText(payload.name || payload.employeeName, "").trim();
+  if (!employeeName) {
+    return res.status(400).json({ error: "Payroll slip payload is empty" });
+  }
+  const employeeSlug = employeeName.replace(/[^\w.-]+/g, "-").toLowerCase() || "employee";
+  const periodSlug = toText(payload.periodLabel, new Date().toISOString().slice(0, 10))
+    .replace(/[^\w.-]+/g, "-")
+    .toLowerCase();
+  return sendWord(res, `payroll-slip-${employeeSlug}-${periodSlug}`, payrollSlipExportHtml(payload));
+});
+
+exportsRouter.post("/exports/payroll-slip/excel", authenticate, async (req: AuthRequest, res: Response) => {
+  const payload = asRecord(req.body);
+  const employeeName = toText(payload.name || payload.employeeName, "").trim();
+  if (!employeeName) {
+    return res.status(400).json({ error: "Payroll slip payload is empty" });
+  }
+  const employeeSlug = employeeName.replace(/[^\w.-]+/g, "-").toLowerCase() || "employee";
+  const periodSlug = toText(payload.periodLabel, new Date().toISOString().slice(0, 10))
+    .replace(/[^\w.-]+/g, "-")
+    .toLowerCase();
+  return sendExcel(res, `payroll-slip-${employeeSlug}-${periodSlug}`, payrollSlipExportHtml(payload));
 });
 
 exportsRouter.post("/exports/receivable-report/word", authenticate, async (req: AuthRequest, res: Response) => {

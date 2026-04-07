@@ -23,7 +23,7 @@ export default function PayrollPage() {
     employeeCount: number;
   } | null>(null);
   const [activeTab, setActiveTab] = useState<'summary' | 'thl-detail' | 'project-allocation'>('summary');
-  const [selectedEmployeeId, setSelectedEmployeeId] = useState<string>('');
+  const [exportingSlipId, setExportingSlipId] = useState<string>('');
   const [isProcessing, setIsProcessing] = useState(false);
   const payrollPeriodLabel = 'Januari 2026';
 
@@ -181,6 +181,89 @@ export default function PayrollPage() {
 
   const getDeductionTotal = (row: any) =>
     Number(row.totalDeductions ?? row.totalKasbon ?? 0);
+
+  const buildPayrollSlipPayload = (row: any) => {
+    const employee = liveEmployeeList.find((item) =>
+      String(item.id || '') === String(row.id || '') ||
+      String(item.employeeId || '') === String(row.employeeId || ''),
+    );
+
+    return {
+      periodLabel: payrollPeriodLabel,
+      generatedAt: new Date().toISOString(),
+      generatedBy: currentUser?.fullName || currentUser?.username || 'Finance/HR',
+      id: row.id,
+      employeeId: row.employeeId,
+      name: row.name,
+      position: row.position,
+      department: row.department,
+      employmentType: row.employmentType,
+      attendanceCount: Number(row.attendanceCount || 0),
+      totalHours: Number(row.totalHours || 0),
+      totalOvertime: Number(row.totalOvertime || 0),
+      salary: Number(row.salary || 0),
+      baseSalary: Number(row.baseSalary || row.salary || 0),
+      transportAllowance: Number(row.transportAllowance || 0),
+      mealAllowanceRate: Number(row.mealAllowanceRate || 0),
+      mealAllowance: Number(row.mealAllowance || 0),
+      attendanceIncentive: Number(row.attendanceIncentive || 0),
+      overtimePay: Number(row.overtimePay || 0),
+      grossSalary: Number(row.grossSalary || 0),
+      totalKasbon: Number(row.totalKasbon || 0),
+      bpjsHealthDeduction: Number(row.bpjsHealthDeduction || 0),
+      jhtDeduction: Number(row.jhtDeduction || 0),
+      jpDeduction: Number(row.jpDeduction || 0),
+      pph21Amount: Number(row.pph21Amount || 0),
+      totalDeductions: getDeductionTotal(row),
+      netSalary: Number(row.netSalary || 0),
+      bank: employee?.bank || '',
+      bankAccount: employee?.bankAccount || '',
+      npwp: employee?.npwp || '',
+      bpjsKesehatan: employee?.bpjsKesehatan || '',
+      bpjsKetenagakerjaan: employee?.bpjsKetenagakerjaan || '',
+    };
+  };
+
+  const handleExportSlip = async (row: any, format: 'word' | 'excel' = 'word') => {
+    setExportingSlipId(String(row.id || row.employeeId || ''));
+    try {
+      const payload = buildPayrollSlipPayload(row);
+      const response = await api.post(
+        `/exports/payroll-slip/${format}`,
+        payload,
+        { responseType: 'blob' },
+      );
+      const fileUrl = URL.createObjectURL(
+        new Blob([
+          response.data,
+        ], {
+          type: format === 'excel' ? 'application/vnd.ms-excel' : 'application/msword',
+        }),
+      );
+      const link = document.createElement('a');
+      const safeName = String(row.name || row.employeeId || 'employee')
+        .replace(/[^\w.-]+/g, '-')
+        .toLowerCase();
+      link.href = fileUrl;
+      link.download = `payroll-slip-${safeName}.${format === 'excel' ? 'xls' : 'doc'}`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(fileUrl);
+
+      addAuditLog({
+        action: 'PAYROLL_SLIP_EXPORTED',
+        module: 'Finance/HR',
+        details: `Export slip gaji ${row.name} (${payrollPeriodLabel})`,
+        status: 'Success',
+      });
+      toast.success(`Slip gaji ${row.name} berhasil diekspor.`);
+    } catch {
+      toast.error(`Export slip gaji ${row.name} gagal.`);
+    } finally {
+      setExportingSlipId('');
+    }
+  };
 
   const handleExportRecap = async () => {
     if (payrollSummary.length === 0) {
@@ -366,6 +449,7 @@ export default function PayrollPage() {
                     <th className="px-8 py-6 text-right">Tunjangan & Komponen</th>
                     <th className="px-8 py-6 text-right text-rose-500">Total Potongan</th>
                     <th className="px-8 py-6 text-right font-black text-slate-900 bg-slate-100/30">Gaji Bersih (Net)</th>
+                    <th className="px-8 py-6 text-center">Slip</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y-2 divide-slate-50">
@@ -411,11 +495,32 @@ export default function PayrollPage() {
                       <td className="px-8 py-5 text-right font-black text-slate-900 bg-slate-100/30 group-hover:bg-emerald-50 transition-colors">
                         {formatCurrency(p.netSalary)}
                       </td>
+                      <td className="px-8 py-5 text-center">
+                        <div className="flex items-center justify-center gap-2">
+                          <button
+                            onClick={() => handleExportSlip(p, 'word')}
+                            disabled={exportingSlipId === String(p.id || p.employeeId || '')}
+                            className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border-2 border-slate-200 text-[10px] font-black uppercase tracking-widest text-slate-600 hover:bg-slate-50 disabled:opacity-60"
+                          >
+                            <Download size={14} />
+                            Slip
+                          </button>
+                          <button
+                            onClick={() => handleExportSlip(p, 'excel')}
+                            disabled={exportingSlipId === String(p.id || p.employeeId || '')}
+                            className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border-2 border-emerald-200 text-[10px] font-black uppercase tracking-widest text-emerald-700 hover:bg-emerald-50 disabled:opacity-60"
+                            title="Export slip Excel"
+                          >
+                            <FileSpreadsheet size={14} />
+                            XLS
+                          </button>
+                        </div>
+                      </td>
                     </tr>
                   ))}
                   {payrollSummary.length === 0 && (
                     <tr>
-                      <td colSpan={7} className="px-8 py-20 text-center">
+                      <td colSpan={8} className="px-8 py-20 text-center">
                         <div className="flex flex-col items-center gap-4 opacity-30">
                            <Users size={48} />
                            <p className="text-xs font-black uppercase tracking-widest italic text-slate-400">Belum ada data karyawan terdaftar</p>
