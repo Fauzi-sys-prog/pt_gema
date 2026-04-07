@@ -2367,29 +2367,53 @@ function payrollSlipExportHtml(payload: Record<string, unknown>): string {
   const npwp = toText(payload.npwp, "-");
   const bpjsKesehatan = toText(payload.bpjsKesehatan, "-");
   const bpjsKetenagakerjaan = toText(payload.bpjsKetenagakerjaan, "-");
+  const totalIncome =
+    grossSalary ||
+    baseSalary + transportAllowance + mealAllowance + attendanceIncentive + overtimePay;
 
   const earningsRows = [
-    { label: "Gaji Pokok", value: baseSalary },
-    { label: "Tunjangan Transport", value: transportAllowance },
-    { label: `Uang Makan (${attendanceCount.toLocaleString("id-ID")} hari)`, value: mealAllowance },
-    { label: "Insentif Kehadiran", value: attendanceIncentive },
-    { label: `Lembur (${totalOvertime.toLocaleString("id-ID")} jam)`, value: overtimePay },
+    {
+      label: "Gaji Pokok",
+      detail: position !== "-" ? `Gaji dasar ${position}` : "Gaji dasar bulanan",
+      value: baseSalary,
+    },
+    {
+      label: "Tunjangan Transport",
+      detail: "Transport tetap",
+      value: transportAllowance,
+    },
+    {
+      label: "Tunjangan Makan",
+      detail: `${attendanceCount.toLocaleString("id-ID")} hari x Rp ${idr(mealAllowanceRate)}`,
+      value: mealAllowance,
+    },
+    {
+      label: "Insentif Kehadiran",
+      detail: "Insentif kehadiran periode berjalan",
+      value: attendanceIncentive,
+    },
+    {
+      label: "Tunjangan Lembur",
+      detail: `${totalOvertime.toLocaleString("id-ID")} jam lembur`,
+      value: overtimePay,
+    },
   ];
 
   const deductionRows = [
-    { label: "Kasbon", value: totalKasbon },
-    { label: "BPJS Kesehatan Karyawan", value: bpjsHealthDeduction },
-    { label: "JHT Karyawan", value: jhtDeduction },
-    { label: "JP Karyawan", value: jpDeduction },
-    { label: "PPh21 Manual", value: pph21Amount },
+    { label: "Kasbon", detail: "Pinjaman / kasbon aktif", value: totalKasbon },
+    { label: "BPJS Kesehatan", detail: "Potongan karyawan", value: bpjsHealthDeduction },
+    { label: "JHT", detail: "Jaminan hari tua", value: jhtDeduction },
+    { label: "JP", detail: "Jaminan pensiun", value: jpDeduction },
+    { label: "PPh21 Manual", detail: "Input manual wave 1", value: pph21Amount },
   ];
 
   const earningHtml = earningsRows
     .map(
       (row) => `
         <tr>
-          <td style="padding:6px 8px;border:1px solid #b8bec7;">${escapeHtml(row.label)}</td>
-          <td style="padding:6px 8px;border:1px solid #b8bec7;text-align:right;">Rp ${idr(row.value)}</td>
+          <td style="padding:7px 8px;border:1px solid #111;">${escapeHtml(row.label)}</td>
+          <td style="padding:7px 8px;border:1px solid #111;">${escapeHtml(row.detail)}</td>
+          <td style="padding:7px 8px;border:1px solid #111;text-align:right;">Rp ${idr(row.value)}</td>
         </tr>
       `,
     )
@@ -2399,69 +2423,145 @@ function payrollSlipExportHtml(payload: Record<string, unknown>): string {
     .map(
       (row) => `
         <tr>
-          <td style="padding:6px 8px;border:1px solid #b8bec7;">${escapeHtml(row.label)}</td>
-          <td style="padding:6px 8px;border:1px solid #b8bec7;text-align:right;">Rp ${idr(row.value)}</td>
+          <td style="padding:7px 8px;border:1px solid #111;">${escapeHtml(row.label)}</td>
+          <td style="padding:7px 8px;border:1px solid #111;">${escapeHtml(row.detail)}</td>
+          <td style="padding:7px 8px;border:1px solid #111;text-align:right;">Rp ${idr(row.value)}</td>
         </tr>
       `,
     )
     .join("");
 
   return `
-    ${companyLetterheadHtml("Slip Gaji")}
-    ${keyValueTableHtml("Informasi Karyawan", [
-      { label: "Periode Payroll", key: "periodLabel", value: periodLabel },
-      { label: "Nama Karyawan", key: "name", value: employeeName },
-      { label: "NIK / ID", key: "employeeId", value: employeeId },
-      { label: "Jabatan", key: "position", value: position },
-      { label: "Department", key: "department", value: department },
-      { label: "Tipe Karyawan", key: "employmentType", value: employmentType },
-      { label: "Hari Hadir", key: "attendanceCount", value: attendanceCount },
-      { label: "Jam Kerja", key: "totalHours", value: totalHours },
-      { label: "Lembur", key: "totalOvertime", value: totalOvertime },
-    ])}
-    <table border="1" cellspacing="0" cellpadding="0" style="border-collapse:collapse;width:100%;font-size:12px;margin-bottom:14px;">
-      <thead>
+    <div style="font-family:Arial, Helvetica, sans-serif;color:#111;font-size:12px;">
+      <table style="width:100%;border-collapse:collapse;border:1.6px solid #111;margin-bottom:0;">
         <tr>
-          <th style="padding:8px;border:1px solid #b8bec7;background:#eef2f7;text-align:left;">Pendapatan</th>
-          <th style="padding:8px;border:1px solid #b8bec7;background:#eef2f7;text-align:right;">Nominal</th>
+          <td style="width:68%;padding:12px 14px;border-right:1.6px solid #111;vertical-align:top;">
+            <table style="width:100%;border-collapse:collapse;">
+              <tr>
+                <td style="width:82px;vertical-align:top;">
+                  <div style="width:72px;height:54px;border:1.6px solid #111;display:flex;align-items:center;justify-content:center;background:#fff;">
+                    <img src="${COMPANY_LOGO_DATA_URI}" alt="Logo Gema Teknik" style="max-width:66px;max-height:48px;object-fit:contain;" />
+                  </div>
+                </td>
+                <td style="vertical-align:top;">
+                  <div style="font-size:19px;font-weight:700;line-height:1.15;">${escapeHtml(COMPANY_NAME)}</div>
+                  <div style="font-size:11px;margin-top:3px;">${escapeHtml(COMPANY_ADDRESS)}</div>
+                  <div style="font-size:11px;margin-top:2px;">${escapeHtml(COMPANY_CONTACT)}</div>
+                </td>
+              </tr>
+            </table>
+          </td>
+          <td style="width:32%;padding:12px 14px;vertical-align:top;text-align:center;">
+            <div style="font-size:16px;font-weight:700;letter-spacing:.5px;">SLIP GAJI</div>
+            <div style="margin-top:6px;font-size:12px;">Periode ${escapeHtml(periodLabel)}</div>
+            <div style="margin-top:4px;font-size:11px;color:#333;">Dicetak ${escapeHtml(formatTanggalIndonesia(generatedAt))}</div>
+          </td>
         </tr>
-      </thead>
-      <tbody>
-        ${earningHtml}
         <tr>
-          <td style="padding:8px;border:1px solid #b8bec7;background:#f8fafc;font-weight:700;">Total Pendapatan Kotor</td>
-          <td style="padding:8px;border:1px solid #b8bec7;background:#f8fafc;text-align:right;font-weight:700;">Rp ${idr(grossSalary)}</td>
+          <td style="padding:0;border-top:1.6px solid #111;border-right:1.6px solid #111;vertical-align:top;">
+            <table style="width:100%;border-collapse:collapse;">
+              <tr><td style="padding:8px 10px;width:34%;border-right:1px solid #111;">Nama</td><td style="padding:8px 10px;">${escapeHtml(employeeName)}</td></tr>
+              <tr><td style="padding:8px 10px;border-top:1px solid #111;border-right:1px solid #111;">NIK / ID</td><td style="padding:8px 10px;border-top:1px solid #111;">${escapeHtml(employeeId)}</td></tr>
+              <tr><td style="padding:8px 10px;border-top:1px solid #111;border-right:1px solid #111;">Jabatan</td><td style="padding:8px 10px;border-top:1px solid #111;">${escapeHtml(position)}</td></tr>
+              <tr><td style="padding:8px 10px;border-top:1px solid #111;border-right:1px solid #111;">Departemen</td><td style="padding:8px 10px;border-top:1px solid #111;">${escapeHtml(department)}</td></tr>
+              <tr><td style="padding:8px 10px;border-top:1px solid #111;border-right:1px solid #111;">Tipe Karyawan</td><td style="padding:8px 10px;border-top:1px solid #111;">${escapeHtml(employmentType)}</td></tr>
+            </table>
+          </td>
+          <td style="padding:0;border-top:1.6px solid #111;vertical-align:top;">
+            <table style="width:100%;border-collapse:collapse;">
+              <tr><td style="padding:8px 10px;width:55%;border-right:1px solid #111;">Hari Hadir</td><td style="padding:8px 10px;text-align:right;">${attendanceCount.toLocaleString("id-ID")}</td></tr>
+              <tr><td style="padding:8px 10px;border-top:1px solid #111;border-right:1px solid #111;">Jam Kerja</td><td style="padding:8px 10px;border-top:1px solid #111;text-align:right;">${totalHours.toLocaleString("id-ID")}</td></tr>
+              <tr><td style="padding:8px 10px;border-top:1px solid #111;border-right:1px solid #111;">Lembur</td><td style="padding:8px 10px;border-top:1px solid #111;text-align:right;">${totalOvertime.toLocaleString("id-ID")} jam</td></tr>
+              <tr><td style="padding:8px 10px;border-top:1px solid #111;border-right:1px solid #111;">Bank</td><td style="padding:8px 10px;border-top:1px solid #111;">${escapeHtml(bank)}</td></tr>
+              <tr><td style="padding:8px 10px;border-top:1px solid #111;border-right:1px solid #111;">No. Rekening</td><td style="padding:8px 10px;border-top:1px solid #111;">${escapeHtml(bankAccount)}</td></tr>
+            </table>
+          </td>
         </tr>
-      </tbody>
-    </table>
-    <table border="1" cellspacing="0" cellpadding="0" style="border-collapse:collapse;width:100%;font-size:12px;margin-bottom:14px;">
-      <thead>
+      </table>
+
+      <table style="width:100%;border-collapse:collapse;border:1.6px solid #111;border-top:none;margin-bottom:0;">
         <tr>
-          <th style="padding:8px;border:1px solid #b8bec7;background:#fff1f2;text-align:left;">Potongan</th>
-          <th style="padding:8px;border:1px solid #b8bec7;background:#fff1f2;text-align:right;">Nominal</th>
+          <td style="width:54%;padding:0;border-right:1.6px solid #111;vertical-align:top;">
+            <table style="width:100%;border-collapse:collapse;">
+              <thead>
+                <tr>
+                  <th style="padding:8px;border-bottom:1.6px solid #111;border-right:1px solid #111;text-align:left;">Pendapatan</th>
+                  <th style="padding:8px;border-bottom:1.6px solid #111;border-right:1px solid #111;text-align:left;">Keterangan</th>
+                  <th style="padding:8px;border-bottom:1.6px solid #111;text-align:right;">Nominal</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${earningHtml}
+                <tr>
+                  <td colspan="2" style="padding:8px;border:1px solid #111;font-weight:700;">Total Pendapatan Kotor</td>
+                  <td style="padding:8px;border:1px solid #111;text-align:right;font-weight:700;">Rp ${idr(totalIncome)}</td>
+                </tr>
+              </tbody>
+            </table>
+          </td>
+          <td style="width:46%;padding:0;vertical-align:top;">
+            <table style="width:100%;border-collapse:collapse;">
+              <thead>
+                <tr>
+                  <th style="padding:8px;border-bottom:1.6px solid #111;border-right:1px solid #111;text-align:left;">Potongan</th>
+                  <th style="padding:8px;border-bottom:1.6px solid #111;border-right:1px solid #111;text-align:left;">Keterangan</th>
+                  <th style="padding:8px;border-bottom:1.6px solid #111;text-align:right;">Nominal</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${deductionHtml}
+                <tr>
+                  <td colspan="2" style="padding:8px;border:1px solid #111;font-weight:700;">Total Potongan</td>
+                  <td style="padding:8px;border:1px solid #111;text-align:right;font-weight:700;">Rp ${idr(totalDeductions)}</td>
+                </tr>
+                <tr>
+                  <td style="padding:8px;border:1px solid #111;font-weight:700;">Dokumen</td>
+                  <td colspan="2" style="padding:8px;border:1px solid #111;">NPWP: ${escapeHtml(npwp)}<br/>BPJS Kes: ${escapeHtml(bpjsKesehatan)}<br/>BPJS TK: ${escapeHtml(bpjsKetenagakerjaan)}</td>
+                </tr>
+              </tbody>
+            </table>
+          </td>
         </tr>
-      </thead>
-      <tbody>
-        ${deductionHtml}
+      </table>
+
+      <table style="width:100%;border-collapse:collapse;border:1.6px solid #111;border-top:none;margin-bottom:0;">
         <tr>
-          <td style="padding:8px;border:1px solid #b8bec7;background:#fff7ed;font-weight:700;">Total Potongan</td>
-          <td style="padding:8px;border:1px solid #b8bec7;background:#fff7ed;text-align:right;font-weight:700;">Rp ${idr(totalDeductions)}</td>
+          <td style="padding:12px 14px;width:62%;border-right:1.6px solid #111;vertical-align:top;">
+            <div style="font-size:11px;line-height:1.6;">
+              <div><b>Catatan Payroll:</b></div>
+              <div>1. Slip ini mengikuti payroll wave 1.</div>
+              <div>2. PPh21 masih menggunakan nominal manual per karyawan.</div>
+              <div>3. Uang makan dihitung dari ${attendanceCount.toLocaleString("id-ID")} hari hadir dengan tarif Rp ${idr(mealAllowanceRate)} / hari.</div>
+            </div>
+          </td>
+          <td style="padding:10px 14px;width:38%;vertical-align:top;">
+            <div style="font-size:11px;color:#333;">Take Home Pay</div>
+            <div style="font-size:24px;font-weight:700;margin-top:4px;">Rp ${idr(netSalary)}</div>
+            <div style="font-size:11px;margin-top:6px;">Gaji Bersih Diterima</div>
+          </td>
         </tr>
-      </tbody>
-    </table>
-    ${keyValueTableHtml("Take Home Pay", [
-      { label: "Gaji Bersih Diterima", key: "netSalary", value: netSalary },
-      { label: "Bank", key: "bank", value: bank },
-      { label: "No Rekening", key: "bankAccount", value: bankAccount },
-      { label: "NPWP", key: "npwp", value: npwp },
-      { label: "BPJS Kesehatan", key: "bpjsKesehatan", value: bpjsKesehatan },
-      { label: "BPJS Ketenagakerjaan", key: "bpjsKetenagakerjaan", value: bpjsKetenagakerjaan },
-      { label: "Generated By", key: "generatedBy", value: generatedBy },
-      { label: "Generated At", key: "generatedAt", value: generatedAt },
-      { label: "Uang Makan / Hari", key: "mealAllowanceRate", value: mealAllowanceRate },
-    ])}
-    <p><b>Catatan:</b> Slip ini mengikuti payroll wave 1. PPh21 masih menggunakan nominal manual per karyawan dan belum dihitung otomatis penuh.</p>
-    ${companyFooterHtml(generatedBy)}
+      </table>
+
+      <table style="width:100%;border-collapse:collapse;border:1.6px solid #111;border-top:none;">
+        <tr>
+          <td style="padding:12px 10px;width:33.33%;text-align:center;vertical-align:top;">
+            <div>Mengetahui,</div>
+            <div style="height:58px;"></div>
+            <div style="font-weight:700;text-decoration:underline;">Management</div>
+          </td>
+          <td style="padding:12px 10px;width:33.33%;text-align:center;vertical-align:top;border-left:1px solid #111;border-right:1px solid #111;">
+            <div>Disiapkan Oleh,</div>
+            <div style="height:58px;"></div>
+            <div style="font-weight:700;text-decoration:underline;">${escapeHtml(generatedBy)}</div>
+          </td>
+          <td style="padding:12px 10px;width:33.33%;text-align:center;vertical-align:top;">
+            <div>Menerima,</div>
+            <div style="height:58px;"></div>
+            <div style="font-weight:700;text-decoration:underline;">${escapeHtml(employeeName)}</div>
+          </td>
+        </tr>
+      </table>
+    </div>
   `;
 }
 
