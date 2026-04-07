@@ -1601,6 +1601,26 @@ export async function buildFinancePayrollSummaryPayload() {
       const status = String(item.status || "").toUpperCase();
       return status === "PRESENT" || status === "H" || status === "HADIR" || status === "MASUK";
     }).length;
+    const lateCount = empAttendance.filter((item) => {
+      const status = String(item.status || "").toUpperCase();
+      return status === "LATE" || status === "TERLAMBAT";
+    }).length;
+    const absentCount = empAttendance.filter((item) => {
+      const status = String(item.status || "").toUpperCase();
+      return status === "ABSENT" || status === "ALPHA" || status === "ALPA";
+    }).length;
+    const leaveCount = empAttendance.filter((item) => {
+      const status = String(item.status || "").toUpperCase();
+      return status === "LEAVE" || status === "CUTI";
+    }).length;
+    const sickCount = empAttendance.filter((item) => {
+      const status = String(item.status || "").toUpperCase();
+      return status === "SICK" || status === "SAKIT";
+    }).length;
+    const permissionCount = empAttendance.filter((item) => {
+      const status = String(item.status || "").toUpperCase();
+      return status === "PERMISSION" || status === "IZIN" || status === "IJIN";
+    }).length;
 
     const totalKasbon = kasbons
       .filter((item) => {
@@ -1648,6 +1668,12 @@ export async function buildFinancePayrollSummaryPayload() {
       totalHours,
       totalOvertime,
       attendanceCount: empAttendance.length,
+      presentCount,
+      lateCount,
+      absentCount,
+      leaveCount,
+      sickCount,
+      permissionCount,
       totalKasbon,
       overtimePay,
       transportAllowance,

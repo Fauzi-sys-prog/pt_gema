@@ -74,6 +74,12 @@ test("POST /exports/payroll-slip/word returns employee slip document", async () 
           employeeId: "EMP-001",
           position: "Finance",
           attendanceCount: 20,
+          presentCount: 18,
+          lateCount: 1,
+          absentCount: 0,
+          leaveCount: 1,
+          sickCount: 0,
+          permissionCount: 0,
           totalOvertime: 3,
           salary: 6_700_000,
           transportAllowance: 500_000,
@@ -97,6 +103,9 @@ test("POST /exports/payroll-slip/word returns employee slip document", async () 
       assert.match(body, /Slip Gaji/i);
       assert.match(body, /Ening/i);
       assert.match(body, /Gaji Bersih Diterima/i);
+      assert.match(body, /Rekap Kehadiran/i);
+      assert.match(body, /Alpha/i);
+      assert.match(body, /Cuti/i);
     });
   } finally {
     mock.restore();
