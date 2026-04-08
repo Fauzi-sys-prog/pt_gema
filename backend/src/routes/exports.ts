@@ -2211,13 +2211,49 @@ function buildInvoiceDisplayItems(
   });
 }
 
+function isDpInvoiceStyle(payload: Record<string, unknown>, displayItems: InvoiceDisplayItem[]): boolean {
+  const haystack = [
+    toText(payload.termin, ""),
+    toText(payload.perihal, ""),
+    toText(payload.remark, ""),
+    ...displayItems.map((item) => item.description),
+  ]
+    .join(" ")
+    .toLowerCase();
+
+  return /\bdp\b|down payment/.test(haystack);
+}
+
+function resolveInvoiceDisplayLabel(item: InvoiceDisplayItem, isDpStyle: boolean): {
+  title: string;
+  detail: string | null;
+} {
+  const groupedLabel = String(item.groupLabel || "").trim();
+  if (
+    isDpStyle &&
+    ["Material", "Jasa", "Equipment", "Consumable"].includes(groupedLabel)
+  ) {
+    return {
+      title: `DP ${groupedLabel}`,
+      detail: item.description.trim() && item.description.trim() !== `DP ${groupedLabel}` ? item.description : null,
+    };
+  }
+
+  return {
+    title: item.description,
+    detail: null,
+  };
+}
+
 async function invoiceExportHtml(payload: Record<string, unknown>): Promise<string> {
   const signer = payload.createdBy || payload.approvedBy;
   const linkedQuotation = await getInvoiceLinkedQuotationContext(payload);
   const discountContext = await getInvoiceDiscountContext(payload, linkedQuotation);
   const displayItems = buildInvoiceDisplayItems(payload, discountContext, linkedQuotation.data);
+  const isDpStyle = isDpInvoiceStyle(payload, displayItems);
   const itemRows = displayItems
     .map((item) => {
+      const labels = resolveInvoiceDisplayLabel(item, isDpStyle);
       const discountRow = item.discountAmount
         ? `
             <tr class="invoice-row invoice-row-discount">
@@ -2235,7 +2271,8 @@ async function invoiceExportHtml(payload: Record<string, unknown>): Promise<stri
             `${item.qty.toLocaleString("id-ID")} ${item.unit}`.trim(),
           )}</td>
           <td>
-            <div class="description-title">${escapeHtml(item.description)}</div>
+            <div class="description-title">${escapeHtml(labels.title)}</div>
+            ${labels.detail ? `<div class="description-subtitle">${escapeHtml(labels.detail)}</div>` : ""}
           </td>
           <td class="align-right">Rp ${idr(item.grossUnitPrice)}</td>
           <td class="align-right">Rp ${idr(item.grossAmount)}</td>
@@ -2294,6 +2331,7 @@ async function invoiceExportHtml(payload: Record<string, unknown>): Promise<stri
       .invoice-row-discount td { padding-top:3px; padding-bottom:3px; }
       .invoice-row-total td { font-weight:700; background:#fcfcfc; }
       .description-title { font-weight:700; }
+      .description-subtitle { margin-top:2px; font-size:11px; color:#333; }
       .sub-row-label { font-weight:700; color:#444; }
       .align-right { text-align:right; }
       .align-center { text-align:center; }

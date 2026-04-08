@@ -63,7 +63,7 @@ function installCustomerInvoiceExportMocks(role: Role) {
     status: "Sent",
     noKontrak: null,
     noPO: "PO-001",
-    termin: "Termin 1",
+    termin: "DP 10%",
     buktiTransfer: null,
     noKwitansi: null,
     tanggalBayar: null,
@@ -163,6 +163,8 @@ test("GET /exports/customer-invoices/:id/word returns customer invoice document"
       assert.match(body, /Quotation QUO-001/i);
       assert.match(body, /Payment Details/i);
       assert.match(body, /Grand Total/i);
+      assert.match(body, /DP Material/i);
+      assert.match(body, /DP Jasa/i);
       assert.match(body, /Total Material/i);
       assert.match(body, /Total Jasa/i);
     });
