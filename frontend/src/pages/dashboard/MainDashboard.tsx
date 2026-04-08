@@ -410,7 +410,7 @@ export default function MainDashboard() {
               </p>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 xl:min-w-[420px]">
+            <div className="grid w-full grid-cols-1 gap-3 sm:grid-cols-3 xl:min-w-[420px] xl:w-auto">
               {roleDashboard.checks.map((item) => (
                 <div key={item.label} className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
                   <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">{item.label}</p>
@@ -443,7 +443,7 @@ export default function MainDashboard() {
               <DollarSign size={20} />
               <span className="text-[10px] uppercase tracking-widest">Revenue</span>
             </div>
-            <p className="mt-4 text-2xl font-black">{formatRupiah(totalRevenue)}</p>
+            <p className="mt-4 text-xl font-black sm:text-2xl">{formatRupiah(totalRevenue)}</p>
             <p className="text-xs text-emerald-100">Total Invoice</p>
           </div>
 
@@ -484,7 +484,7 @@ export default function MainDashboard() {
 
               {topProjects.map((p: any) => (
                 <div key={String(p?.id || Math.random())} className="rounded-2xl border border-slate-200 bg-white p-4">
-                  <div className="flex items-center justify-between gap-3">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
                       <p className="text-sm font-black uppercase italic text-slate-900">
                         {String(p?.namaProject || 'Untitled Project')}

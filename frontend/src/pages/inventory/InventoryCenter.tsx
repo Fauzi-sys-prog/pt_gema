@@ -242,13 +242,13 @@ export default function InventoryCenter({ isCompactView = false }: { isCompactVi
   };
 
   return (
-    <div className="min-h-screen bg-[#F1F5F9] p-6 lg:p-10 space-y-8">
+    <div className="min-h-screen space-y-8 bg-[#F1F5F9] p-4 sm:p-6 lg:p-10">
       {/* Header Operational Dashboard */}
       <div className="bg-[#0F172A] rounded-[32px] p-8 lg:p-12 text-white shadow-2xl relative overflow-hidden">
         <div className="absolute top-0 right-0 w-1/3 h-full bg-gradient-to-l from-indigo-500/10 to-transparent pointer-events-none" />
         
         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-8 relative z-10">
-          <div className="flex items-center gap-6">
+          <div className="flex items-center gap-4 sm:gap-6">
             <div className="w-20 h-20 bg-indigo-600 rounded-3xl flex items-center justify-center shadow-lg rotate-3 border border-indigo-400/30">
               <Boxes size={40} className="text-white" />
             </div>
@@ -261,26 +261,26 @@ export default function InventoryCenter({ isCompactView = false }: { isCompactVi
             </div>
           </div>
 
-          <div className="flex flex-wrap gap-4">
+          <div className="flex w-full flex-col gap-4 sm:flex-row sm:flex-wrap lg:w-auto">
             <button
               onClick={() => navigate('/inventory/stock-in?mode=manual')}
-              className="bg-emerald-500 text-white px-8 py-4 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-emerald-600 transition-all flex items-center gap-3 shadow-xl shadow-emerald-500/20"
+              className="flex w-full items-center justify-center gap-3 rounded-2xl bg-emerald-500 px-8 py-4 text-xs font-black uppercase tracking-widest text-white shadow-xl shadow-emerald-500/20 transition-all hover:bg-emerald-600 sm:w-auto"
             >
               <ArrowUpRight size={18} /> Input Manual Inbound
             </button>
             <button
               onClick={handleExportMaster}
-              className="bg-white/10 text-white px-8 py-4 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-white/20 transition-all flex items-center gap-3 border border-white/20"
+              className="flex w-full items-center justify-center gap-3 rounded-2xl border border-white/20 bg-white/10 px-8 py-4 text-xs font-black uppercase tracking-widest text-white transition-all hover:bg-white/20 sm:w-auto"
             >
               <ExternalLink size={18} /> Export Master
             </button>
             <button 
               onClick={() => setActiveTab(activeTab === 'inventory' ? 'demand' : 'inventory')}
-              className={`px-8 py-4 rounded-2xl font-black text-xs uppercase tracking-widest transition-all flex items-center gap-3 shadow-xl ${activeTab === 'demand' ? 'bg-indigo-600 text-white' : 'bg-white text-slate-900 hover:bg-slate-100'}`}
+              className={`flex w-full items-center justify-center gap-3 rounded-2xl px-8 py-4 text-xs font-black uppercase tracking-widest shadow-xl transition-all sm:w-auto ${activeTab === 'demand' ? 'bg-indigo-600 text-white' : 'bg-white text-slate-900 hover:bg-slate-100'}`}
             >
               <Activity size={18} /> {activeTab === 'inventory' ? 'Demand Analysis' : 'Master Stock'}
             </button>
-            <button onClick={() => setShowNewItemModal(true)} className="bg-white/10 text-white px-8 py-4 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-white/20 transition-all flex items-center gap-3 border border-white/20">
+            <button onClick={() => setShowNewItemModal(true)} className="flex w-full items-center justify-center gap-3 rounded-2xl border border-white/20 bg-white/10 px-8 py-4 text-xs font-black uppercase tracking-widest text-white transition-all hover:bg-white/20 sm:w-auto">
               <Plus size={18} /> Registrasi SKU
             </button>
           </div>
@@ -310,17 +310,17 @@ export default function InventoryCenter({ isCompactView = false }: { isCompactVi
         </div>
       </div>
 
-      <div className="bg-white rounded-[32px] p-8 shadow-sm border border-slate-200 flex flex-col xl:flex-row gap-8 items-center justify-between">
+      <div className="flex flex-col gap-6 rounded-[32px] border border-slate-200 bg-white p-6 shadow-sm sm:p-8 xl:flex-row xl:items-center xl:justify-between xl:gap-8">
         <div className="relative w-full xl:max-w-2xl">
           <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
           <input type="text" placeholder="Search Master SKU, Demand, or Reference..." className="w-full pl-16 pr-8 py-5 bg-slate-50 border-2 border-transparent rounded-2xl text-sm font-bold focus:border-indigo-500 focus:bg-white transition-all outline-none" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
         </div>
-        <div className="relative">
+        <div className="relative w-full xl:w-auto">
           <Filter className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
           <select
             value={activeCategory}
             onChange={(e) => setActiveCategory(e.target.value)}
-            className="appearance-none bg-white border-2 border-slate-200 rounded-xl pl-10 pr-10 py-3 text-[10px] font-black uppercase tracking-widest text-slate-700 focus:outline-none focus:border-indigo-500"
+            className="w-full appearance-none rounded-xl border-2 border-slate-200 bg-white py-3 pl-10 pr-10 text-[10px] font-black uppercase tracking-widest text-slate-700 focus:border-indigo-500 focus:outline-none xl:w-auto"
           >
             {categories.map((cat) => (
               <option key={cat} value={cat}>
@@ -423,7 +423,7 @@ export default function InventoryCenter({ isCompactView = false }: { isCompactVi
                 const inventory = stockItemList.find(s => s.kode === sku || s.nama === sku);
                 const isShortage = (inventory?.stok || 0) < data.qty;
                 return (
-                  <div key={sku} className="p-6 bg-slate-50 rounded-[24px] border border-slate-100 flex justify-between items-center group hover:border-indigo-200 transition-all">
+                  <div key={sku} className="flex flex-col gap-4 rounded-[24px] border border-slate-100 bg-slate-50 p-6 transition-all group hover:border-indigo-200 sm:flex-row sm:items-center sm:justify-between">
                     <div>
                       <p className="font-black text-slate-900 uppercase italic leading-tight">{sku}</p>
                       <div className="flex items-center gap-3 mt-2">
@@ -431,7 +431,7 @@ export default function InventoryCenter({ isCompactView = false }: { isCompactVi
                         <div className="flex -space-x-2">{data.projects.map((p: string) => <div key={p} className="w-6 h-6 rounded-full bg-indigo-600 border-2 border-white flex items-center justify-center text-[8px] font-black text-white">{p.split('-').pop()}</div>)}</div>
                       </div>
                     </div>
-                    <div className="text-right">
+                    <div className="text-left sm:text-right">
                       <p className={`text-xl font-black italic ${isShortage ? 'text-rose-600' : 'text-emerald-600'}`}>{inventory?.stok || 0}</p>
                       <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{isShortage ? 'Shortage!' : 'On Hand'}</p>
                     </div>
@@ -464,13 +464,13 @@ export default function InventoryCenter({ isCompactView = false }: { isCompactVi
         </div>
       )}
       {showOpnameModal && selectedItem && (
-        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md flex items-center justify-center z-[110] p-4">
-          <div className="bg-white rounded-[40px] shadow-2xl w-full max-w-lg overflow-hidden">
-            <div className="p-10 bg-[#0F172A] text-white">
+        <div className="fixed inset-0 z-[110] flex items-start justify-center overflow-y-auto bg-slate-900/80 p-4 backdrop-blur-md sm:items-center">
+          <div className="my-4 w-full max-w-lg overflow-hidden rounded-[40px] bg-white shadow-2xl sm:my-0 sm:max-h-[calc(100vh-2rem)]">
+            <div className="bg-[#0F172A] p-6 text-white sm:p-10">
               <div className="flex justify-between items-start mb-6"><div className="p-4 bg-indigo-500/20 rounded-2xl text-indigo-400"><ClipboardCheck size={28} /></div><button onClick={() => setShowOpnameModal(false)} className="p-2 hover:bg-white/10 rounded-xl transition-all text-slate-400"><X size={24} /></button></div>
               <h3 className="text-3xl font-black uppercase italic tracking-tighter">Physical Audit</h3><p className="text-indigo-400 text-[10px] font-black uppercase tracking-[0.3em] mt-2">{selectedItem.nama}</p>
             </div>
-            <form onSubmit={handleStockOpname} className="p-10 space-y-8">
+            <form onSubmit={handleStockOpname} className="space-y-8 overflow-y-auto p-6 sm:p-10">
               <div className="bg-slate-50 p-8 rounded-[32px] border-4 border-slate-100"><label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Actual Stock</label><div className="flex items-end gap-4"><input type="number" required min="0" className="w-full bg-transparent text-6xl font-black italic text-slate-900 outline-none" value={opnameQty} onChange={(e) => setOpnameQty(Number(e.target.value))} autoFocus /><span className="text-sm font-black text-slate-400 uppercase mb-3">{selectedItem.satuan}</span></div></div>
               <button type="submit" className="w-full py-5 bg-indigo-600 rounded-2xl text-white text-xs font-black uppercase tracking-[0.3em] shadow-xl hover:bg-indigo-500 transition-all border-b-4 border-indigo-800">Update Ledger</button>
             </form>

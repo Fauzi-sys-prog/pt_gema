@@ -355,34 +355,34 @@ export default function PayrollPage() {
   return (
     <div className="p-3 sm:p-6 space-y-4 sm:space-y-8 bg-slate-50 min-h-screen">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+      <div className="flex flex-col justify-between gap-4 xl:flex-row xl:items-center xl:gap-6">
         <div>
           <div className="flex items-center gap-2 mb-2">
             <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 text-[10px] font-black uppercase rounded shadow-sm">Verified Finance</span>
             <span className="text-slate-400 font-bold text-xs uppercase italic tracking-wider">PT Gema Teknik Perkasa</span>
           </div>
-          <h1 className="text-4xl font-black text-slate-900 tracking-tighter uppercase italic flex items-center gap-3">
+          <h1 className="flex items-center gap-3 text-3xl font-black uppercase italic tracking-tighter text-slate-900 sm:text-4xl">
             <Wallet className="text-emerald-600" size={36} />
             Command <span className="text-emerald-600">Payroll</span>
           </h1>
           <p className="text-slate-500 font-bold text-sm uppercase italic tracking-wide">Otomasi Upah, BPJS Karyawan, dan PPh21 Manual</p>
         </div>
-        <div className="flex gap-3">
+        <div className="flex w-full flex-col gap-3 sm:flex-row sm:flex-wrap xl:w-auto xl:justify-end">
            <button
              onClick={() => fetchPayrollData(false)}
              disabled={syncing}
-             className="bg-white border-2 border-slate-200 text-slate-600 px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-sm flex items-center gap-2 hover:bg-slate-50 transition-all disabled:opacity-60"
+             className="flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-slate-200 bg-white px-6 py-3 text-[10px] font-black uppercase tracking-widest text-slate-600 shadow-sm transition-all hover:bg-slate-50 disabled:opacity-60 sm:w-auto"
            >
              <RefreshCw size={16} />
              {syncing ? 'Syncing...' : 'Refresh'}
            </button>
-           <button onClick={handleExportRecap} className="bg-white border-2 border-slate-200 text-slate-600 px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-sm flex items-center gap-2 hover:bg-slate-50 transition-all">
+           <button onClick={handleExportRecap} className="flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-slate-200 bg-white px-6 py-3 text-[10px] font-black uppercase tracking-widest text-slate-600 shadow-sm transition-all hover:bg-slate-50 sm:w-auto">
              <FileSpreadsheet size={18} /> Export Recap
            </button>
            <button 
              onClick={handleClosePayroll}
              disabled={isProcessing}
-             className="bg-slate-900 text-white px-8 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-xl flex items-center gap-2 hover:bg-black transition-all disabled:opacity-50"
+             className="flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-900 px-8 py-3 text-[10px] font-black uppercase tracking-widest text-white shadow-xl transition-all hover:bg-black disabled:opacity-50 sm:w-auto"
            >
              {isProcessing ? <Clock className="animate-spin" size={18} /> : <ShieldCheck size={18} />}
              Tutup Payroll Periode Ini
@@ -419,21 +419,23 @@ export default function PayrollPage() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-2 bg-white p-2 rounded-2xl w-fit border-2 border-slate-100">
-        {[
-          { id: 'summary', label: 'Daftar Gaji Karyawan', icon: List },
-          { id: 'project-allocation', label: 'Alokasi Biaya Proyek', icon: Briefcase },
-          { id: 'thl-detail', label: 'Ledger Absensi Live', icon: History }
-        ].map((tab) => (
-          <button 
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id as any)}
-            className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 ${activeTab === tab.id ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-500 hover:bg-slate-50'}`}
-          >
-            <tab.icon size={14} />
-            {tab.label}
-          </button>
-        ))}
+      <div className="overflow-x-auto">
+        <div className="inline-flex min-w-max gap-2 rounded-2xl border-2 border-slate-100 bg-white p-2">
+          {[
+            { id: 'summary', label: 'Daftar Gaji Karyawan', icon: List },
+            { id: 'project-allocation', label: 'Alokasi Biaya Proyek', icon: Briefcase },
+            { id: 'thl-detail', label: 'Ledger Absensi Live', icon: History }
+          ].map((tab) => (
+            <button 
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id as any)}
+              className={`flex shrink-0 items-center gap-2 rounded-xl px-6 py-2.5 text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === tab.id ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-500 hover:bg-slate-50'}`}
+            >
+              <tab.icon size={14} />
+              {tab.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       <AnimatePresence mode="wait">
@@ -445,7 +447,7 @@ export default function PayrollPage() {
             className="bg-white rounded-[3rem] border-2 border-slate-100 shadow-sm overflow-hidden"
           >
             <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
+              <table className="w-full min-w-[1100px] text-left border-collapse">
                 <thead>
                   <tr className="bg-slate-50 text-slate-400 font-black uppercase tracking-widest text-[9px] border-b-2 border-slate-100">
                     <th className="px-8 py-6">Karyawan</th>
@@ -502,7 +504,7 @@ export default function PayrollPage() {
                         {formatCurrency(p.netSalary)}
                       </td>
                       <td className="px-8 py-5 text-center">
-                        <div className="flex items-center justify-center gap-2">
+                        <div className="flex flex-col items-center justify-center gap-2 sm:flex-row">
                           <button
                             onClick={() => handleExportSlip(p, 'word')}
                             disabled={exportingSlipId === String(p.id || p.employeeId || '')}
@@ -588,13 +590,13 @@ export default function PayrollPage() {
                     <h3 className="text-sm font-black text-slate-900 uppercase italic tracking-widest">Master Attendance Ledger</h3>
                     <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">Live Synchronization from Field Project Records</p>
                  </div>
-                 <div className="relative">
+                 <div className="relative w-full sm:w-auto">
                     <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
-                    <input type="text" placeholder="Search record..." className="pl-10 pr-4 py-2 bg-slate-50 border-2 border-slate-100 rounded-xl text-[10px] font-black outline-none focus:border-blue-500 transition-all w-64" />
+                    <input type="text" placeholder="Search record..." className="w-full rounded-xl border-2 border-slate-100 bg-slate-50 py-2 pl-10 pr-4 text-[10px] font-black outline-none transition-all focus:border-blue-500 sm:w-64" />
                  </div>
               </div>
               <div className="overflow-x-auto">
-                 <table className="w-full text-left">
+                 <table className="w-full min-w-[860px] text-left">
                     <thead>
                        <tr className="bg-slate-50 text-slate-400 font-black uppercase tracking-widest text-[8px] border-b-2 border-slate-100">
                           <th className="px-8 py-4">Timestamp</th>
@@ -640,7 +642,7 @@ export default function PayrollPage() {
          <div className="absolute top-0 right-0 p-12 opacity-5 pointer-events-none">
             <ShieldCheck size={200} />
          </div>
-         <div className="relative z-10 flex flex-col md:flex-row items-center gap-10">
+         <div className="relative z-10 flex flex-col items-start gap-8 md:flex-row md:items-center md:gap-10">
             <div className="flex-1">
                <div className="flex items-center gap-3 mb-4">
                   <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white shadow-lg">
@@ -662,7 +664,7 @@ export default function PayrollPage() {
                   </div>
                </div>
             </div>
-            <div className="w-full md:w-80 space-y-4">
+            <div className="w-full space-y-4 md:w-80">
                <div className="bg-white/10 backdrop-blur-md p-6 rounded-3xl border border-white/20">
                   <p className="text-[9px] font-black text-slate-400 uppercase mb-4 tracking-widest">Next Financial Steps:</p>
                   <ul className="space-y-4">

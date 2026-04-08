@@ -405,7 +405,7 @@ export default function ProductionReportPage() {
         ref={fileInputRef} 
         onChange={handleFileChange} 
       />
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex items-center gap-3">
           <div className="w-12 h-12 bg-rose-600 rounded-2xl flex items-center justify-center text-white shadow-lg">
             <ClipboardList size={24} />
@@ -415,17 +415,17 @@ export default function ProductionReportPage() {
             <p className="text-xs text-slate-500 font-bold uppercase tracking-widest">Workshop Progress & Productivity Logs</p>
           </div>
         </div>
-        <div className="flex gap-3 print:hidden">
+        <div className="flex w-full flex-col gap-3 print:hidden sm:flex-row sm:flex-wrap lg:w-auto">
           <button
             onClick={() => fetchServerData(false)}
             disabled={syncing}
-            className="flex items-center gap-2 px-5 py-2.5 bg-white border border-slate-200 text-slate-600 rounded-xl text-sm font-black hover:bg-slate-50 transition-all shadow-sm disabled:opacity-60"
+            className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-black text-slate-600 shadow-sm transition-all hover:bg-slate-50 disabled:opacity-60 sm:w-auto"
           >
             {syncing ? 'Syncing...' : 'Refresh'}
           </button>
           <Link 
             to="/produksi/guide"
-            className="flex items-center gap-2 px-5 py-2.5 bg-slate-900 text-white rounded-xl text-sm font-black hover:bg-black shadow-lg transition-all"
+            className="flex w-full items-center justify-center gap-2 rounded-xl bg-slate-900 px-5 py-2.5 text-sm font-black text-white shadow-lg transition-all hover:bg-black sm:w-auto"
           >
             <BookOpen size={18} /> Guide
           </Link>
@@ -434,7 +434,7 @@ export default function ProductionReportPage() {
               window.print();
               toast.success('Laporan siap disimpan sebagai PDF.');
             }}
-            className="flex items-center gap-2 px-5 py-2.5 bg-white border border-slate-200 text-slate-600 rounded-xl text-sm font-black hover:bg-slate-50 transition-all shadow-sm"
+            className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-black text-slate-600 shadow-sm transition-all hover:bg-slate-50 sm:w-auto"
           >
             <Printer size={18} />
             Export PDF
@@ -469,7 +469,7 @@ export default function ProductionReportPage() {
                 toast.error('Gagal export LHP dari backend');
               }
             }}
-            className="flex items-center gap-2 px-5 py-2.5 bg-white border border-slate-200 text-blue-600 rounded-xl text-sm font-black hover:bg-blue-50 transition-all shadow-sm"
+            className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-black text-blue-600 shadow-sm transition-all hover:bg-blue-50 sm:w-auto"
           >
             <FileDown size={18} />
             Word
@@ -504,14 +504,14 @@ export default function ProductionReportPage() {
                 toast.error('Gagal export LHP Excel dari backend');
               }
             }}
-            className="flex items-center gap-2 px-5 py-2.5 bg-white border border-slate-200 text-emerald-700 rounded-xl text-sm font-black hover:bg-emerald-50 transition-all shadow-sm"
+            className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-black text-emerald-700 shadow-sm transition-all hover:bg-emerald-50 sm:w-auto"
           >
             <Download size={18} />
             Excel
           </button>
           <button 
             onClick={() => { resetForm(); setShowAddModal(true); }}
-            className="flex items-center gap-2 px-5 py-2.5 bg-rose-600 text-white rounded-xl text-sm font-black hover:bg-rose-700 shadow-lg shadow-rose-200 transition-all active:scale-95"
+            className="flex w-full items-center justify-center gap-2 rounded-xl bg-rose-600 px-5 py-2.5 text-sm font-black text-white shadow-lg shadow-rose-200 transition-all active:scale-95 hover:bg-rose-700 sm:w-auto"
           >
             <Plus size={18} />
             Input LHP Baru
@@ -520,8 +520,8 @@ export default function ProductionReportPage() {
       </div>
 
       <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
-        <div className="p-6 border-b border-slate-50 flex items-center justify-between bg-slate-50/30">
-          <div className="relative w-80">
+        <div className="flex flex-col gap-4 border-b border-slate-50 bg-slate-50/30 p-4 sm:p-6 lg:flex-row lg:items-center lg:justify-between">
+          <div className="relative w-full lg:w-80">
             <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input 
               type="text" 
@@ -531,7 +531,7 @@ export default function ProductionReportPage() {
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-4">
             <div className="flex items-center gap-2">
               <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>
               <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Live Updates Enabled</span>
@@ -545,7 +545,7 @@ export default function ProductionReportPage() {
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full text-left">
+          <table className="w-full min-w-[920px] text-left">
             <thead>
               <tr className="bg-slate-50/50 border-b border-slate-100">
                 <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Tanggal & Shift</th>
@@ -638,7 +638,7 @@ export default function ProductionReportPage() {
             </div>
             <h3 className="text-lg font-black uppercase italic italic tracking-tight">Kapasitas Produksi Harian</h3>
           </div>
-          <div className="grid grid-cols-3 gap-8">
+          <div className="grid grid-cols-1 gap-6 sm:grid-cols-3 sm:gap-8">
             <div>
               <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Total Output</p>
               <p className="text-2xl font-black">{effectiveReports.reduce((sum, r) => sum + r.outputQty, 0)} <span className="text-xs text-slate-500 font-bold uppercase">Unit</span></p>
@@ -670,17 +670,17 @@ export default function ProductionReportPage() {
 
       {/* Modal Tambah LHP */}
       {showAddModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[100] flex items-start justify-center overflow-y-auto p-3 sm:items-center sm:p-4">
           <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setShowAddModal(false)}></div>
-          <div className="bg-white rounded-[2.5rem] w-full max-w-2xl relative z-10 overflow-hidden shadow-2xl flex flex-col max-h-[90vh] border border-slate-200">
-            <div className="p-8 border-b border-slate-100 flex items-center justify-between sticky top-0 bg-white">
+          <div className="relative z-10 my-3 flex max-h-[calc(100vh-1.5rem)] w-full max-w-2xl flex-col overflow-hidden rounded-[2.5rem] border border-slate-200 bg-white shadow-2xl sm:my-0 sm:max-h-[90vh]">
+            <div className="sticky top-0 flex flex-col gap-4 border-b border-slate-100 bg-white p-5 sm:p-8">
               <div>
                 <h3 className="text-xl font-black text-slate-900 uppercase italic tracking-tight">Buat Laporan Harian (LHP)</h3>
                 <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1 italic">
                   {newReport.woId ? 'Input Progress Pekerjaan Workshop' : 'Mode manual stok tanpa BOM / project'}
                 </p>
               </div>
-              <div className="flex items-center gap-3">
+              <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <button 
                   onClick={() => {
                     setNewReport({
@@ -696,17 +696,17 @@ export default function ProductionReportPage() {
                     });
                     toast.success('Data dari Foto LHP berhasil disimulasikan!');
                   }}
-                  className="px-4 py-2 bg-emerald-50 text-emerald-600 rounded-xl text-[10px] font-black uppercase border border-emerald-100 hover:bg-emerald-100 transition-all flex items-center gap-2"
+                  className="flex w-full items-center justify-center gap-2 rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-2 text-[10px] font-black uppercase text-emerald-600 transition-all hover:bg-emerald-100 sm:w-auto"
                 >
                   <Camera size={14} /> Simulasi dari Foto
                 </button>
-                <button onClick={() => setShowAddModal(false)} className="w-10 h-10 bg-slate-50 text-slate-400 rounded-xl flex items-center justify-center hover:bg-rose-50 hover:text-rose-600 transition-all">
+                <button onClick={() => setShowAddModal(false)} className="flex h-10 w-full items-center justify-center rounded-xl bg-slate-50 text-slate-400 transition-all hover:bg-rose-50 hover:text-rose-600 sm:w-10">
                   <X size={24} />
                 </button>
               </div>
             </div>
 
-            <div className="p-8 overflow-y-auto space-y-6">
+            <div className="overflow-y-auto space-y-6 p-5 sm:p-8">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Work Order</label>
@@ -723,7 +723,7 @@ export default function ProductionReportPage() {
                 </div>
                 {/* WO Stats Preview */}
                 {newReport.woId && (
-                  <div className="md:col-span-2 bg-blue-50 border-2 border-blue-100 rounded-2xl p-4 flex items-center justify-between">
+                  <div className="flex flex-col gap-4 rounded-2xl border-2 border-blue-100 bg-blue-50 p-4 md:col-span-2 sm:flex-row sm:items-center sm:justify-between">
                      {(() => {
                        const wo = effectiveWorkOrders.find(w => w.id === newReport.woId);
                        const selectedBOMItem = wo?.bom?.find(b => b.nama === newReport.selectedItem);
@@ -838,7 +838,7 @@ export default function ProductionReportPage() {
                 ></textarea>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Nama Teknisi Pelaksana</label>
                   <div className="relative">
@@ -866,7 +866,7 @@ export default function ProductionReportPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Hasil Output (Qty)</label>
                   <div className="relative">
@@ -893,7 +893,7 @@ export default function ProductionReportPage() {
                 </div>
               </div>
 
-              <div className="p-6 bg-slate-50 rounded-3xl border border-slate-100 flex items-center justify-between">
+              <div className="flex flex-col gap-4 rounded-3xl border border-slate-100 bg-slate-50 p-6 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex items-center gap-4">
                   <div className="w-12 h-12 bg-white rounded-xl border border-slate-200 flex items-center justify-center text-slate-400">
                     {newReport.photoUrl ? (
@@ -911,14 +911,14 @@ export default function ProductionReportPage() {
                   type="button"
                   onClick={triggerCamera}
                   disabled={uploadingPhoto}
-                  className="px-4 py-2 bg-slate-900 text-white rounded-xl text-[10px] font-black uppercase hover:bg-black transition-all"
+                  className="w-full rounded-xl bg-slate-900 px-4 py-2 text-[10px] font-black uppercase text-white transition-all hover:bg-black sm:w-auto"
                 >
                   {uploadingPhoto ? 'UPLOAD...' : newReport.photoUrl ? 'GANTI FOTO' : 'AMBIL FOTO'}
                 </button>
               </div>
             </div>
 
-            <div className="p-8 border-t border-slate-100 bg-slate-50 flex gap-4 sticky bottom-0">
+            <div className="sticky bottom-0 flex flex-col-reverse gap-4 border-t border-slate-100 bg-slate-50 p-5 sm:flex-row sm:p-8">
               <button 
                 onClick={() => setShowAddModal(false)}
                 className="flex-1 py-4 bg-white border-2 border-slate-200 text-slate-600 rounded-2xl text-xs font-black uppercase hover:bg-slate-100 transition-all"
@@ -939,7 +939,7 @@ export default function ProductionReportPage() {
 
       {/* Preview Foto Fullscreen */}
       {selectedPhoto && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/90 backdrop-blur-md p-8" onClick={() => setSelectedPhoto(null)}>
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/90 p-4 backdrop-blur-md sm:p-8" onClick={() => setSelectedPhoto(null)}>
           <div className="max-w-4xl w-full relative" onClick={e => e.stopPropagation()}>
              <button onClick={() => setSelectedPhoto(null)} className="absolute -top-12 right-0 text-white flex items-center gap-2 font-black uppercase text-xs">
                Close <X size={20} />

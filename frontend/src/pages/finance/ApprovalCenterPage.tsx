@@ -569,17 +569,17 @@ export function ApprovalCenterPage({ mode = "finance" }: ApprovalCenterPageProps
   }, [lastSyncedAt]);
 
   return (
-    <div className="p-8 space-y-8 bg-[#F8FAFC] min-h-screen pb-24">
+    <div className="min-h-screen space-y-6 bg-[#F8FAFC] p-3 pb-24 sm:p-5 lg:space-y-8 lg:p-8">
       {/* Premium Header */}
-      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6 bg-white p-10 rounded-[3.5rem] shadow-sm border border-slate-100 relative overflow-hidden">
+      <div className="relative flex flex-col items-start justify-between gap-6 overflow-hidden rounded-[3rem] border border-slate-100 bg-white p-6 shadow-sm sm:p-8 lg:flex-row lg:items-center lg:rounded-[3.5rem] lg:p-10">
         <div className="absolute top-0 right-0 w-80 h-80 bg-slate-900 rounded-full -mr-40 -mt-40 opacity-[0.02]" />
         
-        <div className="flex items-center gap-8 relative z-10">
-          <div className="w-20 h-20 bg-slate-900 rounded-[2rem] flex items-center justify-center text-white shadow-2xl rotate-3">
+        <div className="relative z-10 flex items-center gap-4 sm:gap-8">
+          <div className="flex h-16 w-16 items-center justify-center rounded-[1.5rem] bg-slate-900 text-white shadow-2xl rotate-3 sm:h-20 sm:w-20 sm:rounded-[2rem]">
             <ShieldCheck size={40} />
           </div>
           <div>
-            <h1 className="text-4xl font-black text-slate-900 tracking-tighter uppercase italic leading-none">
+            <h1 className="text-3xl font-black leading-none tracking-tighter text-slate-900 uppercase italic sm:text-4xl">
               {isQuotationMode ? "Quotation Approval Center" : "Finance Approval Center"}
             </h1>
             <div className="flex items-center gap-3 mt-3">
@@ -593,8 +593,8 @@ export function ApprovalCenterPage({ mode = "finance" }: ApprovalCenterPageProps
           </div>
         </div>
 
-        <div className="flex items-center gap-6 relative z-10">
-           <div className="text-right">
+        <div className="relative z-10 flex w-full flex-col gap-4 sm:flex-row sm:items-center sm:justify-between lg:w-auto lg:justify-end lg:gap-6">
+           <div className="text-left sm:text-right">
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 italic">
                 {isQuotationMode ? "Quotation Queue" : "Pending Tasks"}
               </p>
@@ -736,7 +736,7 @@ export function ApprovalCenterPage({ mode = "finance" }: ApprovalCenterPageProps
       />
 
       {/* Grid Summary */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4 lg:gap-6">
         {tabConfigs.map((tab) => {
           return (
             <motion.div 
@@ -756,28 +756,28 @@ export function ApprovalCenterPage({ mode = "finance" }: ApprovalCenterPageProps
       </div>
 
       {/* Main Approval Table */}
-      <div className="bg-white rounded-[3.5rem] border border-slate-200 shadow-sm overflow-hidden">
-        <div className="p-10 border-b border-slate-50 flex flex-col md:flex-row md:items-center justify-between gap-6 bg-slate-50/30">
+      <div className="overflow-hidden rounded-[3rem] border border-slate-200 bg-white shadow-sm lg:rounded-[3.5rem]">
+        <div className="flex flex-col gap-4 border-b border-slate-50 bg-slate-50/30 p-5 sm:p-8 lg:flex-row lg:items-center lg:justify-between lg:gap-6 lg:p-10">
            <div className="px-5 py-3 bg-white rounded-2xl border border-slate-200 shadow-sm text-[10px] font-black uppercase tracking-widest text-slate-500">
              Last Sync: {lastSyncLabel}
            </div>
            
-           <div className="flex items-center gap-3">
+           <div className="flex w-full flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center lg:w-auto">
               <button
                 onClick={() => fetchApprovalCenterData(false)}
                 disabled={syncing}
-                className="px-4 py-3 bg-white border border-slate-200 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-600 hover:bg-slate-50 disabled:opacity-60"
+                className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-600 hover:bg-slate-50 disabled:opacity-60 sm:w-auto"
               >
                 {syncing ? 'Syncing...' : 'Refresh'}
               </button>
-              <div className="relative flex-1 max-w-md">
+              <div className="relative w-full sm:flex-1 sm:max-w-md">
               <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
               <input 
                 type="text" 
                 placeholder="Cari Dokumen..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-16 pr-8 py-5 bg-white border-none rounded-2xl text-sm font-bold uppercase italic outline-none focus:ring-4 focus:ring-slate-900/5 transition-all shadow-sm"
+                className="w-full rounded-2xl border-none bg-white py-4 pl-16 pr-8 text-sm font-bold uppercase italic outline-none shadow-sm transition-all focus:ring-4 focus:ring-slate-900/5 sm:py-5"
               />
               </div>
            </div>
@@ -792,7 +792,7 @@ export function ApprovalCenterPage({ mode = "finance" }: ApprovalCenterPageProps
               exit={{ opacity: 0, x: -20 }}
               transition={{ duration: 0.2 }}
             >
-              <table className="w-full text-left">
+              <table className="w-full min-w-[980px] text-left">
                 <thead>
                   <tr className="bg-slate-50/50 border-b border-slate-100">
                     <th className="px-10 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Document Details</th>
@@ -1036,7 +1036,7 @@ export function ApprovalCenterPage({ mode = "finance" }: ApprovalCenterPageProps
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 bg-slate-950/45 backdrop-blur-sm flex items-start justify-center overflow-y-auto p-6"
+            className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-950/45 p-3 backdrop-blur-sm sm:p-6"
             onClick={() => setSelectedQuotationDetail(null)}
           >
             <motion.div
@@ -1044,10 +1044,10 @@ export function ApprovalCenterPage({ mode = "finance" }: ApprovalCenterPageProps
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 8, scale: 0.98 }}
               transition={{ duration: 0.18 }}
-              className="my-6 flex max-h-[calc(100vh-3rem)] w-full max-w-5xl flex-col overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-2xl"
+              className="my-3 flex max-h-[calc(100vh-1.5rem)] w-full max-w-5xl flex-col overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-2xl sm:my-6 sm:max-h-[calc(100vh-3rem)]"
               onClick={(event) => event.stopPropagation()}
             >
-              <div className="px-8 py-6 border-b border-slate-100 flex items-start justify-between gap-6">
+              <div className="flex flex-col gap-4 border-b border-slate-100 px-5 py-5 sm:flex-row sm:items-start sm:justify-between sm:gap-6 sm:px-8 sm:py-6">
                 <div>
                   <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400 mb-2">Quotation Detail</p>
                   <h3 className="text-2xl font-black italic tracking-tighter text-slate-900 uppercase">{selectedQuotationDetail.noPenawaran || selectedQuotationDetail.id}</h3>
@@ -1064,8 +1064,8 @@ export function ApprovalCenterPage({ mode = "finance" }: ApprovalCenterPageProps
                   Close
                 </button>
               </div>
-              <div className="overflow-y-auto">
-                <div className="px-8 py-6 grid grid-cols-1 md:grid-cols-4 gap-4 border-b border-slate-100 bg-slate-50/40">
+                <div className="overflow-y-auto">
+                <div className="grid grid-cols-1 gap-4 border-b border-slate-100 bg-slate-50/40 px-5 py-5 sm:grid-cols-2 sm:px-8 sm:py-6 xl:grid-cols-4">
                   <div className="rounded-2xl border border-slate-100 bg-white px-5 py-4">
                     <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Status Approval</p>
                     <p className="text-sm font-black italic text-slate-900 mt-2">{getQuotationAuditLabel(selectedQuotationDetail)}</p>
@@ -1083,7 +1083,7 @@ export function ApprovalCenterPage({ mode = "finance" }: ApprovalCenterPageProps
                     <p className="text-sm font-black italic text-indigo-600 mt-2">Rp {(selectedQuotationDetail.grandTotal || 0).toLocaleString('id-ID')}</p>
                   </div>
                 </div>
-                <div className="px-8 py-6">
+                <div className="px-5 py-5 sm:px-8 sm:py-6">
                   <div className="mb-6 rounded-[1.5rem] border border-indigo-100 bg-indigo-50 px-5 py-4">
                     <p className="text-[10px] font-black uppercase tracking-[0.25em] text-indigo-500">Flow Quotation</p>
                     <p className="mt-2 text-sm font-bold text-indigo-900">
@@ -1091,7 +1091,7 @@ export function ApprovalCenterPage({ mode = "finance" }: ApprovalCenterPageProps
                     </p>
                   </div>
                   <div className="overflow-x-auto rounded-[1.5rem] border border-slate-100">
-                  <table className="w-full text-left">
+                  <table className="w-full min-w-[720px] text-left">
                     <thead className="bg-slate-50 border-b border-slate-100">
                       <tr>
                         <th className="px-5 py-4 text-[10px] font-black uppercase tracking-widest text-slate-400">Kode</th>
