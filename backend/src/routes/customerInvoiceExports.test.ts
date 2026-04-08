@@ -26,6 +26,7 @@ function installCustomerInvoiceExportMocks(role: Role) {
   const originalRevokedFindUnique = prismaAny.revokedToken.findUnique;
   const originalUserFindUnique = prismaAny.user.findUnique;
   const originalCustomerInvoiceFindUnique = prismaAny.financeCustomerInvoice.findUnique;
+  const originalProjectFindUnique = prismaAny.projectRecord.findUnique;
 
   prismaAny.revokedToken.findUnique = async () => null;
 
@@ -82,11 +83,34 @@ function installCustomerInvoiceExportMocks(role: Role) {
     payments: [],
   });
 
+  prismaAny.projectRecord.findUnique = async () => ({
+    id: "proj-1",
+    quotationId: "quo-1",
+    customerId: "cust-1",
+    kodeProject: "PRJ-001",
+    namaProject: "Project BW Water",
+    customerName: "PT BW Water",
+    status: "Planning",
+    approvalStatus: "Approved",
+    nilaiKontrak: 11_100_000,
+    progress: 0,
+    payload: {
+      quotationSnapshot: {
+        id: "quo-1",
+        noPenawaran: "QUO-001",
+        pricingConfig: {
+          discountPercent: 10,
+        },
+      },
+    },
+  });
+
   return {
     restore() {
       prismaAny.revokedToken.findUnique = originalRevokedFindUnique;
       prismaAny.user.findUnique = originalUserFindUnique;
       prismaAny.financeCustomerInvoice.findUnique = originalCustomerInvoiceFindUnique;
+      prismaAny.projectRecord.findUnique = originalProjectFindUnique;
     },
   };
 }
@@ -109,6 +133,8 @@ test("GET /exports/customer-invoices/:id/word returns customer invoice document"
       assert.match(body, /Invoice/i);
       assert.match(body, /INV-AR-001/i);
       assert.match(body, /PT BW Water/i);
+      assert.match(body, /Diskon/i);
+      assert.match(body, /Quotation QUO-001/i);
     });
   } finally {
     mock.restore();

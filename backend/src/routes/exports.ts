@@ -1960,10 +1960,92 @@ function quotationBomHtml(payload: Record<string, unknown>, opts?: { excel?: boo
   `;
 }
 
-function invoiceExportHtml(payload: Record<string, unknown>): string {
+type InvoiceDiscountContext = {
+  sourceLabel: "payload" | "project-quotation";
+  discountPercent: number;
+  discountAmount: number;
+  subtotalBeforeDiscount: number;
+  discountSourceText: string;
+};
+
+async function getInvoiceDiscountContext(
+  payload: Record<string, unknown>,
+): Promise<InvoiceDiscountContext | null> {
+  const subtotalAfterDiscount = Math.max(0, toNum(payload.subtotal));
+  if (subtotalAfterDiscount <= 0) return null;
+
+  const buildContext = (
+    discountPercent: number,
+    discountAmount: number,
+    sourceLabel: InvoiceDiscountContext["sourceLabel"],
+    discountSourceText: string,
+  ): InvoiceDiscountContext | null => {
+    if (discountPercent <= 0 && discountAmount <= 0) return null;
+
+    let subtotalBeforeDiscount = subtotalAfterDiscount;
+    let resolvedDiscountAmount = Math.max(0, discountAmount);
+    let resolvedDiscountPercent = Math.max(0, discountPercent);
+
+    if (resolvedDiscountAmount > 0) {
+      subtotalBeforeDiscount = subtotalAfterDiscount + resolvedDiscountAmount;
+      if (resolvedDiscountPercent <= 0 && subtotalBeforeDiscount > 0) {
+        resolvedDiscountPercent = (resolvedDiscountAmount / subtotalBeforeDiscount) * 100;
+      }
+    } else if (resolvedDiscountPercent > 0 && resolvedDiscountPercent < 100) {
+      subtotalBeforeDiscount = subtotalAfterDiscount / (1 - resolvedDiscountPercent / 100);
+      resolvedDiscountAmount = Math.max(0, subtotalBeforeDiscount - subtotalAfterDiscount);
+    }
+
+    if (resolvedDiscountAmount <= 0 && resolvedDiscountPercent <= 0) return null;
+
+    return {
+      sourceLabel,
+      discountPercent: resolvedDiscountPercent,
+      discountAmount: resolvedDiscountAmount,
+      subtotalBeforeDiscount,
+      discountSourceText,
+    };
+  };
+
+  const directContext = buildContext(
+    toNum(payload.diskonPersen) || toNum(payload.discountPercent),
+    toNum(payload.diskonNominal) || toNum(payload.discountAmount),
+    "payload",
+    "Invoice customer",
+  );
+  if (directContext) return directContext;
+
+  const projectId = toText(payload.projectId, "").trim();
+  if (!projectId) return null;
+
+  const projectPayload = await getProjectPayload(projectId);
+  if (!projectPayload) return null;
+
+  const linkedQuotation = await getProjectQuotationContext(projectPayload);
+  const quotationPayload = linkedQuotation.data;
+  if (!quotationPayload || Object.keys(quotationPayload).length === 0) return null;
+
+  const pricingConfig = asRecord(quotationPayload.pricingConfig);
+  const quotationDiscountPercent =
+    toNum(quotationPayload.diskonPersen) ||
+    toNum(quotationPayload.discountPercent) ||
+    toNum(pricingConfig.discountPercent);
+  const quotationDiscountAmount =
+    toNum(quotationPayload.diskonNominal) || toNum(quotationPayload.discountAmount);
+
+  return buildContext(
+    quotationDiscountPercent,
+    quotationDiscountAmount,
+    "project-quotation",
+    `Quotation ${toText(quotationPayload.noPenawaran, "-")}`,
+  );
+}
+
+async function invoiceExportHtml(payload: Record<string, unknown>): Promise<string> {
   const items = asRecords(payload.items);
   const signer = payload.createdBy || payload.approvedBy;
-  const meta = keyValueTableHtml("Informasi Invoice", [
+  const discountContext = await getInvoiceDiscountContext(payload);
+  const metaRows: Array<{ label: string; key: string; value: unknown }> = [
     { label: "ID", key: "id", value: payload.id },
     { label: "No Invoice", key: "noInvoice", value: payload.noInvoice },
     { label: "Tanggal", key: "tanggal", value: payload.tanggal },
@@ -1972,10 +2054,29 @@ function invoiceExportHtml(payload: Record<string, unknown>): string {
     { label: "Alamat", key: "alamat", value: payload.alamat },
     { label: "No PO", key: "noPO", value: payload.noPO },
     { label: "Status", key: "status", value: payload.status },
-    { label: "Subtotal", key: "subtotal", value: payload.subtotal },
+  ];
+
+  if (discountContext) {
+    metaRows.push(
+      { label: "Subtotal Sebelum Diskon", key: "subtotalSebelumDiskon", value: discountContext.subtotalBeforeDiscount },
+      {
+        label: `Diskon (${discountContext.discountPercent.toLocaleString("id-ID", { maximumFractionDigits: 2 })}%)`,
+        key: "discountAmount",
+        value: discountContext.discountAmount,
+      },
+      { label: "Subtotal / DPP Invoice", key: "subtotal", value: payload.subtotal },
+      { label: "Sumber Diskon", key: "discountSource", value: discountContext.discountSourceText },
+    );
+  } else {
+    metaRows.push({ label: "Subtotal", key: "subtotal", value: payload.subtotal });
+  }
+
+  metaRows.push(
     { label: "PPN", key: "ppn", value: payload.ppn },
     { label: "Total Bayar", key: "totalBayar", value: payload.totalBayar },
-  ]);
+  );
+
+  const meta = keyValueTableHtml("Informasi Invoice", metaRows);
   const itemsTable = listTable("Rincian Item", items, ["deskripsi", "qty", "unit", "hargaSatuan", "jumlah"]);
   return `${companyLetterheadHtml("Invoice")} ${meta} ${itemsTable} ${companyFooterHtml(signer)}`;
 }
@@ -3273,25 +3374,25 @@ exportsRouter.get("/exports/projects/:id/excel", authenticate, async (req: AuthR
 exportsRouter.get("/exports/invoices/:id/word", authenticate, async (req: AuthRequest, res: Response) => {
   const payload = await getAppEntityPayload("invoices", req.params.id);
   if (!payload) return res.status(404).json({ error: "Invoice not found" });
-  return sendWord(res, `invoice-${req.params.id}`, invoiceExportHtml(payload));
+  return sendWord(res, `invoice-${req.params.id}`, await invoiceExportHtml(payload));
 });
 
 exportsRouter.get("/exports/invoices/:id/excel", authenticate, async (req: AuthRequest, res: Response) => {
   const payload = await getAppEntityPayload("invoices", req.params.id);
   if (!payload) return res.status(404).json({ error: "Invoice not found" });
-  return sendExcel(res, `invoice-${req.params.id}`, invoiceExportHtml(payload));
+  return sendExcel(res, `invoice-${req.params.id}`, await invoiceExportHtml(payload));
 });
 
 exportsRouter.get("/exports/customer-invoices/:id/word", authenticate, async (req: AuthRequest, res: Response) => {
   const payload = await getAppEntityPayload("customer-invoices", req.params.id);
   if (!payload) return res.status(404).json({ error: "Customer invoice not found" });
-  return sendWord(res, `customer-invoice-${req.params.id}`, invoiceExportHtml(payload));
+  return sendWord(res, `customer-invoice-${req.params.id}`, await invoiceExportHtml(payload));
 });
 
 exportsRouter.get("/exports/customer-invoices/:id/excel", authenticate, async (req: AuthRequest, res: Response) => {
   const payload = await getAppEntityPayload("customer-invoices", req.params.id);
   if (!payload) return res.status(404).json({ error: "Customer invoice not found" });
-  return sendExcel(res, `customer-invoice-${req.params.id}`, invoiceExportHtml(payload));
+  return sendExcel(res, `customer-invoice-${req.params.id}`, await invoiceExportHtml(payload));
 });
 
 exportsRouter.get("/exports/vendor-invoices/:id/word", authenticate, async (req: AuthRequest, res: Response) => {
@@ -3787,7 +3888,7 @@ exportsRouter.get("/exports/preview/:resource/:id", authenticate, async (req: Au
   if (resource === "invoices") {
     const payload = await getAppEntityPayload("invoices", id);
     if (!payload) return res.status(404).json({ error: "Invoice not found" });
-    return sendPreview(res, invoiceExportHtml(payload));
+    return sendPreview(res, await invoiceExportHtml(payload));
   }
 
   if (resource === "surat-jalan") {
