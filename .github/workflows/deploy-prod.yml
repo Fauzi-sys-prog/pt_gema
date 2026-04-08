@@ -26,10 +26,24 @@ jobs:
           script_stop: true
           command_timeout: 30m
           script: |
-            set -e
-            cd /root/pt_gema
+            set -euo pipefail
+            ROOT=/root/ptgema
+            RELEASES=/root/ptgema-releases
+            REV=${{ github.sha }}
+            SHORT_REV=$(printf '%s' "$REV" | cut -c1-7)
+            STAMP=$(date +%Y%m%d-%H%M%S)
+            REL="$RELEASES/$STAMP-$SHORT_REV"
+
+            mkdir -p "$REL"
+
+            cd "$ROOT"
             git fetch origin main
-            git reset --hard origin/main
-            docker compose -f docker-compose.prod.yml up -d --build backend frontend migrate
-            docker compose -f docker-compose.prod.yml ps
+            git archive --format=tar "$REV" | tar -xf - -C "$REL"
+
+            cp "$ROOT/.env" "$REL/.env"
+            cp "$ROOT/backend/.env" "$REL/backend/.env"
+
+            docker compose -p ptgema -f "$REL/docker-compose.prod.yml" run --rm --entrypoint sh migrate -lc "npx prisma migrate deploy && npx prisma generate"
+            docker compose -p ptgema -f "$REL/docker-compose.prod.yml" up -d --build backend frontend
+            docker compose -p ptgema -f "$REL/docker-compose.prod.yml" ps
             curl -fsS http://127.0.0.1:3000/health

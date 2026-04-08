@@ -157,12 +157,14 @@ Required GitHub repository secrets:
 
 Expected server app path:
 
-- `/root/pt_gema`
+- `/root/ptgema`
 
 Deploy behavior:
 
 - trigger on push to `main`
 - can also be triggered manually from GitHub Actions
-- server runs `git fetch`, `git reset --hard origin/main`, rebuilds `backend/frontend/migrate`, then checks backend health
+- server fetches the target commit into a clean release directory under `/root/ptgema-releases`
+- production `.env` files are copied from the live server into that release
+- deploy runs `migrate`, rebuilds `backend/frontend`, then checks backend health without resetting the dirty live repo
 
 The badge above points to repository `Fauzi-sys-prog/pt_gema`.
