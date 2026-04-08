@@ -1388,14 +1388,14 @@ export default function QuotationPage() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+            className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-4 sm:items-center"
             onClick={() => setShowSurveyListModal(false)}
           >
             <motion.div
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden"
+              className="my-4 w-full max-w-4xl max-h-[calc(100vh-2rem)] overflow-hidden rounded-xl bg-white shadow-2xl sm:my-8 sm:max-h-[90vh]"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="p-6 border-b border-gray-200 bg-gradient-to-r from-blue-600 to-purple-600">
@@ -1481,13 +1481,13 @@ export default function QuotationPage() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 overflow-y-auto"
+            className="fixed inset-0 bg-black/50 flex items-start justify-center z-50 overflow-y-auto p-4 sm:items-center"
           >
             <motion.div
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-white rounded-xl shadow-2xl max-w-7xl w-full my-8"
+              className="my-4 w-full max-w-7xl max-h-[calc(100vh-2rem)] overflow-hidden rounded-xl bg-white shadow-2xl sm:my-8"
               onClick={(e) => e.stopPropagation()}
             >
               <form onSubmit={handleCreate}>
@@ -1516,7 +1516,7 @@ export default function QuotationPage() {
                   </div>
                 </div>
 
-                <div className="p-6 max-h-[calc(100vh-200px)] overflow-y-auto">
+                <div className="p-4 sm:p-6 max-h-[calc(100vh-2rem-88px)] sm:max-h-[calc(100vh-200px)] overflow-y-auto">
                   <div className="mb-4 flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
                     <div>
                       <p className="text-sm font-semibold text-slate-800">

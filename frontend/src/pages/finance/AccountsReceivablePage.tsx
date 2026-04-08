@@ -777,7 +777,7 @@ export default function AccountsReceivablePage() {
               Buat Invoice
             </button>
 
-            <div className="flex-1 min-w-[200px]">
+            <div className="flex-1 min-w-0 sm:min-w-[200px]">
               <div className="relative">
                 <Search className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                 <input
@@ -1275,7 +1275,7 @@ export default function AccountsReceivablePage() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+            className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-4 sm:items-center"
             onClick={() => setShowInvoiceModal(false)}
           >
             <motion.div
@@ -1283,7 +1283,7 @@ export default function AccountsReceivablePage() {
               animate={{ scale: 1 }}
               exit={{ scale: 0.95 }}
               onClick={(e) => e.stopPropagation()}
-              className="bg-white rounded-lg p-6 max-w-4xl w-full max-h-[90vh] overflow-y-auto"
+              className="my-4 w-full max-w-4xl max-h-[calc(100vh-2rem)] overflow-y-auto rounded-lg bg-white p-6 sm:my-8 sm:max-h-[90vh]"
             >
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-2xl font-bold">Buat Invoice Baru</h2>
@@ -1588,7 +1588,7 @@ export default function AccountsReceivablePage() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+            className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-4 sm:items-center"
             onClick={() => setShowPaymentModal(false)}
           >
             <motion.div
@@ -1596,7 +1596,7 @@ export default function AccountsReceivablePage() {
               animate={{ scale: 1 }}
               exit={{ scale: 0.95 }}
               onClick={(e) => e.stopPropagation()}
-              className="bg-white rounded-lg p-6 max-w-lg w-full"
+              className="my-4 w-full max-w-lg max-h-[calc(100vh-2rem)] overflow-y-auto rounded-lg bg-white p-6 sm:my-8"
             >
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-2xl font-bold">Catat Pembayaran</h2>
@@ -1683,7 +1683,7 @@ export default function AccountsReceivablePage() {
                 </div>
               </div>
 
-              <div className="flex gap-3 mt-6">
+              <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row">
                 <button
                   onClick={handleSubmitPayment}
                   className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
@@ -1709,7 +1709,7 @@ export default function AccountsReceivablePage() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+            className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-4 sm:items-center"
             onClick={closeCustomerModal}
           >
             <motion.div
@@ -1717,7 +1717,7 @@ export default function AccountsReceivablePage() {
               animate={{ scale: 1 }}
               exit={{ scale: 0.95 }}
               onClick={(e) => e.stopPropagation()}
-              className="bg-white rounded-lg p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto"
+              className="my-4 w-full max-w-2xl max-h-[calc(100vh-2rem)] overflow-y-auto rounded-lg bg-white p-6 sm:my-8 sm:max-h-[90vh]"
             >
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-2xl font-bold">
@@ -1833,7 +1833,7 @@ export default function AccountsReceivablePage() {
                 </div>
               </div>
 
-              <div className="flex gap-3 mt-6">
+              <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row">
                 <button
                   onClick={handleSubmitCustomer}
                   className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
@@ -1859,7 +1859,7 @@ export default function AccountsReceivablePage() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+            className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-4 sm:items-center"
             onClick={() => setShowPreviewModal(false)}
           >
             <motion.div
@@ -1867,11 +1867,11 @@ export default function AccountsReceivablePage() {
               animate={{ scale: 1 }}
               exit={{ scale: 0.95 }}
               onClick={(e) => e.stopPropagation()}
-              className="bg-white rounded-lg p-6 max-w-4xl w-full max-h-[90vh] overflow-y-auto"
+              className="my-4 w-full max-w-4xl max-h-[calc(100vh-2rem)] overflow-y-auto rounded-lg bg-white p-6 sm:my-8 sm:max-h-[90vh]"
             >
-              <div className="flex items-center justify-between mb-6">
+              <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <h2 className="text-2xl font-bold">Detail Invoice</h2>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <button
                     onClick={() => handleExportInvoice(selectedInvoice, 'word')}
                     disabled={exportingInvoiceId === String(selectedInvoice.id)}
@@ -1910,7 +1910,7 @@ export default function AccountsReceivablePage() {
                 </div>
 
                 {/* Info */}
-                <div className="grid grid-cols-2 gap-4 p-4 bg-gray-50 rounded-lg">
+                <div className="grid grid-cols-1 gap-4 p-4 bg-gray-50 rounded-lg sm:grid-cols-2">
                   <div>
                     <div className="text-sm text-gray-600">Customer</div>
                     <div className="font-medium">{selectedInvoice.customerName}</div>
@@ -1932,26 +1932,28 @@ export default function AccountsReceivablePage() {
                 {/* Items */}
                 <div>
                   <h3 className="font-bold mb-3">Items</h3>
-                  <table className="w-full">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th className="px-4 py-2 text-left text-sm">Deskripsi</th>
-                        <th className="px-4 py-2 text-center text-sm">Qty</th>
-                        <th className="px-4 py-2 text-right text-sm">Harga</th>
-                        <th className="px-4 py-2 text-right text-sm">Jumlah</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(Array.isArray(selectedInvoice.items) ? selectedInvoice.items : []).map((item: any) => (
-                        <tr key={item.id} className="border-t border-gray-200">
-                          <td className="px-4 py-2">{item.deskripsi}</td>
-                          <td className="px-4 py-2 text-center">{item.qty} {item.satuan}</td>
-                          <td className="px-4 py-2 text-right">{formatCurrency(item.hargaSatuan)}</td>
-                          <td className="px-4 py-2 text-right font-medium">{formatCurrency(item.jumlah)}</td>
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[640px]">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-4 py-2 text-left text-sm">Deskripsi</th>
+                          <th className="px-4 py-2 text-center text-sm">Qty</th>
+                          <th className="px-4 py-2 text-right text-sm">Harga</th>
+                          <th className="px-4 py-2 text-right text-sm">Jumlah</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody>
+                        {(Array.isArray(selectedInvoice.items) ? selectedInvoice.items : []).map((item: any) => (
+                          <tr key={item.id} className="border-t border-gray-200">
+                            <td className="px-4 py-2">{item.deskripsi}</td>
+                            <td className="px-4 py-2 text-center">{item.qty} {item.satuan}</td>
+                            <td className="px-4 py-2 text-right">{formatCurrency(item.hargaSatuan)}</td>
+                            <td className="px-4 py-2 text-right font-medium">{formatCurrency(item.jumlah)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
 
                 {/* Totals */}

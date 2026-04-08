@@ -946,16 +946,16 @@ export default function PurchaseOrderPage() {
 
       {/* Modal Input */}
       {showModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col">
-            <div className="p-6 border-b flex justify-between items-center bg-gray-50">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-start justify-center overflow-y-auto z-[100] p-4 sm:items-center">
+          <div className="my-4 flex max-h-[calc(100vh-2rem)] w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl sm:my-8 sm:max-h-[90vh]">
+            <div className="p-4 sm:p-6 border-b flex justify-between items-center bg-gray-50">
               <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
                 <FileText size={24} className="text-blue-600" />
                 {editMode ? 'Edit Purchase Order' : 'Buat Purchase Order Baru'}
               </h2>
               <button onClick={() => { setShowModal(false); resetForm(); }} className="text-gray-400 hover:text-gray-600"><X size={28} /></button>
             </div>
-            <form onSubmit={handleSubmit} className="p-6 overflow-y-auto flex-grow bg-white">
+            <form onSubmit={handleSubmit} className="p-4 sm:p-6 overflow-y-auto flex-grow bg-white">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
                 <div className="space-y-4">
                   <h3 className="font-black italic text-blue-800 border-b pb-1 flex items-center gap-2 uppercase tracking-tighter">📝 Administrasi</h3>
@@ -1186,8 +1186,8 @@ export default function PurchaseOrderPage() {
                 </div>
               </div>
 
-              <div className="flex justify-end gap-3 border-t pt-6">
-                <button type="button" onClick={() => { setShowModal(false); resetForm(); }} className="px-6 py-2 border rounded-lg font-bold text-gray-600 hover:bg-gray-50">Batal</button>
+              <div className="flex flex-col-reverse sm:flex-row justify-end gap-3 border-t pt-6">
+                <button type="button" onClick={() => { setShowModal(false); resetForm(); }} className="px-6 py-3 border rounded-lg font-bold text-gray-600 hover:bg-gray-50">Batal</button>
                 <button type="submit" className="px-8 py-2 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700 shadow-lg">Simpan Purchase Order</button>
               </div>
             </form>

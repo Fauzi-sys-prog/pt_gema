@@ -1473,9 +1473,9 @@ export default function ProjectManagementPage() {
 
       {/* Basic Project Modal */}
       {showProjectModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-[2rem] w-full max-w-2xl overflow-hidden shadow-2xl">
-            <div className="bg-slate-900 p-6 text-white flex justify-between items-center">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-start justify-center overflow-y-auto z-50 p-4 sm:items-center">
+          <div className="my-4 w-full max-w-2xl overflow-hidden rounded-[2rem] bg-white shadow-2xl sm:my-8">
+            <div className="bg-slate-900 p-5 sm:p-6 text-white flex justify-between items-center">
               <h2 className="text-xl font-black uppercase italic tracking-tighter">
                 {isEditMode ? "Edit Project Details" : "Register New Project"}
               </h2>
@@ -1483,7 +1483,7 @@ export default function ProjectManagementPage() {
                 <X size={24} />
               </button>
             </div>
-            <div className="p-8 space-y-6 max-h-[70vh] overflow-y-auto">
+            <div className="p-5 sm:p-8 space-y-6 max-h-[calc(100vh-2rem)] sm:max-h-[70vh] overflow-y-auto">
               {isEditMode && selectedProject && isProjectLockedForEdit(selectedProject) && (
                 <div className="bg-amber-50 border border-amber-200 p-3 rounded-xl text-[10px] font-bold text-amber-700 uppercase tracking-wider">
                   Project sudah Approved. Field inti terkunci dan tidak bisa diubah.
@@ -1543,8 +1543,8 @@ export default function ProjectManagementPage() {
                 </div>
               </div>
             </div>
-            <div className="p-6 bg-slate-50 border-t border-slate-100 flex justify-end gap-3">
-              <button onClick={() => setShowProjectModal(false)} className="px-6 py-2 font-bold text-slate-400 uppercase text-[10px]">Cancel</button>
+            <div className="p-5 sm:p-6 bg-slate-50 border-t border-slate-100 flex flex-col-reverse sm:flex-row justify-end gap-3">
+              <button onClick={() => setShowProjectModal(false)} className="px-6 py-3 font-bold text-slate-400 uppercase text-[10px]">Cancel</button>
               <button onClick={handleSaveProject} className="px-8 py-3 bg-blue-600 text-white rounded-xl font-black uppercase text-[10px] shadow-lg shadow-blue-100">Save Project</button>
             </div>
           </div>

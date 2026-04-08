@@ -418,16 +418,16 @@ export default function StockOutPage() {
 
       {/* Add Modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
-          <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-5xl max-h-[90vh] overflow-auto border border-slate-200">
-            <div className="sticky top-0 bg-white border-b border-slate-100 px-8 py-6 flex justify-between items-center z-10">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-start justify-center z-[100] overflow-y-auto p-4 sm:items-center">
+          <div className="my-4 w-full max-w-5xl max-h-[calc(100vh-2rem)] overflow-auto rounded-[2.5rem] border border-slate-200 bg-white shadow-2xl sm:my-8 sm:max-h-[90vh]">
+            <div className="sticky top-0 bg-white border-b border-slate-100 px-4 sm:px-8 py-5 sm:py-6 flex justify-between items-center z-10">
               <h3 className="text-2xl font-black uppercase italic tracking-tighter">Entry Stok Keluar Baru</h3>
               <button onClick={() => setShowModal(false)} className="w-10 h-10 bg-slate-50 text-slate-400 rounded-xl flex items-center justify-center hover:bg-red-50 hover:text-red-600 transition-all">
                 <X size={20} />
               </button>
             </div>
             
-            <form onSubmit={handleSubmit} className="p-8 space-y-8">
+            <form onSubmit={handleSubmit} className="p-4 sm:p-8 space-y-8">
               <div className="flex flex-col md:flex-row gap-6">
                 <div className="flex-1 p-6 bg-slate-50 rounded-3xl border border-slate-100 flex flex-col justify-between">
                   <label className="block text-[10px] font-black italic text-slate-400 uppercase tracking-widest mb-3">Project / Work Order</label>

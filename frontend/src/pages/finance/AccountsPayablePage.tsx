@@ -384,18 +384,18 @@ export default function AccountsPayablePage() {
 
       {/* Main Table Section */}
       <div className="bg-white rounded-[3.5rem] border border-slate-200 shadow-sm overflow-hidden">
-        <div className="p-10 border-b border-slate-50 flex flex-wrap items-center justify-between gap-6">
-          <div className="relative flex-1 min-w-[300px]">
+        <div className="p-6 sm:p-10 border-b border-slate-50 flex flex-wrap items-center justify-between gap-4 sm:gap-6">
+          <div className="relative flex-1 min-w-0 sm:min-w-[300px]">
             <Search size={20} className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-400" />
             <input 
               type="text" 
               placeholder="Cari No. Invoice, Supplier, atau No. PO..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-16 pr-8 py-5 bg-slate-50 rounded-[2rem] text-sm font-bold border-none focus:ring-2 focus:ring-rose-500 transition-all"
+              className="w-full pl-14 sm:pl-16 pr-4 sm:pr-8 py-4 sm:py-5 bg-slate-50 rounded-[1.5rem] sm:rounded-[2rem] text-sm font-bold border-none focus:ring-2 focus:ring-rose-500 transition-all"
             />
           </div>
-          <div className="flex gap-4">
+          <div className="flex w-full sm:w-auto gap-4">
             <button onClick={handleResetFilters} className="p-5 bg-slate-50 rounded-2xl border border-slate-100 text-slate-400 hover:text-slate-900 transition-all flex items-center gap-2 text-[10px] font-black uppercase tracking-widest">
               <Filter size={20} /> Filter
             </button>
@@ -491,14 +491,14 @@ export default function AccountsPayablePage() {
       {/* Payment Modal */}
       <AnimatePresence>
         {showPayModal && selectedInvoice && (
-          <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[100] flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[100] flex items-start justify-center overflow-y-auto p-4 sm:items-center">
             <motion.div 
               initial={{ opacity: 0, scale: 0.9, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.9, y: 20 }}
-              className="bg-white w-full max-w-lg rounded-[3rem] overflow-hidden shadow-2xl"
+              className="my-4 w-full max-w-lg max-h-[calc(100vh-2rem)] overflow-y-auto rounded-[2rem] bg-white shadow-2xl sm:my-8 sm:rounded-[3rem]"
             >
-              <div className="p-10 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+              <div className="p-6 sm:p-10 border-b border-slate-100 flex justify-between items-center bg-slate-50">
                 <div className="flex items-center gap-4">
                   <div className="w-12 h-12 bg-rose-600 text-white rounded-2xl flex items-center justify-center shadow-lg rotate-3">
                     <CreditCard size={24} />
@@ -513,7 +513,7 @@ export default function AccountsPayablePage() {
                 </button>
               </div>
 
-              <div className="p-10 space-y-6">
+              <div className="p-6 sm:p-10 space-y-6">
                 <div className="bg-slate-50 p-6 rounded-3xl border border-slate-100">
                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Tagihan Tersisa</p>
                   <h4 className="text-2xl font-black text-slate-900 italic tracking-tight">
@@ -538,7 +538,7 @@ export default function AccountsPayablePage() {
                   </div>
                 </div>
 
-                <div className="pt-4 flex gap-4">
+                <div className="pt-4 flex flex-col-reverse gap-4 sm:flex-row">
                   <button 
                     onClick={() => setShowPayModal(false)}
                     className="flex-1 py-5 bg-slate-100 text-slate-600 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-200 transition-all"
@@ -561,15 +561,15 @@ export default function AccountsPayablePage() {
       {/* Create Invoice Modal */}
       <AnimatePresence>
         {showCreateModal && (
-          <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[100] flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[100] flex items-start justify-center overflow-y-auto p-4 sm:items-center">
             <motion.div 
               initial={{ opacity: 0, scale: 0.9, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.9, y: 20 }}
-              className="bg-white w-full max-w-2xl rounded-[3.5rem] overflow-hidden shadow-2xl"
+              className="my-4 w-full max-w-2xl overflow-hidden rounded-[2rem] bg-white shadow-2xl sm:my-8 sm:rounded-[3.5rem]"
             >
               <form onSubmit={handleCreateInvoice}>
-                <div className="p-10 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+                <div className="p-6 sm:p-10 border-b border-slate-100 flex justify-between items-center bg-slate-50">
                   <div className="flex items-center gap-4">
                     <div className="w-12 h-12 bg-slate-900 text-white rounded-2xl flex items-center justify-center shadow-lg -rotate-3">
                       <FileText size={24} />
@@ -584,8 +584,8 @@ export default function AccountsPayablePage() {
                   </button>
                 </div>
 
-                <div className="p-10 space-y-8 max-h-[70vh] overflow-y-auto custom-scrollbar">
-                  <div className="grid grid-cols-2 gap-6">
+                <div className="p-6 sm:p-10 space-y-8 max-h-[calc(100vh-2rem)] sm:max-h-[70vh] overflow-y-auto custom-scrollbar">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="space-y-2">
                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Nama Supplier / Vendor</label>
                       <input 
@@ -610,7 +610,7 @@ export default function AccountsPayablePage() {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="space-y-2">
                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Referensi Purchase Order (PO)</label>
                         <select
@@ -656,7 +656,7 @@ export default function AccountsPayablePage() {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="space-y-2">
                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Tanggal Jatuh Tempo</label>
                       <div className="relative">
@@ -687,7 +687,7 @@ export default function AccountsPayablePage() {
                   </div>
                 </div>
 
-                <div className="p-10 bg-slate-50 flex gap-4">
+                <div className="p-6 sm:p-10 bg-slate-50 flex flex-col-reverse gap-4 sm:flex-row">
                   <button 
                     type="button"
                     onClick={() => setShowCreateModal(false)}

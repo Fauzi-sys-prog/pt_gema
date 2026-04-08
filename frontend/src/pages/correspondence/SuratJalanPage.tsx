@@ -473,7 +473,7 @@ export default function SuratJalanPage() {
       {/* Document List */}
       <div className="bg-white rounded-2xl lg:rounded-[3.5rem] border border-slate-100 shadow-sm overflow-hidden">
         <div className="p-4 sm:p-6 lg:p-10 border-b border-slate-50 flex flex-wrap items-center justify-between gap-4 sm:gap-6">
-          <div className="relative flex-1 min-w-[200px] sm:min-w-[300px]">
+          <div className="relative flex-1 min-w-0 sm:min-w-[300px]">
             <Search size={20} className="absolute left-4 sm:left-6 top-1/2 -translate-y-1/2 text-slate-300 flex-shrink-0" />
             <input 
               type="text" 
