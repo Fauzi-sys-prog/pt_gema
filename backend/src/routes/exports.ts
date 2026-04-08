@@ -1979,8 +1979,26 @@ type InvoiceDisplayItem = {
   groupLabel: string;
 };
 
+type InvoiceCategoryHint = {
+  label: string;
+  names: string[];
+};
+
+async function getInvoiceLinkedQuotationContext(
+  payload: Record<string, unknown>,
+): Promise<ProjectQuotationContext> {
+  const projectId = toText(payload.projectId, "").trim();
+  if (!projectId) return { sourceLabel: "none", data: {} };
+
+  const projectPayload = await getProjectPayload(projectId);
+  if (!projectPayload) return { sourceLabel: "none", data: {} };
+
+  return getProjectQuotationContext(projectPayload);
+}
+
 async function getInvoiceDiscountContext(
   payload: Record<string, unknown>,
+  linkedQuotation?: ProjectQuotationContext,
 ): Promise<InvoiceDiscountContext | null> {
   const subtotalAfterDiscount = Math.max(0, toNum(payload.subtotal));
   if (subtotalAfterDiscount <= 0) return null;
@@ -2026,14 +2044,7 @@ async function getInvoiceDiscountContext(
   );
   if (directContext) return directContext;
 
-  const projectId = toText(payload.projectId, "").trim();
-  if (!projectId) return null;
-
-  const projectPayload = await getProjectPayload(projectId);
-  if (!projectPayload) return null;
-
-  const linkedQuotation = await getProjectQuotationContext(projectPayload);
-  const quotationPayload = linkedQuotation.data;
+  const quotationPayload = linkedQuotation?.data || {};
   if (!quotationPayload || Object.keys(quotationPayload).length === 0) return null;
 
   const pricingConfig = asRecord(quotationPayload.pricingConfig);
@@ -2052,7 +2063,7 @@ async function getInvoiceDiscountContext(
   );
 }
 
-function detectInvoiceGroupLabel(description: string, index: number): string {
+function detectInvoiceGroupLabelFallback(description: string, index: number): string {
   const normalized = description.toLowerCase();
   if (normalized.includes("material")) return "Material";
   if (normalized.includes("jasa")) return "Jasa";
@@ -2060,9 +2071,83 @@ function detectInvoiceGroupLabel(description: string, index: number): string {
   return `Item ${index + 1}`;
 }
 
+function normalizeInvoiceMatchText(value: unknown): string {
+  return String(value ?? "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function buildInvoiceCategoryHints(quotationPayload: Record<string, unknown>): InvoiceCategoryHint[] {
+  const pricingItems = asRecord(quotationPayload.pricingItems);
+  const groups: Array<{ key: string; label: string }> = [
+    { key: "materials", label: "Material" },
+    { key: "manpower", label: "Jasa" },
+    { key: "equipment", label: "Equipment" },
+    { key: "consumables", label: "Consumable" },
+  ];
+
+  return groups
+    .map((group) => {
+      const rows = asRecords(pricingItems[group.key]);
+      const names = rows
+        .map((row) =>
+          toText(
+            row.description ||
+              row.materialName ||
+              row.nama ||
+              row.itemName ||
+              row.equipmentName ||
+              row.jabatan ||
+              row.deskripsi,
+            "",
+          ),
+        )
+        .map((name) => normalizeInvoiceMatchText(name))
+        .filter(Boolean);
+      return rows.length > 0 ? { label: group.label, names } : null;
+    })
+    .filter((entry): entry is InvoiceCategoryHint => Boolean(entry));
+}
+
+function resolveInvoiceGroupLabel(
+  description: string,
+  index: number,
+  itemCount: number,
+  quotationPayload: Record<string, unknown>,
+): string {
+  const explicit = detectInvoiceGroupLabelFallback(description, index);
+  if (!explicit.startsWith("Item ") && !explicit.startsWith("DP ")) {
+    return explicit;
+  }
+
+  const normalizedDescription = normalizeInvoiceMatchText(description);
+  const hints = buildInvoiceCategoryHints(quotationPayload);
+  if (normalizedDescription && hints.length > 0) {
+    const matchedHint = hints.find((hint) =>
+      hint.names.some((candidate) => {
+        if (!candidate) return false;
+        if (normalizedDescription === candidate) return true;
+        if (normalizedDescription.includes(candidate) || candidate.includes(normalizedDescription)) return true;
+        const descTokens = normalizedDescription.split(" ");
+        const candidateTokens = candidate.split(" ");
+        const overlap = candidateTokens.filter((token) => token && descTokens.includes(token)).length;
+        return overlap >= Math.min(2, candidateTokens.length);
+      }),
+    );
+    if (matchedHint) return matchedHint.label;
+  }
+
+  if (hints.length === 1) return hints[0].label;
+  if (hints.length === itemCount && hints[index]) return hints[index].label;
+  return explicit;
+}
+
 function buildInvoiceDisplayItems(
   payload: Record<string, unknown>,
   discountContext: InvoiceDiscountContext | null,
+  quotationPayload: Record<string, unknown>,
 ): InvoiceDisplayItem[] {
   const rawItems = asRecords(payload.items);
   const normalizedItems = (rawItems.length
@@ -2084,7 +2169,7 @@ function buildInvoiceDisplayItems(
       unit: toText(item.unit, "Lot"),
       description: toText(item.deskripsi, `Item ${index + 1}`),
       netAmount,
-      groupLabel: detectInvoiceGroupLabel(toText(item.deskripsi, `Item ${index + 1}`), index),
+      groupLabel: "",
     };
   });
 
@@ -2116,15 +2201,21 @@ function buildInvoiceDisplayItems(
       grossAmount,
       discountAmount: allocatedDiscount,
       netAmount: item.netAmount,
-      groupLabel: item.groupLabel,
+      groupLabel: resolveInvoiceGroupLabel(
+        item.description,
+        index,
+        normalizedItems.length,
+        quotationPayload,
+      ),
     };
   });
 }
 
 async function invoiceExportHtml(payload: Record<string, unknown>): Promise<string> {
   const signer = payload.createdBy || payload.approvedBy;
-  const discountContext = await getInvoiceDiscountContext(payload);
-  const displayItems = buildInvoiceDisplayItems(payload, discountContext);
+  const linkedQuotation = await getInvoiceLinkedQuotationContext(payload);
+  const discountContext = await getInvoiceDiscountContext(payload, linkedQuotation);
+  const displayItems = buildInvoiceDisplayItems(payload, discountContext, linkedQuotation.data);
   const itemRows = displayItems
     .map((item) => {
       const discountRow = item.discountAmount

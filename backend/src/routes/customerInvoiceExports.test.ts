@@ -73,11 +73,19 @@ function installCustomerInvoiceExportMocks(role: Role) {
     items: [
       {
         id: "item-1",
-        description: "Jasa Pekerjaan",
+        description: "Anchor Set",
         qty: 1,
         unit: "Lot",
-        unitPrice: 10_000_000,
-        amount: 10_000_000,
+        unitPrice: 6_000_000,
+        amount: 6_000_000,
+      },
+      {
+        id: "item-2",
+        description: "Dryout Crew",
+        qty: 1,
+        unit: "Lot",
+        unitPrice: 4_000_000,
+        amount: 4_000_000,
       },
     ],
     payments: [],
@@ -100,6 +108,24 @@ function installCustomerInvoiceExportMocks(role: Role) {
         noPenawaran: "QUO-001",
         pricingConfig: {
           discountPercent: 10,
+        },
+        pricingItems: {
+          materials: [
+            {
+              description: "Anchor Set",
+              qty: 1,
+              unitPrice: 6_000_000,
+              totalCost: 6_000_000,
+            },
+          ],
+          manpower: [
+            {
+              description: "Dryout Crew",
+              qty: 1,
+              unitPrice: 4_000_000,
+              totalCost: 4_000_000,
+            },
+          ],
         },
       },
     },
@@ -137,6 +163,8 @@ test("GET /exports/customer-invoices/:id/word returns customer invoice document"
       assert.match(body, /Quotation QUO-001/i);
       assert.match(body, /Payment Details/i);
       assert.match(body, /Grand Total/i);
+      assert.match(body, /Total Material/i);
+      assert.match(body, /Total Jasa/i);
     });
   } finally {
     mock.restore();
