@@ -512,6 +512,11 @@ export interface ProductionReport {
   woNumber?: string;
   woId?: string;
   selectedItem?: string;
+  selectedItemCode?: string;
+  selectedItemName?: string;
+  projectId?: string;
+  projectName?: string;
+  manualMode?: boolean;
 }
 
 /**
@@ -915,7 +920,7 @@ export interface AppContextType {
   updateInvoice: (id: string, updates: Partial<Invoice>) => Promise<void>;
   addPO: (po: PurchaseOrder) => Promise<void>;
 
-  addProductionReport: (report: ProductionReport) => void;
+  addProductionReport: (report: ProductionReport) => Promise<boolean>;
   handleProductionOutput: (
     woId: string,
     qty: number,
@@ -2949,58 +2954,60 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     handleProductionOutput(woId, qty, currentUser?.fullName || currentUser?.username || "System");
   };
 
-  const addProductionReport: AppContextType["addProductionReport"] = (report) => {
+  const addProductionReport: AppContextType["addProductionReport"] = async (report) => {
+    const optimisticId = report.id;
     setProductionReportList((prev) => [report, ...prev]);
-    api
-      .post("/production/submit-lhp", { report })
-      .then((res) => {
-        const serverReport = (res?.data?.report || report) as ProductionReport;
-        const serverWorkOrder = res?.data?.workOrder as WorkOrder | undefined;
-        const serverStockOut = res?.data?.stockOut as StockOut | null | undefined;
-        const serverStockMovements = Array.isArray(res?.data?.stockMovements)
-          ? (res.data.stockMovements as StockMovement[])
-          : [];
-        const serverStockItems = Array.isArray(res?.data?.stockItems)
-          ? (res.data.stockItems as StockItem[])
-          : [];
+    try {
+      const res = await api.post("/production/submit-lhp", { report });
+      const serverReport = (res?.data?.report || report) as ProductionReport;
+      const serverWorkOrder = res?.data?.workOrder as WorkOrder | undefined;
+      const serverStockOut = res?.data?.stockOut as StockOut | null | undefined;
+      const serverStockMovements = Array.isArray(res?.data?.stockMovements)
+        ? (res.data.stockMovements as StockMovement[])
+        : [];
+      const serverStockItems = Array.isArray(res?.data?.stockItems)
+        ? (res.data.stockItems as StockItem[])
+        : [];
 
-        setProductionReportList((prev) => {
-          const filtered = prev.filter((item) => item.id !== serverReport.id);
-          return [serverReport, ...filtered];
-        });
-
-        if (serverWorkOrder?.id) {
-          setWorkOrderList((prev) =>
-            prev.map((item) => (item.id === serverWorkOrder.id ? serverWorkOrder : item))
-          );
-        }
-
-        if (serverStockOut?.id) {
-          setStockOutList((prev) => {
-            const filtered = prev.filter((item) => item.id !== serverStockOut.id);
-            return [serverStockOut, ...filtered];
-          });
-        }
-
-        if (serverStockMovements.length) {
-          setStockMovementList((prev) => [...serverStockMovements, ...prev]);
-        }
-
-        if (serverStockItems.length) {
-          setStockItemList((prev) => {
-            const byId = new Map(prev.map((item) => [item.id, item]));
-            for (const item of serverStockItems) {
-              if (item?.id) byId.set(item.id, item);
-            }
-            return Array.from(byId.values());
-          });
-        }
-      })
-      .catch((err) => {
-        console.error("Failed to submit LHP transaction:", err);
-        setProductionReportList((prev) => prev.filter((item) => item.id !== report.id));
-        toast.error(err?.response?.data?.error || "Gagal submit LHP (transaction rollback)");
+      setProductionReportList((prev) => {
+        const filtered = prev.filter((item) => item.id !== optimisticId);
+        return [serverReport, ...filtered];
       });
+
+      if (serverWorkOrder?.id) {
+        setWorkOrderList((prev) =>
+          prev.map((item) => (item.id === serverWorkOrder.id ? serverWorkOrder : item))
+        );
+      }
+
+      if (serverStockOut?.id) {
+        setStockOutList((prev) => {
+          const filtered = prev.filter((item) => item.id !== serverStockOut.id);
+          return [serverStockOut, ...filtered];
+        });
+      }
+
+      if (serverStockMovements.length) {
+        setStockMovementList((prev) => [...serverStockMovements, ...prev]);
+      }
+
+      if (serverStockItems.length) {
+        setStockItemList((prev) => {
+          const byId = new Map(prev.map((item) => [item.id, item]));
+          for (const item of serverStockItems) {
+            if (item?.id) byId.set(item.id, item);
+          }
+          return Array.from(byId.values());
+        });
+      }
+
+      return true;
+    } catch (err: any) {
+      console.error("Failed to submit LHP transaction:", err);
+      setProductionReportList((prev) => prev.filter((item) => item.id !== optimisticId));
+      toast.error(err?.response?.data?.error || "Gagal submit LHP (transaction rollback)");
+      return false;
+    }
   };
 
   /**

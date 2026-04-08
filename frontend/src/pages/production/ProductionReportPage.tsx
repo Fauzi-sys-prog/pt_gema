@@ -6,6 +6,9 @@ import api from '../../services/api';
 import { ImageWithFallback } from '../../components/figma/ImageWithFallback';
 import { normalizeEntityRows } from '../../utils/normalizeEntityRows';
 
+const MANUAL_LHP_PROJECT_ID = 'PRJ-STOCK-UMUM';
+const MANUAL_LHP_PROJECT_NAME = 'STOK UMUM INTERNAL';
+
 export default function ProductionReportPage() {
   const { 
     productionReportList, 
@@ -96,7 +99,13 @@ export default function ProductionReportPage() {
 
   const activeWorkOrders = effectiveWorkOrders.filter(wo => wo.status === 'In Progress' || wo.status === 'QC');
 
-  const [newReport, setNewReport] = useState<Partial<ProductionReport & { woId?: string, selectedItem?: string }>>({
+  const [newReport, setNewReport] = useState<Partial<ProductionReport & {
+    woId?: string;
+    selectedItem?: string;
+    selectedItemCode?: string;
+    selectedItemName?: string;
+    machineId?: string;
+  }>>({
     tanggal: new Date().toISOString().split('T')[0],
     shift: '1',
     workshop: 'Gema Teknik Workshop',
@@ -213,6 +222,8 @@ export default function ProductionReportPage() {
         ...newReport,
         woId: wo.id,
         selectedItem: '', // Reset item selection when WO changes
+        selectedItemCode: '',
+        selectedItemName: '',
         activity: `Produksi ${wo.itemToProduce} (${wo.woNumber})`,
         unit: wo.bom?.[0]?.unit || 'Unit'
       });
@@ -221,6 +232,8 @@ export default function ProductionReportPage() {
         ...newReport,
         woId: undefined,
         selectedItem: '',
+        selectedItemCode: '',
+        selectedItemName: '',
         activity: '',
         unit: 'Pcs'
       });
@@ -245,6 +258,8 @@ export default function ProductionReportPage() {
       setNewReport({
         ...newReport,
         selectedItem: normalizedValue,
+        selectedItemCode: selectedOption?.code || normalizedValue,
+        selectedItemName: itemLabel,
         unit: bomItem?.unit || selectedOption?.unit || (normalizedValue ? 'Pcs' : 'Unit'),
         activity: normalizedValue
           ? `Pengerjaan ${itemLabel} untuk ${wo.itemToProduce} (${wo.woNumber})`
@@ -254,19 +269,26 @@ export default function ProductionReportPage() {
       setNewReport({
         ...newReport,
         selectedItem: normalizedValue,
+        selectedItemCode: selectedOption?.code || normalizedValue,
+        selectedItemName: itemLabel,
         unit: selectedOption?.unit || (normalizedValue ? 'Pcs' : 'Unit'),
         activity: normalizedValue ? `Pengerjaan ${itemLabel}` : ''
       });
     }
   };
 
-  const handleAddReport = () => {
+  const handleAddReport = async () => {
     if (!newReport.workerName || !newReport.activity || !newReport.outputQty) {
       toast.error('Mohon lengkapi data teknisi, aktivitas, dan qty');
       return;
     }
 
     const selectedWO = effectiveWorkOrders.find(w => w.id === newReport.woId);
+    const isManualMode = !selectedWO;
+    if (isManualMode && !newReport.selectedItemCode && !newReport.selectedItem) {
+      toast.error('Pilih item gudang untuk LHP manual.');
+      return;
+    }
 
     const report: ProductionReport = {
       id: `lhp-${Date.now()}`,
@@ -283,7 +305,12 @@ export default function ProductionReportPage() {
       remarks: newReport.remarks || 'Selesai',
       photoUrl: newReport.photoUrl,
       photoAssetId: newReport.photoAssetId,
-      woNumber: selectedWO?.woNumber
+      woNumber: selectedWO?.woNumber,
+      manualMode: isManualMode,
+      projectId: selectedWO?.projectId || (isManualMode ? MANUAL_LHP_PROJECT_ID : undefined),
+      projectName: selectedWO?.projectName || (isManualMode ? MANUAL_LHP_PROJECT_NAME : undefined),
+      selectedItemCode: newReport.selectedItemCode,
+      selectedItemName: newReport.selectedItemName,
     };
 
     // We pass the WO number in a way the AppContext can parse if needed, 
@@ -300,11 +327,16 @@ export default function ProductionReportPage() {
     };
 
     // Use centralized logic: addProductionReport now handles handleProductionOutput internally
-    addProductionReport(finalReport);
-    
+    const ok = await addProductionReport(finalReport);
+    if (!ok) return;
+
     setShowAddModal(false);
     resetForm();
-    toast.success('LHP berhasil disimpan. Stok bahan baku telah dipotong otomatis dan progress diperbarui!');
+    toast.success(
+      isManualMode
+        ? 'LHP manual berhasil disimpan. Stok item gudang sudah diperbarui!'
+        : 'LHP berhasil disimpan. Stok bahan baku telah dipotong otomatis dan progress diperbarui!'
+    );
   };
 
   const resetForm = () => {
@@ -314,7 +346,10 @@ export default function ProductionReportPage() {
       workshop: 'Gema Teknik Workshop',
       unit: 'Pcs',
       startTime: '08:00',
-      endTime: '17:00'
+      endTime: '17:00',
+      selectedItem: '',
+      selectedItemCode: '',
+      selectedItemName: '',
     });
   };
 
@@ -327,11 +362,7 @@ export default function ProductionReportPage() {
     }
 
     const selectedWO = effectiveWorkOrders.find((wo) => wo.id === newReport.woId);
-    const projectId = selectedWO?.projectId;
-    if (!projectId) {
-      toast.error('Pilih Work Order dulu sebelum upload foto LHP.');
-      return;
-    }
+    const projectId = selectedWO?.projectId || MANUAL_LHP_PROJECT_ID;
 
     const reader = new FileReader();
     reader.onload = async () => {
@@ -645,7 +676,9 @@ export default function ProductionReportPage() {
             <div className="p-8 border-b border-slate-100 flex items-center justify-between sticky top-0 bg-white">
               <div>
                 <h3 className="text-xl font-black text-slate-900 uppercase italic tracking-tight">Buat Laporan Harian (LHP)</h3>
-                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1 italic">Input Progress Pekerjaan Workshop</p>
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1 italic">
+                  {newReport.woId ? 'Input Progress Pekerjaan Workshop' : 'Mode manual stok tanpa BOM / project'}
+                </p>
               </div>
               <div className="flex items-center gap-3">
                 <button 
@@ -755,14 +788,19 @@ export default function ProductionReportPage() {
                     value={newReport.selectedItem || ''}
                     onChange={(e) => handleItemSelect(e.target.value)}
                   >
-                    <option value="">-- Pilih Item Gudang --</option>
-                    <option value="auto">-- Auto-Deduct All BOM (opsional) --</option>
+                    <option value="">{newReport.woId ? '-- Pilih Item Gudang --' : '-- Pilih Item Stok Manual --'}</option>
+                    {newReport.woId && <option value="auto">-- Auto-Deduct All BOM (opsional) --</option>}
                     {selectableWarehouseItems.map((item) => (
                       <option key={item.id} value={item.value} disabled={item.disabled}>
                         {item.name} ({item.code || '-'} • Stok {item.stock} {item.unit}{item.disabled ? ' • HABIS' : ''})
                       </option>
                     ))}
                   </select>
+                  {!newReport.woId && (
+                    <p className="text-[10px] font-bold text-amber-600 uppercase tracking-wide">
+                      Manual mode: qty output akan dipakai sebagai pengeluaran stok item terpilih.
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -892,7 +930,7 @@ export default function ProductionReportPage() {
                 className="flex-1 py-4 bg-rose-600 text-white rounded-2xl text-xs font-black uppercase hover:bg-rose-700 shadow-xl shadow-rose-200 transition-all flex items-center justify-center gap-2"
               >
                 <ClipboardList size={16} />
-                SIMPAN & UPDATE PROGRESS
+                {newReport.woId ? 'SIMPAN & UPDATE PROGRESS' : 'SIMPAN LHP MANUAL'}
               </button>
             </div>
           </div>

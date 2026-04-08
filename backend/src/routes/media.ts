@@ -6,6 +6,10 @@ import { authenticate } from "../middlewares/auth";
 import { prisma } from "../prisma";
 import { AuthRequest } from "../types/auth";
 import { sendError } from "../utils/http";
+import {
+  ensureManualLhpProject,
+  MANUAL_LHP_PROJECT_ID,
+} from "../utils/manualLhpProject";
 import { storeImageDataUrl } from "../utils/mediaStorage";
 
 export const mediaRouter = Router();
@@ -73,6 +77,10 @@ mediaRouter.post("/media/qc-drawings", authenticate, async (req: AuthRequest, re
   }
 
   const { projectId, workOrderId, fileName, dataUrl } = parsed.data;
+
+  if (projectId === MANUAL_LHP_PROJECT_ID) {
+    await ensureManualLhpProject(prisma);
+  }
 
   const project = await prisma.projectRecord.findUnique({
     where: { id: projectId },

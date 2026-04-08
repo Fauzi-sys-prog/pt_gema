@@ -1980,6 +1980,47 @@ function invoiceExportHtml(payload: Record<string, unknown>): string {
   return `${companyLetterheadHtml("Invoice")} ${meta} ${itemsTable} ${companyFooterHtml(signer)}`;
 }
 
+function vendorInvoiceExportHtml(payload: Record<string, unknown>): string {
+  const invoiceNumber = payload.noInvoiceVendor || payload.noInvoice || payload.number;
+  const supplierName = payload.supplier || payload.vendorName || payload.supplierName;
+  const dueDate = payload.jatuhTempo || payload.dueDate;
+  const signer = payload.createdBy || payload.approvedBy || supplierName;
+  const summaryRows = [
+    {
+      supplier: toText(supplierName, "-"),
+      noPO: toText(payload.noPO, "-"),
+      totalAmount: toNum(payload.totalAmount),
+      paidAmount: toNum(payload.paidAmount),
+      outstandingAmount: Math.max(
+        0,
+        toNum(payload.outstandingAmount) || toNum(payload.totalAmount) - toNum(payload.paidAmount)
+      ),
+      ppn: toNum(payload.ppn),
+      status: toText(payload.status, "-"),
+    },
+  ];
+  const meta = keyValueTableHtml("Informasi Invoice Vendor", [
+    { label: "ID", key: "id", value: payload.id },
+    { label: "No Invoice Vendor", key: "noInvoiceVendor", value: invoiceNumber },
+    { label: "Supplier", key: "supplier", value: supplierName },
+    { label: "Tanggal", key: "tanggal", value: payload.tanggal },
+    { label: "Jatuh Tempo", key: "jatuhTempo", value: dueDate },
+    { label: "No PO", key: "noPO", value: payload.noPO },
+    { label: "Project", key: "projectId", value: payload.projectName || payload.projectId },
+    { label: "Status", key: "status", value: payload.status },
+  ]);
+  const summaryTable = listTable("Ringkasan Kewajiban Vendor", summaryRows, [
+    "supplier",
+    "noPO",
+    "totalAmount",
+    "paidAmount",
+    "outstandingAmount",
+    "ppn",
+    "status",
+  ]);
+  return `${companyLetterheadHtml("Invoice Vendor")} ${meta} ${summaryTable} ${companyFooterHtml(signer)}`;
+}
+
 function suratJalanExportHtml(payload: Record<string, unknown>): string {
   const items = asRecords(payload.items);
   const number = toText(payload.noSurat || payload.noSuratJalan || payload.nomor || payload.id, "-");
@@ -3251,6 +3292,18 @@ exportsRouter.get("/exports/customer-invoices/:id/excel", authenticate, async (r
   const payload = await getAppEntityPayload("customer-invoices", req.params.id);
   if (!payload) return res.status(404).json({ error: "Customer invoice not found" });
   return sendExcel(res, `customer-invoice-${req.params.id}`, invoiceExportHtml(payload));
+});
+
+exportsRouter.get("/exports/vendor-invoices/:id/word", authenticate, async (req: AuthRequest, res: Response) => {
+  const payload = await getAppEntityPayload("vendor-invoices", req.params.id);
+  if (!payload) return res.status(404).json({ error: "Vendor invoice not found" });
+  return sendWord(res, `vendor-invoice-${req.params.id}`, vendorInvoiceExportHtml(payload));
+});
+
+exportsRouter.get("/exports/vendor-invoices/:id/excel", authenticate, async (req: AuthRequest, res: Response) => {
+  const payload = await getAppEntityPayload("vendor-invoices", req.params.id);
+  if (!payload) return res.status(404).json({ error: "Vendor invoice not found" });
+  return sendExcel(res, `vendor-invoice-${req.params.id}`, vendorInvoiceExportHtml(payload));
 });
 
 exportsRouter.get("/exports/surat-jalan/:id/word", authenticate, async (req: AuthRequest, res: Response) => {

@@ -29,6 +29,7 @@ export default function AccountsPayablePage() {
   const [selectedInvoice, setSelectedInvoice] = useState<VendorInvoice | null>(null);
   const [showPayModal, setShowPayModal] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [exportingInvoiceId, setExportingInvoiceId] = useState('');
   const [paymentAmount, setPaymentAmount] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [summaryLoading, setSummaryLoading] = useState(false);
@@ -250,6 +251,46 @@ export default function AccountsPayablePage() {
     toast.info(`${inv.noInvoiceVendor} • ${inv.supplier} • ${formatIDR(inv.totalAmount - inv.paidAmount)}`);
   };
 
+  const handleExportInvoice = async (invoice: VendorInvoice, format: 'word' | 'excel') => {
+    const invoiceId = String(invoice?.id || '').trim();
+    if (!invoiceId) {
+      toast.error('ID invoice vendor tidak valid');
+      return;
+    }
+
+    try {
+      const exportKey = `${invoiceId}:${format}`;
+      setExportingInvoiceId(exportKey);
+      const response = await api.get(`/exports/vendor-invoices/${invoiceId}/${format}`, {
+        responseType: 'blob',
+      });
+      const blob = new Blob([response.data], {
+        type: format === 'excel' ? 'application/vnd.ms-excel' : 'application/msword',
+      });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      const safeNo = String(invoice.noInvoiceVendor || invoiceId).replace(/[^a-zA-Z0-9-_]+/g, '_');
+      link.href = url;
+      link.download = `${safeNo}.${format === 'excel' ? 'xls' : 'doc'}`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      addAuditLog({
+        action: 'VENDOR_INVOICE_EXPORTED',
+        module: 'Finance',
+        details: `Export invoice vendor ${invoice.noInvoiceVendor} ke ${format.toUpperCase()}`,
+        status: 'Success',
+      });
+      toast.success(`Export invoice vendor ${format === 'excel' ? 'Excel' : 'Word'} berhasil`);
+    } catch (error) {
+      console.error('Failed to export vendor invoice:', error);
+      toast.error(`Gagal export invoice vendor ${format === 'excel' ? 'Excel' : 'Word'}`);
+    } finally {
+      setExportingInvoiceId('');
+    }
+  };
+
   return (
     <div className="p-3 sm:p-6 space-y-4 sm:space-y-8 bg-[#F8FAFC] min-h-screen">
       {/* Header */}
@@ -413,6 +454,18 @@ export default function AccountsPayablePage() {
                     <div className="flex justify-end gap-2">
                       <button onClick={() => handleQuickView(inv)} className="p-3 bg-white border border-slate-100 text-slate-400 hover:text-blue-600 hover:border-blue-200 rounded-xl transition-all shadow-sm">
                         <Eye size={16} />
+                      </button>
+                      <button
+                        onClick={() => handleExportInvoice(inv, 'word')}
+                        className="px-4 py-3 bg-white border border-slate-100 text-slate-500 hover:text-emerald-600 hover:border-emerald-200 rounded-xl transition-all shadow-sm text-[10px] font-black uppercase tracking-widest"
+                      >
+                        {exportingInvoiceId === `${inv.id}:word` ? 'Word...' : 'Word'}
+                      </button>
+                      <button
+                        onClick={() => handleExportInvoice(inv, 'excel')}
+                        className="px-4 py-3 bg-white border border-slate-100 text-slate-500 hover:text-emerald-600 hover:border-emerald-200 rounded-xl transition-all shadow-sm text-[10px] font-black uppercase tracking-widest"
+                      >
+                        {exportingInvoiceId === `${inv.id}:excel` ? 'XLS...' : 'XLS'}
                       </button>
                       {inv.status !== 'Paid' && (
                         <button 
