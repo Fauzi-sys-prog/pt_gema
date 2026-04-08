@@ -163,14 +163,13 @@ export async function upsertProjectFromQuotationForApprovalSync(params: {
     select: projectDashboardSelect,
   });
 
-  if (!existing && status === "Rejected") return;
+  if (status !== "Approved") return;
 
   const projectId = existing?.id ?? toProjectIdFromQuotation(quotationId);
   const existingPayload = existing ? mapProjectDashboardPayload(existing) : {};
   const existingApproval = String(existingPayload.approvalStatus || "Pending").toUpperCase();
   const isProjectFinalApproved = existingApproval === "APPROVED";
 
-  const mappedProjectStatus = status === "Rejected" ? "On Hold" : "Planning";
   const commercialTerms = asRecord(quotationPayload.commercialTerms);
 
   const nextPayload = {
@@ -181,7 +180,7 @@ export async function upsertProjectFromQuotationForApprovalSync(params: {
     namaProject: perihal || readString(existingPayload, "namaProject") || `Project dari ${quotationNo || quotationId}`,
     customer: perusahaan || kepada || readString(existingPayload, "customer") || "-",
     nilaiKontrak: grandTotal || readNumber(existingPayload, "nilaiKontrak"),
-    status: isProjectFinalApproved ? (readString(existingPayload, "status") || mappedProjectStatus) : mappedProjectStatus,
+    status: isProjectFinalApproved ? (readString(existingPayload, "status") || "Planning") : "Planning",
     progress: readNumber(existingPayload, "progress"),
     approvalStatus: isProjectFinalApproved ? (readString(existingPayload, "approvalStatus") || "Approved") : "Pending",
     approvedBy: isProjectFinalApproved ? readString(existingPayload, "approvedBy") : null,

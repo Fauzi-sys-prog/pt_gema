@@ -168,7 +168,7 @@ test("upsertProjectFromQuotationForApprovalSync skips rejected quotation when pr
   }
 });
 
-test("upsertProjectFromQuotationForApprovalSync creates synchronized project payload from quotation", async () => {
+test("upsertProjectFromQuotationForApprovalSync skips non-approved quotation before project baseline is final", async () => {
   const mock = mockProjectWorkflowDeps();
 
   try {
@@ -176,6 +176,25 @@ test("upsertProjectFromQuotationForApprovalSync creates synchronized project pay
       quotationId: "Q-2026/001",
       quotationPayload: {
         status: "SENT",
+        noPenawaran: "Q-2026/001",
+      },
+    });
+
+    assert.equal(mock.appEntityUpserts.length, 0);
+    assert.equal(mock.projectUpserts.length, 0);
+  } finally {
+    mock.restore();
+  }
+});
+
+test("upsertProjectFromQuotationForApprovalSync creates synchronized project payload from approved quotation", async () => {
+  const mock = mockProjectWorkflowDeps();
+
+  try {
+    await upsertProjectFromQuotationForApprovalSync({
+      quotationId: "Q-2026/001",
+      quotationPayload: {
+        status: "APPROVED",
         noPenawaran: "Q-2026/001",
         perihal: "Instalasi Panel",
         perusahaan: "PT Customer",

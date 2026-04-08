@@ -774,7 +774,12 @@ export default function ProjectManagementPage() {
   const handleUnlockSelectedProject = async () => {
     if (!selectedProject) return;
     const reason =
-      window.prompt("Alasan unlock project (opsional)", "Perlu revisi approval") || "";
+      window.prompt("Alasan unlock project (minimal 5 karakter)", "Perlu revisi approval") || "";
+    if (!reason.trim()) return;
+    if (reason.trim().length < 5) {
+      toast.error("Alasan unlock minimal 5 karakter.");
+      return;
+    }
     if (
       !window.confirm(
         `Unlock project ${selectedProject.kodeProject || selectedProject.namaProject} ke status Pending?`
@@ -783,7 +788,7 @@ export default function ProjectManagementPage() {
       return;
     }
     try {
-      await unlockProject(selectedProject.id, reason.trim() || undefined);
+      await unlockProject(selectedProject.id, reason.trim());
       toast.success("Project berhasil di-unlock ke Pending.");
     } catch {
       // Error toast already handled in AppContext.

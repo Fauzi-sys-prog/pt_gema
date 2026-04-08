@@ -930,8 +930,8 @@ export interface AppContextType {
 
   updatePO: (id: string, updates: Partial<PurchaseOrder>) => Promise<void>;
   approveProject: (id: string, ownerName: string) => Promise<void>;
-  rejectProject: (id: string, ownerName: string, reason?: string) => Promise<void>;
-  unlockProject: (id: string, reason?: string) => Promise<void>;
+  rejectProject: (id: string, ownerName: string, reason: string) => Promise<void>;
+  unlockProject: (id: string, reason: string) => Promise<void>;
   relockProject: (id: string) => Promise<void>;
 
   updateMaterialRequest: (id: string, updates: Partial<MaterialRequest>) => Promise<void>;
@@ -2374,7 +2374,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     );
 
     try {
-      const res = await api.patch(`/projects/${id}/approval`, { action: "REJECT", reason: String(reason || "").trim() });
+      const res = await api.patch(`/projects/${id}/approval`, { action: "REJECT", reason: String(reason).trim() });
       if (res?.data) {
         setProjectList((prev) => prev.map((p) => (p.id === id ? (res.data as Project) : p)));
       }
@@ -2412,7 +2412,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     );
 
     try {
-      const res = await api.post(`/projects/${id}/unlock`, { reason: reason || "" });
+      const res = await api.post(`/projects/${id}/unlock`, { reason: String(reason).trim() });
       if (res?.data) {
         setProjectList((prev) => prev.map((p) => (p.id === id ? (res.data as Project) : p)));
       }

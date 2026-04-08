@@ -818,6 +818,29 @@ async function ensureProjectCanBeApproved(
     };
   }
 
+  const boqRows = Array.isArray(payload.boq) ? payload.boq.filter((row) => Object.keys(asRecord(row)).length > 0) : [];
+  if (boqRows.length === 0) {
+    return { ok: false, error: "Project belum punya BOQ final. Isi minimal 1 item BOQ sebelum approve." };
+  }
+
+  const contractValue =
+    readNumber(payload, "nilaiKontrak") ??
+    readNumber(payload, "contractValue") ??
+    readNumber(payload, "totalContractValue") ??
+    0;
+  if (contractValue <= 0) {
+    return { ok: false, error: "Nilai kontrak project harus lebih dari 0 sebelum approve." };
+  }
+
+  const customerName =
+    readString(payload, "customer") ||
+    readString(payload, "customerName") ||
+    readString(quotationPayload, "perusahaan") ||
+    readString(quotationPayload, "kepada");
+  if (!customerName) {
+    return { ok: false, error: "Customer project belum valid. Lengkapi customer sebelum approve." };
+  }
+
   return { ok: true };
 }
 
@@ -1569,6 +1592,13 @@ projectsRouter.post(
 
   const { id } = req.params;
   const reason = String((req.body as Record<string, unknown>)?.reason || "").trim();
+  if (reason.length < 5) {
+    return sendError(res, 400, {
+      code: "UNLOCK_REASON_REQUIRED",
+      message: "Unlock membutuhkan alasan minimal 5 karakter",
+      legacyError: "Unlock membutuhkan alasan minimal 5 karakter",
+    });
+  }
 
   try {
     const actor = await resolveActorSnapshot(req.user?.id, req.user?.role);

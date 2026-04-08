@@ -149,7 +149,7 @@ test("executeFinanceApprovalAction rejects invoice verify for unauthorized role"
   );
 });
 
-test("executeFinanceApprovalAction processes quotation send and triggers sync + logs", async () => {
+test("executeFinanceApprovalAction processes quotation send without creating project sync", async () => {
   const { deps, calls } = createDeps();
 
   const result = await executeFinanceApprovalAction({
@@ -171,7 +171,7 @@ test("executeFinanceApprovalAction processes quotation send and triggers sync + 
 
   assert.equal(result.status, "SENT");
   assert.equal(calls.quotationUpdates.length, 1);
-  assert.equal(calls.syncs.length, 1);
+  assert.equal(calls.syncs.length, 0);
   assert.equal(calls.quotationLogs.length, 1);
   assert.deepEqual(calls.auditLogs[0], {
     action: "QUOTATION_SEND",
@@ -179,6 +179,70 @@ test("executeFinanceApprovalAction processes quotation send and triggers sync + 
     documentId: "quot-1",
     metadata: undefined,
   });
+});
+
+test("executeFinanceApprovalAction processes quotation approve and triggers project sync", async () => {
+  const { deps, calls } = createDeps();
+  deps.findQuotation = async (quotationId: string) => ({
+    id: quotationId,
+    status: "Sent",
+    payload: { id: quotationId, status: "Sent" },
+  });
+
+  const result = await executeFinanceApprovalAction({
+    input: {
+      documentType: "QUOTATION",
+      action: "APPROVE",
+      documentId: "quot-1",
+      reason: "",
+    },
+    role: Role.SPV,
+    userId: "user-spv",
+    actor: {
+      actorName: "Aji",
+      actorRole: Role.SPV,
+      actorUserId: "user-spv",
+    },
+    ...deps,
+  });
+
+  assert.equal(result.status, "APPROVED");
+  assert.equal(calls.quotationUpdates.length, 1);
+  assert.equal(calls.syncs.length, 1);
+  assert.equal(calls.quotationLogs.length, 1);
+});
+
+test("executeFinanceApprovalAction requires reason when rejecting quotation", async () => {
+  const { deps } = createDeps();
+  deps.findQuotation = async (quotationId: string) => ({
+    id: quotationId,
+    status: "Sent",
+    payload: { id: quotationId, status: "Sent" },
+  });
+
+  await assert.rejects(
+    () =>
+      executeFinanceApprovalAction({
+        input: {
+          documentType: "QUOTATION",
+          action: "REJECT",
+          documentId: "quot-1",
+          reason: "no",
+        },
+        role: Role.SPV,
+        userId: "user-spv",
+        actor: {
+          actorName: "Aji",
+          actorRole: Role.SPV,
+          actorUserId: "user-spv",
+        },
+        ...deps,
+      }),
+    (error) =>
+      error instanceof FinanceApprovalActionError &&
+      error.status === 400 &&
+      error.code === "REJECT_REASON_REQUIRED",
+  );
 });
 
 test("executeFinanceApprovalAction rejects material request issue for finance role", async () => {

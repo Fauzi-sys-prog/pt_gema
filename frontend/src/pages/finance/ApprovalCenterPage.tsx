@@ -433,7 +433,19 @@ export function ApprovalCenterPage({ mode = "finance" }: ApprovalCenterPageProps
   };
 
   const handleRejectQuotation = async (q: ApprovalQuotationItem) => {
-    await executeApprovalAction("QUOTATION", q.id, "REJECT", `Quotation ${q.noPenawaran || q.id} ditolak.`);
+    const reason = window.prompt("Alasan reject quotation (minimal 5 karakter)", "") || "";
+    if (!reason.trim()) return;
+    if (reason.trim().length < 5) {
+      toast.error("Alasan reject quotation minimal 5 karakter.");
+      return;
+    }
+    await executeApprovalAction(
+      "QUOTATION",
+      q.id,
+      "REJECT",
+      `Quotation ${q.noPenawaran || q.id} ditolak.`,
+      reason.trim(),
+    );
     addAuditLog({
       action: 'QUOTATION_REJECTED',
       module: 'Sales',

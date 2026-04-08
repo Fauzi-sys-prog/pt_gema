@@ -84,6 +84,16 @@ function approvalError(status: number, code: string, message: string, legacyErro
   throw new FinanceApprovalActionError(status, code, message, legacyError);
 }
 
+function ensureReasonProvided(
+  reason: string,
+  options: { code: string; message: string; minLength?: number },
+): void {
+  const { code, message, minLength = 5 } = options;
+  if (reason.trim().length < minLength) {
+    approvalError(400, code, message, message);
+  }
+}
+
 export function parseFinanceApprovalActionInput(rawBody: unknown): FinanceApprovalActionInput {
   if (!rawBody || typeof rawBody !== "object" || Array.isArray(rawBody)) {
     approvalError(400, "INVALID_PAYLOAD", "Invalid payload");
@@ -244,10 +254,6 @@ export async function executeFinanceApprovalAction(
       });
 
       await updateQuotation(current.id, "SENT", nextPayload);
-      await syncProjectFromQuotation({
-        quotationId: current.id,
-        quotationPayload: nextPayload,
-      });
       await writeQuotationApprovalLog({
         quotationId: current.id,
         action: "SEND",
@@ -280,6 +286,10 @@ export async function executeFinanceApprovalAction(
         );
       }
     } else {
+      ensureReasonProvided(reason, {
+        code: "REJECT_REASON_REQUIRED",
+        message: "Reject quotation membutuhkan alasan minimal 5 karakter",
+      });
       if ((currentStatus === "SENT" || currentStatus === "REVIEW") && canManageApproval) {
         nextStatus = "REJECTED";
       } else {
@@ -311,10 +321,12 @@ export async function executeFinanceApprovalAction(
     });
 
     await updateQuotation(current.id, nextStatus, nextPayload);
-    await syncProjectFromQuotation({
-      quotationId: current.id,
-      quotationPayload: nextPayload,
-    });
+    if (action === "APPROVE") {
+      await syncProjectFromQuotation({
+        quotationId: current.id,
+        quotationPayload: nextPayload,
+      });
+    }
     await writeQuotationApprovalLog({
       quotationId: current.id,
       action,
