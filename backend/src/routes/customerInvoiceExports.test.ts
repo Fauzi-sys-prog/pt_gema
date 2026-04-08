@@ -135,6 +135,8 @@ test("GET /exports/customer-invoices/:id/word returns customer invoice document"
       assert.match(body, /PT BW Water/i);
       assert.match(body, /Diskon/i);
       assert.match(body, /Quotation QUO-001/i);
+      assert.match(body, /Payment Details/i);
+      assert.match(body, /Grand Total/i);
     });
   } finally {
     mock.restore();

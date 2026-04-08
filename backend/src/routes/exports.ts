@@ -1968,6 +1968,17 @@ type InvoiceDiscountContext = {
   discountSourceText: string;
 };
 
+type InvoiceDisplayItem = {
+  qty: number;
+  unit: string;
+  description: string;
+  grossUnitPrice: number;
+  grossAmount: number;
+  discountAmount: number;
+  netAmount: number;
+  groupLabel: string;
+};
+
 async function getInvoiceDiscountContext(
   payload: Record<string, unknown>,
 ): Promise<InvoiceDiscountContext | null> {
@@ -2041,44 +2052,298 @@ async function getInvoiceDiscountContext(
   );
 }
 
+function detectInvoiceGroupLabel(description: string, index: number): string {
+  const normalized = description.toLowerCase();
+  if (normalized.includes("material")) return "Material";
+  if (normalized.includes("jasa")) return "Jasa";
+  if (normalized.includes("dp")) return `DP ${index + 1}`;
+  return `Item ${index + 1}`;
+}
+
+function buildInvoiceDisplayItems(
+  payload: Record<string, unknown>,
+  discountContext: InvoiceDiscountContext | null,
+): InvoiceDisplayItem[] {
+  const rawItems = asRecords(payload.items);
+  const normalizedItems = (rawItems.length
+    ? rawItems
+    : [
+        {
+          deskripsi: payload.perihal || "Invoice Customer",
+          qty: 1,
+          unit: "Lot",
+          jumlah: payload.subtotal,
+          total: payload.subtotal,
+        },
+      ]
+  ).map((item, index) => {
+    const qty = Math.max(0, toNum(item.qty)) || 1;
+    const netAmount = Math.max(0, toNum(item.jumlah) || toNum(item.total));
+    return {
+      qty,
+      unit: toText(item.unit, "Lot"),
+      description: toText(item.deskripsi, `Item ${index + 1}`),
+      netAmount,
+      groupLabel: detectInvoiceGroupLabel(toText(item.deskripsi, `Item ${index + 1}`), index),
+    };
+  });
+
+  const totalNetAmount =
+    normalizedItems.reduce((sum, item) => sum + item.netAmount, 0) || Math.max(0, toNum(payload.subtotal));
+  const totalDiscount = Math.round(Math.max(0, discountContext?.discountAmount || 0));
+  let remainingDiscount = totalDiscount;
+
+  return normalizedItems.map((item, index) => {
+    let allocatedDiscount = 0;
+    if (remainingDiscount > 0 && totalNetAmount > 0) {
+      if (index === normalizedItems.length - 1) {
+        allocatedDiscount = remainingDiscount;
+      } else {
+        allocatedDiscount = Math.round(totalDiscount * (item.netAmount / totalNetAmount));
+        allocatedDiscount = Math.min(allocatedDiscount, remainingDiscount);
+      }
+      remainingDiscount -= allocatedDiscount;
+    }
+
+    const grossAmount = item.netAmount + allocatedDiscount;
+    const grossUnitPrice = item.qty > 0 ? grossAmount / item.qty : grossAmount;
+
+    return {
+      qty: item.qty,
+      unit: item.unit,
+      description: item.description,
+      grossUnitPrice,
+      grossAmount,
+      discountAmount: allocatedDiscount,
+      netAmount: item.netAmount,
+      groupLabel: item.groupLabel,
+    };
+  });
+}
+
 async function invoiceExportHtml(payload: Record<string, unknown>): Promise<string> {
-  const items = asRecords(payload.items);
   const signer = payload.createdBy || payload.approvedBy;
   const discountContext = await getInvoiceDiscountContext(payload);
-  const metaRows: Array<{ label: string; key: string; value: unknown }> = [
-    { label: "ID", key: "id", value: payload.id },
-    { label: "No Invoice", key: "noInvoice", value: payload.noInvoice },
-    { label: "Tanggal", key: "tanggal", value: payload.tanggal },
-    { label: "Jatuh Tempo", key: "jatuhTempo", value: payload.jatuhTempo },
-    { label: "Customer", key: "customer", value: payload.customer },
-    { label: "Alamat", key: "alamat", value: payload.alamat },
-    { label: "No PO", key: "noPO", value: payload.noPO },
-    { label: "Status", key: "status", value: payload.status },
+  const displayItems = buildInvoiceDisplayItems(payload, discountContext);
+  const itemRows = displayItems
+    .map((item) => {
+      const discountRow = item.discountAmount
+        ? `
+            <tr class="invoice-row invoice-row-discount">
+              <td></td>
+              <td><span class="sub-row-label">Diskon</span></td>
+              <td></td>
+              <td class="align-right">Rp ${idr(item.discountAmount)}</td>
+            </tr>
+          `
+        : "";
+
+      return `
+        <tr class="invoice-row">
+          <td class="align-center">${escapeHtml(
+            `${item.qty.toLocaleString("id-ID")} ${item.unit}`.trim(),
+          )}</td>
+          <td>
+            <div class="description-title">${escapeHtml(item.description)}</div>
+          </td>
+          <td class="align-right">Rp ${idr(item.grossUnitPrice)}</td>
+          <td class="align-right">Rp ${idr(item.grossAmount)}</td>
+        </tr>
+        ${discountRow}
+        <tr class="invoice-row invoice-row-total">
+          <td></td>
+          <td colspan="2"><span class="sub-row-label">Total ${escapeHtml(item.groupLabel)}</span></td>
+          <td class="align-right">Rp ${idr(item.netAmount)}</td>
+        </tr>
+      `;
+    })
+    .join("");
+
+  const discountLabel = discountContext
+    ? `Diskon (${discountContext.discountPercent.toLocaleString("id-ID", { maximumFractionDigits: 2 })}%)`
+    : "Diskon";
+  const subtotalBeforeDiscount = discountContext?.subtotalBeforeDiscount || Math.max(0, toNum(payload.subtotal));
+  const invoiceDate = formatTanggalIndonesia(payload.tanggal);
+  const dueDate = formatTanggalIndonesia(payload.jatuhTempo || payload.dueDate);
+  const paymentDetails = [
+    "Bank Mandiri Cabang Bulak Kapal Bekasi",
+    `A/N ${COMPANY_NAME}`,
+    "No : 156-001-340-8283",
   ];
+  const customerName = toText(payload.customerName || payload.customer, "-");
+  const customerAddress = toText(payload.alamat, "-");
+  const customerUp = toText(payload.upPerson || payload.attention || payload.up, "-");
 
-  if (discountContext) {
-    metaRows.push(
-      { label: "Subtotal Sebelum Diskon", key: "subtotalSebelumDiskon", value: discountContext.subtotalBeforeDiscount },
-      {
-        label: `Diskon (${discountContext.discountPercent.toLocaleString("id-ID", { maximumFractionDigits: 2 })}%)`,
-        key: "discountAmount",
-        value: discountContext.discountAmount,
-      },
-      { label: "Subtotal / DPP Invoice", key: "subtotal", value: payload.subtotal },
-      { label: "Sumber Diskon", key: "discountSource", value: discountContext.discountSourceText },
-    );
-  } else {
-    metaRows.push({ label: "Subtotal", key: "subtotal", value: payload.subtotal });
-  }
+  return `
+    <style>
+      .invoice-sheet { font-family: Arial, sans-serif; color:#111; font-size:12px; }
+      .invoice-head { width:100%; border-collapse:collapse; margin-bottom:10px; }
+      .invoice-head td { vertical-align:top; }
+      .invoice-brand { width:66%; }
+      .invoice-brand-wrap { display:flex; gap:12px; align-items:flex-start; }
+      .invoice-logo-box { width:84px; height:58px; border:1.6px solid #111; display:flex; align-items:center; justify-content:center; background:#fff; }
+      .invoice-logo-box img { max-width:78px; max-height:52px; object-fit:contain; }
+      .invoice-brand-name { font-size:17px; font-weight:700; letter-spacing:.2px; }
+      .invoice-brand-tagline { font-size:10px; font-weight:700; letter-spacing:1px; margin-top:2px; }
+      .invoice-brand-copy { font-size:10.5px; line-height:1.35; margin-top:4px; }
+      .invoice-title-box { width:34%; text-align:center; }
+      .invoice-title { display:inline-block; padding:8px 24px; border:1px solid #c9ccd3; font-size:18px; font-weight:700; letter-spacing:.8px; }
+      .invoice-number { margin-top:8px; font-size:12px; font-weight:700; }
+      .invoice-divider { border-top:2px solid #111; margin:8px 0 10px; }
+      .invoice-meta-grid { width:100%; border-collapse:collapse; margin-bottom:14px; }
+      .invoice-meta-grid td { width:50%; vertical-align:top; }
+      .meta-box { border:1px solid #111; min-height:116px; }
+      .meta-box table { width:100%; border-collapse:collapse; font-size:12px; }
+      .meta-box td { padding:4px 8px; vertical-align:top; }
+      .meta-title { font-weight:700; text-transform:uppercase; letter-spacing:.4px; padding:8px; border-bottom:1px solid #111; }
+      .meta-line-label { width:108px; white-space:nowrap; }
+      .invoice-items { width:100%; border-collapse:collapse; border:1px solid #111; margin-bottom:14px; }
+      .invoice-items th, .invoice-items td { border:1px solid #111; padding:6px 8px; vertical-align:top; }
+      .invoice-items th { background:#fafafa; font-size:11px; letter-spacing:.6px; text-transform:uppercase; }
+      .invoice-row-discount td { padding-top:3px; padding-bottom:3px; }
+      .invoice-row-total td { font-weight:700; background:#fcfcfc; }
+      .description-title { font-weight:700; }
+      .sub-row-label { font-weight:700; color:#444; }
+      .align-right { text-align:right; }
+      .align-center { text-align:center; }
+      .invoice-bottom { width:100%; border-collapse:collapse; margin-top:4px; }
+      .invoice-bottom td { width:50%; vertical-align:top; }
+      .payment-box { border:1px solid #111; min-height:84px; padding:8px 10px; }
+      .payment-title { font-weight:700; margin-bottom:6px; }
+      .payment-line { font-size:12px; line-height:1.45; }
+      .summary-box { border:1px solid #111; border-collapse:collapse; width:100%; }
+      .summary-box td { border:1px solid #111; padding:6px 8px; font-size:12px; }
+      .summary-box .summary-label { width:68%; font-weight:700; }
+      .summary-box .grand-total td { font-weight:700; font-size:13px; }
+      .invoice-notes { margin-top:10px; font-size:10.5px; color:#333; }
+      .invoice-signature { margin-top:42px; text-align:right; }
+      .invoice-signature-title { font-weight:700; margin-bottom:52px; }
+      .invoice-signature-name { font-weight:700; }
+      .invoice-signature-source { font-size:10px; color:#444; margin-top:6px; }
+    </style>
+    <div class="invoice-sheet">
+      <table class="invoice-head">
+        <tr>
+          <td class="invoice-brand">
+            <div class="invoice-brand-wrap">
+              <div class="invoice-logo-box">
+                <img src="${COMPANY_LOGO_DATA_URI}" alt="Logo Gema Teknik" />
+              </div>
+              <div>
+                <div class="invoice-brand-name">${escapeHtml(COMPANY_NAME)}</div>
+                <div class="invoice-brand-tagline">${escapeHtml(COMPANY_TAGLINE)}</div>
+                <div class="invoice-brand-copy">
+                  ${escapeHtml(COMPANY_ADDRESS)}<br />
+                  ${escapeHtml(COMPANY_CONTACT)}
+                </div>
+              </div>
+            </div>
+          </td>
+          <td class="invoice-title-box">
+            <div class="invoice-title">INVOICE</div>
+            <div class="invoice-number">No : ${escapeHtml(toText(payload.noInvoice, "-"))}</div>
+          </td>
+        </tr>
+      </table>
 
-  metaRows.push(
-    { label: "PPN", key: "ppn", value: payload.ppn },
-    { label: "Total Bayar", key: "totalBayar", value: payload.totalBayar },
-  );
+      <div class="invoice-divider"></div>
 
-  const meta = keyValueTableHtml("Informasi Invoice", metaRows);
-  const itemsTable = listTable("Rincian Item", items, ["deskripsi", "qty", "unit", "hargaSatuan", "jumlah"]);
-  return `${companyLetterheadHtml("Invoice")} ${meta} ${itemsTable} ${companyFooterHtml(signer)}`;
+      <table class="invoice-meta-grid">
+        <tr>
+          <td style="padding-right:10px;">
+            <div class="meta-box">
+              <div class="meta-title">Customer</div>
+              <table>
+                <tr><td class="meta-line-label">Name</td><td>: ${escapeHtml(customerName)}</td></tr>
+                <tr><td class="meta-line-label">Alamat</td><td>: ${escapeHtml(customerAddress)}</td></tr>
+                <tr><td class="meta-line-label">UP</td><td>: ${escapeHtml(customerUp)}</td></tr>
+              </table>
+            </div>
+          </td>
+          <td style="padding-left:10px;">
+            <div class="meta-box">
+              <div class="meta-title">Informasi Invoice</div>
+              <table>
+                <tr><td class="meta-line-label">Date</td><td>: ${escapeHtml(invoiceDate)}</td></tr>
+                <tr><td class="meta-line-label">PO Number</td><td>: ${escapeHtml(toText(payload.noPO, "-"))}</td></tr>
+                <tr><td class="meta-line-label">PO Date</td><td>: ${escapeHtml(formatTanggalIndonesia(payload.poDate || payload.tanggalPO || payload.projectStartDate || payload.tanggal))}</td></tr>
+                <tr><td class="meta-line-label">Due Date</td><td>: ${escapeHtml(dueDate)}</td></tr>
+                <tr><td class="meta-line-label">Status</td><td>: ${escapeHtml(toText(payload.status, "-"))}</td></tr>
+                <tr><td class="meta-line-label">Termin</td><td>: ${escapeHtml(toText(payload.termin, "-"))}</td></tr>
+              </table>
+            </div>
+          </td>
+        </tr>
+      </table>
+
+      <table class="invoice-items">
+        <thead>
+          <tr>
+            <th style="width:11%;">Qty</th>
+            <th>DESCRIPTION</th>
+            <th style="width:18%;">UNIT PRICE</th>
+            <th style="width:20%;">TOTAL PRICE</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${itemRows || `<tr><td colspan="4" class="align-center">-</td></tr>`}
+        </tbody>
+      </table>
+
+      <table class="invoice-bottom">
+        <tr>
+          <td style="padding-right:10px;">
+            <div class="payment-box">
+              <div class="payment-title">Payment Details</div>
+              ${paymentDetails.map((line) => `<div class="payment-line">${escapeHtml(line)}</div>`).join("")}
+            </div>
+          </td>
+          <td style="padding-left:10px;">
+            <table class="summary-box">
+              <tbody>
+                <tr>
+                  <td class="summary-label">Total Material &amp; Jasa</td>
+                  <td class="align-right">Rp ${idr(subtotalBeforeDiscount)}</td>
+                </tr>
+                ${
+                  discountContext
+                    ? `
+                      <tr>
+                        <td class="summary-label">${escapeHtml(discountLabel)}</td>
+                        <td class="align-right">Rp ${idr(discountContext.discountAmount)}</td>
+                      </tr>
+                    `
+                    : ""
+                }
+                <tr>
+                  <td class="summary-label">Subtotal / DPP Invoice</td>
+                  <td class="align-right">Rp ${idr(Math.max(0, toNum(payload.subtotal)))}</td>
+                </tr>
+                <tr>
+                  <td class="summary-label">PPN</td>
+                  <td class="align-right">Rp ${idr(Math.max(0, toNum(payload.ppn)))}</td>
+                </tr>
+                <tr class="grand-total">
+                  <td class="summary-label">Grand Total</td>
+                  <td class="align-right">Rp ${idr(Math.max(0, toNum(payload.totalBayar)))}</td>
+                </tr>
+              </tbody>
+            </table>
+          </td>
+        </tr>
+      </table>
+
+      <div class="invoice-notes">
+        ${discountContext ? `<div>Sumber diskon: ${escapeHtml(discountContext.discountSourceText)}</div>` : ""}
+        ${payload.perihal ? `<div>Perihal: ${escapeHtml(toText(payload.perihal, "-"))}</div>` : ""}
+      </div>
+
+      <div class="invoice-signature">
+        <div class="invoice-signature-title">Hormat kami,</div>
+        <div class="invoice-signature-name">${escapeHtml(toText(signer, "Management"))}</div>
+      </div>
+    </div>
+  `;
 }
 
 function vendorInvoiceExportHtml(payload: Record<string, unknown>): string {
