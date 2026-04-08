@@ -2245,6 +2245,12 @@ function resolveInvoiceDisplayLabel(item: InvoiceDisplayItem, isDpStyle: boolean
   };
 }
 
+function resolveInvoiceSummaryBaseLabel(payload: Record<string, unknown>): string {
+  const termin = toText(payload.termin, "").trim();
+  if (termin) return termin;
+  return "Subtotal / DPP Invoice";
+}
+
 async function invoiceExportHtml(payload: Record<string, unknown>): Promise<string> {
   const signer = payload.createdBy || payload.approvedBy;
   const linkedQuotation = await getInvoiceLinkedQuotationContext(payload);
@@ -2293,6 +2299,7 @@ async function invoiceExportHtml(payload: Record<string, unknown>): Promise<stri
   const subtotalBeforeDiscount = discountContext?.subtotalBeforeDiscount || Math.max(0, toNum(payload.subtotal));
   const invoiceDate = formatTanggalIndonesia(payload.tanggal);
   const dueDate = formatTanggalIndonesia(payload.jatuhTempo || payload.dueDate);
+  const summaryBaseLabel = resolveInvoiceSummaryBaseLabel(payload);
   const paymentDetails = [
     "Bank Mandiri Cabang Bulak Kapal Bekasi",
     `A/N ${COMPANY_NAME}`,
@@ -2445,7 +2452,7 @@ async function invoiceExportHtml(payload: Record<string, unknown>): Promise<stri
                     : ""
                 }
                 <tr>
-                  <td class="summary-label">Subtotal / DPP Invoice</td>
+                  <td class="summary-label">${escapeHtml(summaryBaseLabel)}</td>
                   <td class="align-right">Rp ${idr(Math.max(0, toNum(payload.subtotal)))}</td>
                 </tr>
                 <tr>

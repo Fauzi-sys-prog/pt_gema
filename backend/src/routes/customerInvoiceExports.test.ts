@@ -162,6 +162,7 @@ test("GET /exports/customer-invoices/:id/word returns customer invoice document"
       assert.match(body, /Diskon/i);
       assert.match(body, /Quotation QUO-001/i);
       assert.match(body, /Payment Details/i);
+      assert.match(body, /DP 10%/i);
       assert.match(body, /Grand Total/i);
       assert.match(body, /DP Material/i);
       assert.match(body, /DP Jasa/i);
