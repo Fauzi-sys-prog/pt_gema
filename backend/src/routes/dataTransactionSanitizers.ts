@@ -460,7 +460,7 @@ export function sanitizeStockInPayload(
   const type =
     assertStatusInList(
       asTrimmedString(merged.type),
-      ["Receiving", "Return", "Adjustment"],
+      ["Receiving", "Return", "Adjustment", "Finished Goods"],
       "stock-ins",
     ) || "Receiving";
   const poId = asTrimmedString(merged.poId) || undefined;

@@ -526,6 +526,12 @@ operationsRouter.post("/production/submit-lhp", authenticate, async (req: AuthRe
       }
 
       const isManualReport = !legacyWo && !relationalWo;
+      const manualModeType =
+        isManualReport && asString(reportInput.manualModeType) === "finished-goods"
+          ? "finished-goods"
+          : isManualReport
+            ? "material-issue"
+            : null;
       const normalizedSelectedTargets = [
         selectedItemCode,
         selectedItem,
@@ -539,7 +545,9 @@ operationsRouter.post("/production/submit-lhp", authenticate, async (req: AuthRe
       let woNumber = "";
       let woPayload: Record<string, unknown> = {};
       let stockOutType = "Project Issue";
+      let stockInType = "Finished Goods";
       let stockOutItems: Array<{ kode: string; nama: string; qty: number; satuan: string }> = [];
+      let stockInItems: Array<{ kode: string; nama: string; qty: number; satuan: string }> = [];
       let nextWorkOrderPayload: Record<string, unknown> | null = null;
       let stockRowsCache: Array<{ id: string; payload: unknown }> | null = null;
       let inventoryRowsCache:
@@ -584,7 +592,11 @@ operationsRouter.post("/production/submit-lhp", authenticate, async (req: AuthRe
 
       if (isManualReport) {
         if (!normalizedSelectedTargets.length || isAutoDeduct) {
-          throw new Error("Pilih item gudang untuk material issue manual");
+          throw new Error(
+            manualModeType === "finished-goods"
+              ? "Pilih item gudang untuk finished goods stock in"
+              : "Pilih item gudang untuk material issue manual"
+          );
         }
         await ensureManualLhpProject(tx);
         projectId = MANUAL_LHP_PROJECT_ID;
@@ -630,14 +642,18 @@ operationsRouter.post("/production/submit-lhp", authenticate, async (req: AuthRe
           throw new Error("Item gudang manual tidak ditemukan");
         }
 
-        stockOutItems = [
-          {
-            kode: manualItemCode,
-            nama: manualItemName,
-            qty: outputQty,
-            satuan: manualItemUnit,
-          },
-        ];
+        const manualStockItem = {
+          kode: manualItemCode,
+          nama: manualItemName,
+          qty: outputQty,
+          satuan: manualItemUnit,
+        };
+        if (manualModeType === "finished-goods") {
+          stockInItems = [manualStockItem];
+          stockInType = "Finished Goods";
+        } else {
+          stockOutItems = [manualStockItem];
+        }
       } else {
         woPayload =
           legacyWo?.payload
@@ -716,11 +732,13 @@ operationsRouter.post("/production/submit-lhp", authenticate, async (req: AuthRe
       }
 
       const stockOutId = `SO-${randomUUID().slice(0, 12).toUpperCase()}`;
+      const stockInId = `SI-${randomUUID().slice(0, 12).toUpperCase()}`;
       const movementPrefix = `MOV-${randomUUID().slice(0, 8).toUpperCase()}`;
       const nowIso = new Date().toISOString();
 
       const updatedStockItemPayloads: Array<Record<string, unknown>> = [];
       const createdStockMovementPayloads: Array<Record<string, unknown>> = [];
+      let createdStockInPayload: Record<string, unknown> | null = null;
       let createdStockOutPayload: Record<string, unknown> | null = null;
 
       if (stockOutItems.length > 0) {
@@ -916,6 +934,231 @@ operationsRouter.post("/production/submit-lhp", authenticate, async (req: AuthRe
         }
       }
 
+      if (stockInItems.length > 0) {
+        const { stockRows, inventoryRows } = await loadStockSources();
+        const legacyByCode = new Map<string, { id: string; payload: Record<string, unknown> }>();
+        for (const row of stockRows) {
+          const payload = asObject(row.payload);
+          const kode = asString(payload.kode);
+          if (kode) legacyByCode.set(kode, { id: row.id, payload });
+        }
+        const inventoryByCode = new Map(inventoryRows.map((row) => [row.code, row] as const));
+
+        createdStockInPayload = {
+          id: stockInId,
+          noStockIn: stockInId,
+          noSuratJalan: reportId,
+          projectId,
+          projectName: woProjectName || undefined,
+          tanggal: toDateOnly(reportInput.tanggal),
+          type: stockInType,
+          status: "Posted",
+          createdBy: "Production System",
+          notes: `Finished goods receipt dari LHP ${reportId}`,
+          items: stockInItems,
+        };
+
+        await tx.stockInRecord.create({
+          data: {
+            id: stockInId,
+            projectId,
+            payload: createdStockInPayload as Prisma.InputJsonValue,
+          },
+        });
+
+        const stockInItemCreates: Array<Record<string, unknown>> = [];
+
+        for (const receipt of stockInItems) {
+          const inventory = inventoryByCode.get(receipt.kode) || null;
+          const legacy = legacyByCode.get(receipt.kode) || null;
+          const before =
+            inventory?.onHandQty ??
+            (legacy ? asNumber(legacy.payload.stok, 0) : 0);
+          const after = before + receipt.qty;
+          const location =
+            (inventory ? asString(asObject(inventory.metadata).lokasi) : null) ||
+            inventory?.location ||
+            asString(legacy?.payload?.lokasi) ||
+            "Gudang Utama";
+
+          let inventoryItemId = inventory?.id || undefined;
+          let legacyRecordId = legacy?.id || null;
+
+          if (legacy) {
+            const nextStockPayload: Record<string, unknown> = {
+              ...legacy.payload,
+              stok: after,
+              lastUpdate: nowIso,
+              lokasi: asString(legacy.payload.lokasi) || location,
+              satuan: asString(legacy.payload.satuan) || receipt.satuan,
+            };
+            await tx.stockItemRecord.update({
+              where: { id: legacy.id },
+              data: { payload: nextStockPayload as Prisma.InputJsonValue },
+            });
+          } else {
+            legacyRecordId = `STK-${randomUUID().slice(0, 12).toUpperCase()}`;
+            const nextStockPayload: Record<string, unknown> = {
+              id: legacyRecordId,
+              kode: receipt.kode,
+              nama: receipt.nama,
+              stok: after,
+              satuan: receipt.satuan,
+              lokasi: location,
+              kategori: "Finished Goods",
+              lastUpdate: nowIso,
+            };
+            await tx.stockItemRecord.create({
+              data: {
+                id: legacyRecordId,
+                payload: nextStockPayload as Prisma.InputJsonValue,
+              },
+            });
+          }
+
+          if (inventory) {
+            const metadata = asObject(inventory.metadata);
+            await tx.inventoryItem.update({
+              where: { id: inventory.id },
+              data: {
+                onHandQty: after,
+                lastStockUpdateAt: new Date(nowIso),
+                metadata: {
+                  ...metadata,
+                  id: asString(metadata.id) || inventory.id,
+                  kode: asString(metadata.kode) || inventory.code,
+                  nama: asString(metadata.nama) || inventory.name,
+                  satuan: asString(metadata.satuan) || inventory.unit,
+                  lokasi: asString(metadata.lokasi) || inventory.location,
+                  stok: after,
+                  lastUpdate: nowIso,
+                } as Prisma.InputJsonValue,
+              },
+            });
+          } else {
+            inventoryItemId = `INV-${randomUUID().slice(0, 12).toUpperCase()}`;
+            await tx.inventoryItem.create({
+              data: {
+                id: inventoryItemId,
+                code: receipt.kode,
+                name: receipt.nama,
+                category: "Finished Goods",
+                unit: receipt.satuan,
+                location,
+                minStock: 0,
+                onHandQty: after,
+                reservedQty: 0,
+                onOrderQty: 0,
+                lastStockUpdateAt: new Date(nowIso),
+                metadata: {
+                  id: legacyRecordId || inventoryItemId,
+                  kode: receipt.kode,
+                  nama: receipt.nama,
+                  satuan: receipt.satuan,
+                  lokasi: location,
+                  kategori: "Finished Goods",
+                  stok: after,
+                  lastUpdate: nowIso,
+                } as Prisma.InputJsonValue,
+              },
+            });
+          }
+
+          stockInItemCreates.push({
+            id: `${stockInId}-ITEM-${String(stockInItemCreates.length + 1).padStart(3, "0")}`,
+            inventoryItemId,
+            itemCode: receipt.kode,
+            itemName: receipt.nama,
+            qty: receipt.qty,
+            unit: receipt.satuan,
+          });
+
+          updatedStockItemPayloads.push({
+            id: inventoryItemId || legacyRecordId || receipt.kode,
+            kode: receipt.kode,
+            nama: receipt.nama,
+            satuan: receipt.satuan,
+            lokasi: location,
+            kategori: "Finished Goods",
+            stok: after,
+            lastUpdate: nowIso,
+          });
+
+          const movementId = `${movementPrefix}-${createdStockMovementPayloads.length + 1}`;
+          const movementPayload: Record<string, unknown> = {
+            id: movementId,
+            tanggal: toDateOnly(reportInput.tanggal),
+            type: "IN",
+            refNo: stockInId,
+            refType: "Stock In",
+            itemKode: receipt.kode,
+            itemNama: receipt.nama,
+            qty: receipt.qty,
+            unit: receipt.satuan,
+            lokasi: location,
+            stockBefore: before,
+            stockAfter: after,
+            createdBy: "Production System",
+            productionReportId: reportId,
+            projectId,
+            projectName: woProjectName || undefined,
+          };
+          await tx.stockMovementRecord.create({
+            data: {
+              id: movementId,
+              projectId,
+              payload: movementPayload as Prisma.InputJsonValue,
+            },
+          });
+          await tx.inventoryStockMovement.create({
+            data: {
+              id: movementId,
+              tanggal: new Date(toDateOnly(reportInput.tanggal)),
+              direction: "IN",
+              referenceNo: stockInId,
+              referenceType: "Stock In",
+              inventoryItemId,
+              itemCode: receipt.kode,
+              itemName: receipt.nama,
+              qty: receipt.qty,
+              unit: receipt.satuan,
+              location,
+              stockBefore: before,
+              stockAfter: after,
+              createdByName: "Production System",
+              projectId,
+              stockInId,
+              legacyPayload: movementPayload as Prisma.InputJsonValue,
+            },
+          });
+          createdStockMovementPayloads.push(movementPayload);
+        }
+
+        await tx.inventoryStockIn.create({
+          data: {
+            id: stockInId,
+            number: stockInId,
+            tanggal: new Date(toDateOnly(reportInput.tanggal)),
+            type: stockInType,
+            status: "Posted",
+            notes: `Finished goods receipt dari LHP ${reportId}`,
+            createdByName: "Production System",
+            projectId,
+            legacyPayload: createdStockInPayload as Prisma.InputJsonValue,
+            items: {
+              create: stockInItemCreates.map((item) => ({
+                id: String(item.id),
+                inventoryItemId: (item.inventoryItemId as string | undefined) || undefined,
+                itemCode: String(item.itemCode),
+                itemName: String(item.itemName),
+                qty: Number(item.qty),
+                unit: String(item.unit),
+              })),
+            },
+          },
+        });
+      }
+
       if (!isManualReport) {
         const targetQty = relationalWo?.targetQty || asNumber(woPayload.targetQty, 0);
         const denominator = targetQty;
@@ -1037,7 +1280,7 @@ operationsRouter.post("/production/submit-lhp", authenticate, async (req: AuthRe
         workOrderId: relationalWo?.id || legacyWo?.id,
         woNumber: woNumber || undefined,
         manualMode: isManualReport || undefined,
-        manualModeType: isManualReport ? "material-issue" : undefined,
+        manualModeType: manualModeType || undefined,
         selectedItemCode: selectedItemCode || undefined,
         selectedItemName: selectedItemName || undefined,
         notes: asString(reportInput.notes) || asString(reportInput.remarks) || undefined,
@@ -1089,14 +1332,20 @@ operationsRouter.post("/production/submit-lhp", authenticate, async (req: AuthRe
       return {
         report: reportPayload,
         workOrder: nextWorkOrderPayload || undefined,
+        stockIn: createdStockInPayload,
         stockOut: createdStockOutPayload,
         stockMovements: createdStockMovementPayloads,
         stockItems: updatedStockItemPayloads,
       };
     });
 
+    const auditManualModeType = asString(asObject(result.report).manualModeType);
     await writeAuditLog(req, "create", "production-reports", String(reportInput.id || ""), {
-      mode: asString(reportInput.woId) || asString(reportInput.woNumber) ? "atomic-submit-lhp" : "manual-material-issue",
+      mode: asString(reportInput.woId) || asString(reportInput.woNumber)
+        ? "atomic-submit-lhp"
+        : auditManualModeType === "finished-goods"
+          ? "manual-finished-goods-stock-in"
+          : "manual-material-issue",
       workOrderId: reportInput.woId ?? null,
       woNumber: reportInput.woNumber ?? null,
     });

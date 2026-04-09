@@ -200,3 +200,144 @@ test("POST /production/submit-lhp supports manual stock mode without work order"
     auth.restore();
   }
 });
+
+test("POST /production/submit-lhp supports finished goods stock in without work order", async () => {
+  const auth = installAuthMocks(Role.PRODUKSI);
+  const token = signAccessToken({ id: "user-1", role: Role.PRODUKSI });
+  const prismaAny = prisma as unknown as Record<string, any>;
+  const auditLogs: Array<Record<string, unknown>> = [];
+  const projectUpserts: Array<Record<string, any>> = [];
+  const stockInCreates: Array<Record<string, any>> = [];
+  const inventoryStockInCreates: Array<Record<string, any>> = [];
+  const reportCreates: Array<Record<string, any>> = [];
+  const executionReportCreates: Array<Record<string, any>> = [];
+  const inventoryCreates: Array<Record<string, any>> = [];
+
+  const restores = [
+    swapMethod(prismaAny.auditLogEntry, "create", async (args: { data: Record<string, unknown> }) => {
+      auditLogs.push(args.data);
+      return args.data;
+    }),
+    swapMethod(prismaAny, "$transaction", async (callback: (tx: Record<string, any>) => Promise<unknown>) =>
+      callback({
+        workOrderRecord: {
+          findUnique: async () => null,
+          findMany: async () => [],
+        },
+        productionWorkOrder: {
+          findUnique: async () => null,
+        },
+        projectRecord: {
+          upsert: async (args: Record<string, any>) => {
+            projectUpserts.push(args);
+            return args.create;
+          },
+        },
+        stockItemRecord: {
+          findMany: async () => [],
+          create: async () => ({}),
+          update: async () => ({}),
+        },
+        inventoryItem: {
+          findMany: async () => [],
+          create: async (args: Record<string, any>) => {
+            inventoryCreates.push(args.data);
+            return args.data;
+          },
+          update: async () => ({}),
+        },
+        productionReportRecord: {
+          findUnique: async () => null,
+          create: async (args: Record<string, any>) => {
+            reportCreates.push(args.data);
+            return args.data;
+          },
+        },
+        productionExecutionReport: {
+          findUnique: async () => null,
+          create: async (args: Record<string, any>) => {
+            executionReportCreates.push(args.data);
+            return args.data;
+          },
+        },
+        stockOutRecord: {
+          create: async () => {
+            throw new Error("stockOut should not be created for finished goods mode");
+          },
+        },
+        inventoryStockOut: {
+          create: async () => {
+            throw new Error("inventoryStockOut should not be created for finished goods mode");
+          },
+        },
+        stockInRecord: {
+          create: async (args: Record<string, any>) => {
+            stockInCreates.push(args.data);
+            return args.data;
+          },
+        },
+        inventoryStockIn: {
+          create: async (args: Record<string, any>) => {
+            inventoryStockInCreates.push(args.data);
+            return args.data;
+          },
+        },
+        stockMovementRecord: {
+          create: async () => ({}),
+        },
+        inventoryStockMovement: {
+          create: async () => ({}),
+        },
+      })),
+  ];
+
+  try {
+    await withServer(async (baseUrl) => {
+      const response = await fetch(`${baseUrl}/production/submit-lhp`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          report: {
+            id: "lhp-fg-1",
+            tanggal: "2026-04-08",
+            workerName: "Soleh",
+            activity: "Stock in barang jadi panel",
+            outputQty: 4,
+            unit: "Pcs",
+            selectedItem: "FG-001",
+            selectedItemCode: "FG-001",
+            selectedItemName: "Panel Refractory",
+            manualModeType: "finished-goods",
+          },
+        }),
+      });
+
+      assert.equal(response.status, 201);
+      const payload = (await response.json()) as Record<string, any>;
+      assert.equal(payload.report?.id, "lhp-fg-1");
+      assert.equal(payload.report?.manualMode, true);
+      assert.equal(payload.report?.manualModeType, "finished-goods");
+      assert.equal(payload.report?.projectId, "PRJ-STOCK-UMUM");
+      assert.equal(payload.stockOut, null);
+      assert.equal(payload.stockIn?.type, "Finished Goods");
+      assert.equal(payload.stockIn?.items?.[0]?.kode, "FG-001");
+      assert.equal(payload.stockIn?.items?.[0]?.qty, 4);
+      assert.equal(payload.workOrder, undefined);
+    });
+
+    assert.equal(projectUpserts.length, 1);
+    assert.equal(stockInCreates.length, 1);
+    assert.equal(inventoryStockInCreates.length, 1);
+    assert.equal(reportCreates.length, 1);
+    assert.equal(executionReportCreates.length, 1);
+    assert.equal(inventoryCreates.length, 1);
+    assert.equal(auditLogs.length, 1);
+    assert.equal(auditLogs[0]?.resource, "production-reports");
+  } finally {
+    restores.reverse().forEach((restore) => restore());
+    auth.restore();
+  }
+});

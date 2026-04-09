@@ -95,6 +95,19 @@ test("sanitizeStockInPayload requires poId for receiving type", () => {
   );
 });
 
+test("sanitizeStockInPayload accepts finished goods stock in without poId", () => {
+  const payload = sanitizeStockInPayload({
+    noStockIn: "SI-002",
+    type: "Finished Goods",
+    status: "Posted",
+    items: [{ kode: "FG-001", nama: "Panel Refractory", qty: 2, satuan: "Pcs" }],
+  });
+
+  assert.equal(payload.type, "Finished Goods");
+  assert.equal(Array.isArray(payload.items), true);
+  assert.equal((payload.items as Array<Record<string, unknown>>)[0]?.kode, "FG-001");
+});
+
 test("sanitizeReceivingPayload requires at least one valid item", () => {
   assert.throws(
     () =>

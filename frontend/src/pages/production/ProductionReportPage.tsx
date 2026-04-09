@@ -11,6 +11,10 @@ const MANUAL_LHP_PROJECT_NAME = 'STOK UMUM INTERNAL';
 const MANUAL_ISSUE_LABEL = 'Material Issue Manual';
 const MANUAL_ISSUE_HELP =
   'Mode ini untuk stok keluar dari gudang. Kalau hasil produksi berupa barang jadi masuk gudang, gunakan menu Stock In.';
+const FINISHED_GOODS_LABEL = 'Finished Goods Stock In';
+const FINISHED_GOODS_HELP =
+  'Mode ini untuk hasil produksi berupa barang jadi yang masuk ke gudang. Stok item akan bertambah saat LHP disimpan.';
+const DEFAULT_MANUAL_MODE = 'material-issue';
 
 export default function ProductionReportPage() {
   const { 
@@ -108,13 +112,15 @@ export default function ProductionReportPage() {
     selectedItemCode?: string;
     selectedItemName?: string;
     machineId?: string;
+    manualModeType?: 'material-issue' | 'finished-goods';
   }>>({
     tanggal: new Date().toISOString().split('T')[0],
     shift: '1',
     workshop: 'Gema Teknik Workshop',
     unit: 'Pcs',
     startTime: '08:00',
-    endTime: '17:00'
+    endTime: '17:00',
+    manualModeType: DEFAULT_MANUAL_MODE,
   });
   
   // Show all operational assets from DB (fallback to all non-scrapped if category is inconsistent).
@@ -159,9 +165,16 @@ export default function ProductionReportPage() {
     () => effectiveWorkOrders.find((wo) => wo.id === newReport.woId),
     [effectiveWorkOrders, newReport.woId]
   );
+  const currentManualModeType =
+    !newReport.woId && newReport.manualModeType === 'finished-goods'
+      ? 'finished-goods'
+      : 'material-issue';
+  const manualModeHelp =
+    currentManualModeType === 'finished-goods' ? FINISHED_GOODS_HELP : MANUAL_ISSUE_HELP;
 
   const selectableWarehouseItems = useMemo(() => {
     const stockedItems = effectiveStockItems || [];
+    const allowZeroStockSelection = !selectedWorkOrder && currentManualModeType === 'finished-goods';
     const stockByCode = new Map(
       stockedItems
         .map((item) => {
@@ -193,7 +206,7 @@ export default function ProductionReportPage() {
           name,
           unit: String(item?.unit || stockMatch?.satuan || 'Unit'),
           stock: Number(stockMatch?.stok || 0),
-          disabled: Number(stockMatch?.stok || 0) <= 0,
+          disabled: allowZeroStockSelection ? false : Number(stockMatch?.stok || 0) <= 0,
           source: 'bom' as const,
         };
       })
@@ -211,12 +224,12 @@ export default function ProductionReportPage() {
         name: String(item?.nama || '').trim(),
         unit: String(item?.satuan || 'Unit'),
         stock: Number(item?.stok || 0),
-        disabled: Number(item?.stok || 0) <= 0,
+        disabled: allowZeroStockSelection ? false : Number(item?.stok || 0) <= 0,
         source: 'stock' as const,
       }))
       .filter((item) => item.id && item.value)
       .sort((a, b) => a.name.localeCompare(b.name));
-  }, [effectiveStockItems, selectedWorkOrder]);
+  }, [currentManualModeType, effectiveStockItems, selectedWorkOrder]);
 
   const handleWOSelect = (woId: string) => {
     const wo = effectiveWorkOrders.find(w => w.id === woId);
@@ -238,9 +251,22 @@ export default function ProductionReportPage() {
         selectedItemCode: '',
         selectedItemName: '',
         activity: '',
-        unit: 'Pcs'
+        unit: 'Pcs',
+        manualModeType: newReport.manualModeType || DEFAULT_MANUAL_MODE,
       });
     }
+  };
+
+  const handleManualModeChange = (mode: 'material-issue' | 'finished-goods') => {
+    setNewReport((prev) => ({
+      ...prev,
+      manualModeType: mode,
+      selectedItem: '',
+      selectedItemCode: '',
+      selectedItemName: '',
+      unit: 'Pcs',
+      activity: '',
+    }));
   };
 
   const handleItemSelect = (itemValue: string) => {
@@ -275,7 +301,11 @@ export default function ProductionReportPage() {
         selectedItemCode: selectedOption?.code || normalizedValue,
         selectedItemName: itemLabel,
         unit: selectedOption?.unit || (normalizedValue ? 'Pcs' : 'Unit'),
-        activity: normalizedValue ? `Pengerjaan ${itemLabel}` : ''
+        activity: normalizedValue
+          ? currentManualModeType === 'finished-goods'
+            ? `Finished goods ${itemLabel}`
+            : `Material issue ${itemLabel}`
+          : ''
       });
     }
   };
@@ -288,8 +318,16 @@ export default function ProductionReportPage() {
 
     const selectedWO = effectiveWorkOrders.find(w => w.id === newReport.woId);
     const isManualMode = !selectedWO;
+    const manualModeType =
+      isManualMode && newReport.manualModeType === 'finished-goods'
+        ? 'finished-goods'
+        : 'material-issue';
     if (isManualMode && !newReport.selectedItemCode && !newReport.selectedItem) {
-      toast.error('Pilih item gudang untuk material issue manual.');
+      toast.error(
+        manualModeType === 'finished-goods'
+          ? 'Pilih item gudang untuk finished goods stock in.'
+          : 'Pilih item gudang untuk material issue manual.'
+      );
       return;
     }
 
@@ -310,7 +348,7 @@ export default function ProductionReportPage() {
       photoAssetId: newReport.photoAssetId,
       woNumber: selectedWO?.woNumber,
       manualMode: isManualMode,
-      manualModeType: isManualMode ? 'material-issue' : undefined,
+      manualModeType: isManualMode ? manualModeType : undefined,
       projectId: selectedWO?.projectId || (isManualMode ? MANUAL_LHP_PROJECT_ID : undefined),
       projectName: selectedWO?.projectName || (isManualMode ? MANUAL_LHP_PROJECT_NAME : undefined),
       selectedItemCode: newReport.selectedItemCode,
@@ -338,7 +376,9 @@ export default function ProductionReportPage() {
     resetForm();
     toast.success(
       isManualMode
-        ? 'Material issue manual berhasil disimpan. Stok gudang berkurang sesuai item yang dipilih.'
+        ? manualModeType === 'finished-goods'
+          ? 'Finished goods berhasil disimpan. Stok gudang bertambah sesuai item yang dipilih.'
+          : 'Material issue manual berhasil disimpan. Stok gudang berkurang sesuai item yang dipilih.'
         : 'LHP berhasil disimpan. Stok bahan baku telah dipotong otomatis dan progress diperbarui!'
     );
   };
@@ -354,6 +394,7 @@ export default function ProductionReportPage() {
       selectedItem: '',
       selectedItemCode: '',
       selectedItemName: '',
+      manualModeType: DEFAULT_MANUAL_MODE,
     });
   };
 
@@ -584,8 +625,16 @@ export default function ProductionReportPage() {
                         <div className="flex items-center gap-2 mt-1">
                           <span className="text-[10px] text-slate-400 font-bold uppercase">Workshop: {report.workshop}</span>
                           {report.manualMode && (
-                            <span className="rounded-md border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[10px] font-black uppercase text-amber-700">
-                              {MANUAL_ISSUE_LABEL}
+                            <span
+                              className={`rounded-md px-1.5 py-0.5 text-[10px] font-black uppercase ${
+                                report.manualModeType === 'finished-goods'
+                                  ? 'border border-emerald-200 bg-emerald-50 text-emerald-700'
+                                  : 'border border-amber-200 bg-amber-50 text-amber-700'
+                              }`}
+                            >
+                              {report.manualModeType === 'finished-goods'
+                                ? FINISHED_GOODS_LABEL
+                                : MANUAL_ISSUE_LABEL}
                             </span>
                           )}
                           {report.machineNo && (
@@ -686,7 +735,11 @@ export default function ProductionReportPage() {
               <div>
                 <h3 className="text-xl font-black text-slate-900 uppercase italic tracking-tight">Buat Laporan Harian (LHP)</h3>
                 <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1 italic">
-                  {newReport.woId ? 'Input Progress Pekerjaan Workshop' : 'Mode material issue manual / stok keluar gudang'}
+                  {newReport.woId
+                    ? 'Input Progress Pekerjaan Workshop'
+                    : currentManualModeType === 'finished-goods'
+                      ? 'Mode finished goods stock in / stok masuk gudang'
+                      : 'Mode material issue manual / stok keluar gudang'}
                 </p>
               </div>
               <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -724,12 +777,25 @@ export default function ProductionReportPage() {
                     value={newReport.woId || ''}
                     onChange={(e) => handleWOSelect(e.target.value)}
                   >
-                    <option value="">{`-- ${MANUAL_ISSUE_LABEL} (Stok Keluar) --`}</option>
+                    <option value="">-- Tanpa WO / Manual --</option>
                     {activeWorkOrders.map(wo => (
                       <option key={wo.id} value={wo.id}>{wo.woNumber}</option>
                     ))}
                   </select>
                 </div>
+                {!newReport.woId && (
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Flow Manual</label>
+                    <select
+                      className="w-full px-4 py-3 bg-white border-2 border-slate-100 rounded-2xl text-sm font-bold focus:border-rose-500 transition-colors outline-none"
+                      value={currentManualModeType}
+                      onChange={(e) => handleManualModeChange(e.target.value as 'material-issue' | 'finished-goods')}
+                    >
+                      <option value="material-issue">{MANUAL_ISSUE_LABEL}</option>
+                      <option value="finished-goods">{FINISHED_GOODS_LABEL}</option>
+                    </select>
+                  </div>
+                )}
                 {/* WO Stats Preview */}
                 {newReport.woId && (
                   <div className="flex flex-col gap-4 rounded-2xl border-2 border-blue-100 bg-blue-50 p-4 md:col-span-2 sm:flex-row sm:items-center sm:justify-between">
@@ -797,7 +863,13 @@ export default function ProductionReportPage() {
                     value={newReport.selectedItem || ''}
                     onChange={(e) => handleItemSelect(e.target.value)}
                   >
-                    <option value="">{newReport.woId ? '-- Pilih Item Gudang --' : '-- Pilih Item untuk Material Issue --'}</option>
+                    <option value="">
+                      {newReport.woId
+                        ? '-- Pilih Item Gudang --'
+                        : currentManualModeType === 'finished-goods'
+                          ? '-- Pilih Item Finished Goods --'
+                          : '-- Pilih Item untuk Material Issue --'}
+                    </option>
                     {newReport.woId && <option value="auto">-- Auto-Deduct All BOM (opsional) --</option>}
                     {selectableWarehouseItems.map((item) => (
                       <option key={item.id} value={item.value} disabled={item.disabled}>
@@ -806,12 +878,28 @@ export default function ProductionReportPage() {
                     ))}
                   </select>
                   {!newReport.woId && (
-                    <div className="space-y-2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
-                      <p className="text-[10px] font-bold text-amber-700 uppercase tracking-wide">
-                        {MANUAL_ISSUE_LABEL}: qty output akan dipakai sebagai stok keluar / material issue.
+                    <div
+                      className={`space-y-2 rounded-2xl px-4 py-3 ${
+                        currentManualModeType === 'finished-goods'
+                          ? 'border border-emerald-200 bg-emerald-50'
+                          : 'border border-amber-200 bg-amber-50'
+                      }`}
+                    >
+                      <p
+                        className={`text-[10px] font-bold uppercase tracking-wide ${
+                          currentManualModeType === 'finished-goods' ? 'text-emerald-700' : 'text-amber-700'
+                        }`}
+                      >
+                        {currentManualModeType === 'finished-goods'
+                          ? `${FINISHED_GOODS_LABEL}: qty output akan dicatat sebagai stok masuk / barang jadi.`
+                          : `${MANUAL_ISSUE_LABEL}: qty output akan dipakai sebagai stok keluar / material issue.`}
                       </p>
-                      <p className="text-[11px] font-medium leading-relaxed text-amber-800">
-                        {MANUAL_ISSUE_HELP}
+                      <p
+                        className={`text-[11px] font-medium leading-relaxed ${
+                          currentManualModeType === 'finished-goods' ? 'text-emerald-800' : 'text-amber-800'
+                        }`}
+                      >
+                        {manualModeHelp}
                       </p>
                       <div className="flex flex-col gap-2 sm:flex-row">
                         <Link
@@ -958,7 +1046,11 @@ export default function ProductionReportPage() {
                 className="flex-1 py-4 bg-rose-600 text-white rounded-2xl text-xs font-black uppercase hover:bg-rose-700 shadow-xl shadow-rose-200 transition-all flex items-center justify-center gap-2"
               >
                 <ClipboardList size={16} />
-                {newReport.woId ? 'SIMPAN & UPDATE PROGRESS' : 'SIMPAN MATERIAL ISSUE'}
+                {newReport.woId
+                  ? 'SIMPAN & UPDATE PROGRESS'
+                  : currentManualModeType === 'finished-goods'
+                    ? 'SIMPAN FINISHED GOODS'
+                    : 'SIMPAN MATERIAL ISSUE'}
               </button>
             </div>
           </div>

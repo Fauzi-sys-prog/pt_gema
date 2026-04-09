@@ -373,7 +373,7 @@ export interface StockIn {
   projectId?: string;
   projectName?: string;
   tanggal: string;
-  type: "Receiving" | "Return" | "Adjustment";
+  type: "Receiving" | "Return" | "Adjustment" | "Finished Goods";
   status: "Posted" | "Draft";
   createdBy: string;
   items: StockInItem[];
@@ -525,7 +525,7 @@ export interface ProductionReport {
   projectId?: string;
   projectName?: string;
   manualMode?: boolean;
-  manualModeType?: "material-issue" | string;
+  manualModeType?: "material-issue" | "finished-goods" | string;
 }
 
 /**
@@ -3002,6 +3002,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       const res = await api.post("/production/submit-lhp", { report });
       const serverReport = (res?.data?.report || report) as ProductionReport;
       const serverWorkOrder = res?.data?.workOrder as WorkOrder | undefined;
+      const serverStockIn = res?.data?.stockIn as StockIn | null | undefined;
       const serverStockOut = res?.data?.stockOut as StockOut | null | undefined;
       const serverStockMovements = Array.isArray(res?.data?.stockMovements)
         ? (res.data.stockMovements as StockMovement[])
@@ -3025,6 +3026,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         setStockOutList((prev) => {
           const filtered = prev.filter((item) => item.id !== serverStockOut.id);
           return [serverStockOut, ...filtered];
+        });
+      }
+
+      if (serverStockIn?.id) {
+        setStockInList((prev) => {
+          const filtered = prev.filter((item) => item.id !== serverStockIn.id);
+          return [serverStockIn, ...filtered];
         });
       }
 

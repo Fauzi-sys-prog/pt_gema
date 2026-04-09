@@ -250,6 +250,7 @@ export default function StockInPage() {
             <option value="Receiving">Penerimaan (PO / Manual)</option>
             <option value="Return">Retur Proyek</option>
             <option value="Adjustment">Penyesuaian</option>
+            <option value="Finished Goods">Finished Goods</option>
           </select>
         </div>
       </div>
@@ -348,6 +349,7 @@ export default function StockInPage() {
                     <option value="Receiving">Penerimaan (PO / Manual)</option>
                     <option value="Return">Retur Proyek</option>
                     <option value="Adjustment">Penyesuaian (Opname)</option>
+                    <option value="Finished Goods">Finished Goods</option>
                   </select>
                 </div>
               </div>
