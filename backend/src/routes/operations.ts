@@ -584,7 +584,7 @@ operationsRouter.post("/production/submit-lhp", authenticate, async (req: AuthRe
 
       if (isManualReport) {
         if (!normalizedSelectedTargets.length || isAutoDeduct) {
-          throw new Error("Pilih item gudang untuk LHP manual");
+          throw new Error("Pilih item gudang untuk material issue manual");
         }
         await ensureManualLhpProject(tx);
         projectId = MANUAL_LHP_PROJECT_ID;
@@ -1037,6 +1037,7 @@ operationsRouter.post("/production/submit-lhp", authenticate, async (req: AuthRe
         workOrderId: relationalWo?.id || legacyWo?.id,
         woNumber: woNumber || undefined,
         manualMode: isManualReport || undefined,
+        manualModeType: isManualReport ? "material-issue" : undefined,
         selectedItemCode: selectedItemCode || undefined,
         selectedItemName: selectedItemName || undefined,
         notes: asString(reportInput.notes) || asString(reportInput.remarks) || undefined,
@@ -1095,7 +1096,7 @@ operationsRouter.post("/production/submit-lhp", authenticate, async (req: AuthRe
     });
 
     await writeAuditLog(req, "create", "production-reports", String(reportInput.id || ""), {
-      mode: asString(reportInput.woId) || asString(reportInput.woNumber) ? "atomic-submit-lhp" : "manual-submit-lhp",
+      mode: asString(reportInput.woId) || asString(reportInput.woNumber) ? "atomic-submit-lhp" : "manual-material-issue",
       workOrderId: reportInput.woId ?? null,
       woNumber: reportInput.woNumber ?? null,
     });

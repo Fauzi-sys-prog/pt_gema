@@ -8,6 +8,9 @@ import { normalizeEntityRows } from '../../utils/normalizeEntityRows';
 
 const MANUAL_LHP_PROJECT_ID = 'PRJ-STOCK-UMUM';
 const MANUAL_LHP_PROJECT_NAME = 'STOK UMUM INTERNAL';
+const MANUAL_ISSUE_LABEL = 'Material Issue Manual';
+const MANUAL_ISSUE_HELP =
+  'Mode ini untuk stok keluar dari gudang. Kalau hasil produksi berupa barang jadi masuk gudang, gunakan menu Stock In.';
 
 export default function ProductionReportPage() {
   const { 
@@ -286,7 +289,7 @@ export default function ProductionReportPage() {
     const selectedWO = effectiveWorkOrders.find(w => w.id === newReport.woId);
     const isManualMode = !selectedWO;
     if (isManualMode && !newReport.selectedItemCode && !newReport.selectedItem) {
-      toast.error('Pilih item gudang untuk LHP manual.');
+      toast.error('Pilih item gudang untuk material issue manual.');
       return;
     }
 
@@ -307,6 +310,7 @@ export default function ProductionReportPage() {
       photoAssetId: newReport.photoAssetId,
       woNumber: selectedWO?.woNumber,
       manualMode: isManualMode,
+      manualModeType: isManualMode ? 'material-issue' : undefined,
       projectId: selectedWO?.projectId || (isManualMode ? MANUAL_LHP_PROJECT_ID : undefined),
       projectName: selectedWO?.projectName || (isManualMode ? MANUAL_LHP_PROJECT_NAME : undefined),
       selectedItemCode: newReport.selectedItemCode,
@@ -334,7 +338,7 @@ export default function ProductionReportPage() {
     resetForm();
     toast.success(
       isManualMode
-        ? 'LHP manual berhasil disimpan. Stok item gudang sudah diperbarui!'
+        ? 'Material issue manual berhasil disimpan. Stok gudang berkurang sesuai item yang dipilih.'
         : 'LHP berhasil disimpan. Stok bahan baku telah dipotong otomatis dan progress diperbarui!'
     );
   };
@@ -579,6 +583,11 @@ export default function ProductionReportPage() {
                         <span className="text-sm font-bold text-slate-900 leading-tight">{report.activity}</span>
                         <div className="flex items-center gap-2 mt-1">
                           <span className="text-[10px] text-slate-400 font-bold uppercase">Workshop: {report.workshop}</span>
+                          {report.manualMode && (
+                            <span className="rounded-md border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[10px] font-black uppercase text-amber-700">
+                              {MANUAL_ISSUE_LABEL}
+                            </span>
+                          )}
                           {report.machineNo && (
                             <span className="text-[10px] bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded-md font-black">
                                 {effectiveAssets.find(a => a.id === report.machineNo || a.assetCode === report.machineNo)?.name || report.machineNo}
@@ -677,7 +686,7 @@ export default function ProductionReportPage() {
               <div>
                 <h3 className="text-xl font-black text-slate-900 uppercase italic tracking-tight">Buat Laporan Harian (LHP)</h3>
                 <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1 italic">
-                  {newReport.woId ? 'Input Progress Pekerjaan Workshop' : 'Mode manual stok tanpa BOM / project'}
+                  {newReport.woId ? 'Input Progress Pekerjaan Workshop' : 'Mode material issue manual / stok keluar gudang'}
                 </p>
               </div>
               <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -715,7 +724,7 @@ export default function ProductionReportPage() {
                     value={newReport.woId || ''}
                     onChange={(e) => handleWOSelect(e.target.value)}
                   >
-                    <option value="">-- Manual --</option>
+                    <option value="">{`-- ${MANUAL_ISSUE_LABEL} (Stok Keluar) --`}</option>
                     {activeWorkOrders.map(wo => (
                       <option key={wo.id} value={wo.id}>{wo.woNumber}</option>
                     ))}
@@ -788,7 +797,7 @@ export default function ProductionReportPage() {
                     value={newReport.selectedItem || ''}
                     onChange={(e) => handleItemSelect(e.target.value)}
                   >
-                    <option value="">{newReport.woId ? '-- Pilih Item Gudang --' : '-- Pilih Item Stok Manual --'}</option>
+                    <option value="">{newReport.woId ? '-- Pilih Item Gudang --' : '-- Pilih Item untuk Material Issue --'}</option>
                     {newReport.woId && <option value="auto">-- Auto-Deduct All BOM (opsional) --</option>}
                     {selectableWarehouseItems.map((item) => (
                       <option key={item.id} value={item.value} disabled={item.disabled}>
@@ -797,9 +806,28 @@ export default function ProductionReportPage() {
                     ))}
                   </select>
                   {!newReport.woId && (
-                    <p className="text-[10px] font-bold text-amber-600 uppercase tracking-wide">
-                      Manual mode: qty output akan dipakai sebagai pengeluaran stok item terpilih.
-                    </p>
+                    <div className="space-y-2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
+                      <p className="text-[10px] font-bold text-amber-700 uppercase tracking-wide">
+                        {MANUAL_ISSUE_LABEL}: qty output akan dipakai sebagai stok keluar / material issue.
+                      </p>
+                      <p className="text-[11px] font-medium leading-relaxed text-amber-800">
+                        {MANUAL_ISSUE_HELP}
+                      </p>
+                      <div className="flex flex-col gap-2 sm:flex-row">
+                        <Link
+                          to="/inventory/stock-out"
+                          className="inline-flex items-center justify-center gap-2 rounded-xl border border-amber-200 bg-white px-3 py-2 text-[10px] font-black uppercase text-amber-700 transition-colors hover:bg-amber-100"
+                        >
+                          Buka Stock Out
+                        </Link>
+                        <Link
+                          to="/inventory/stock-in"
+                          className="inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-white px-3 py-2 text-[10px] font-black uppercase text-emerald-700 transition-colors hover:bg-emerald-100"
+                        >
+                          Barang Jadi? Pakai Stock In
+                        </Link>
+                      </div>
+                    </div>
                   )}
                 </div>
               </div>
@@ -930,7 +958,7 @@ export default function ProductionReportPage() {
                 className="flex-1 py-4 bg-rose-600 text-white rounded-2xl text-xs font-black uppercase hover:bg-rose-700 shadow-xl shadow-rose-200 transition-all flex items-center justify-center gap-2"
               >
                 <ClipboardList size={16} />
-                {newReport.woId ? 'SIMPAN & UPDATE PROGRESS' : 'SIMPAN LHP MANUAL'}
+                {newReport.woId ? 'SIMPAN & UPDATE PROGRESS' : 'SIMPAN MATERIAL ISSUE'}
               </button>
             </div>
           </div>

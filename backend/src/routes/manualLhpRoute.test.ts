@@ -178,6 +178,7 @@ test("POST /production/submit-lhp supports manual stock mode without work order"
       const payload = (await response.json()) as Record<string, any>;
       assert.equal(payload.report?.id, "lhp-manual-1");
       assert.equal(payload.report?.manualMode, true);
+      assert.equal(payload.report?.manualModeType, "material-issue");
       assert.equal(payload.report?.projectId, "PRJ-STOCK-UMUM");
       assert.equal(payload.stockOut?.type, "Adjustment");
       assert.equal(payload.stockOut?.items?.[0]?.kode, "STK-001");

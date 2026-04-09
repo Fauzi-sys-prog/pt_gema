@@ -525,6 +525,7 @@ export interface ProductionReport {
   projectId?: string;
   projectName?: string;
   manualMode?: boolean;
+  manualModeType?: "material-issue" | string;
 }
 
 /**
