@@ -30,7 +30,7 @@ const isAccessDeniedError = (error: unknown): boolean =>
   Number((error as any)?.response?.status) === 403;
 
 export default function FieldProjectRecord() {
-  const { projectList = [], employeeList = [], assetList = [], updateProject, materialRequestList = [], addAuditLog } = useApp();
+  const { projectList = [], employeeList = [], assetList = [], workOrderList = [], updateProject, materialRequestList = [], addAuditLog } = useApp();
   const { currentUser } = useAuth();
   const [serverProjectList, setServerProjectList] = useState<Project[] | null>(null);
   const [serverEmployeeList, setServerEmployeeList] = useState<Employee[] | null>(null);
@@ -47,6 +47,8 @@ export default function FieldProjectRecord() {
   const [showFinalizeModal, setShowFinalizeModal] = useState(false);
   const [selectedWorker, setSelectedWorker] = useState<ProjectWorker | null>(null);
   const [workerRoster, setWorkerRoster] = useState<ProjectWorker[]>([]);
+  const [progressOverrideInput, setProgressOverrideInput] = useState('');
+  const [progressOverrideReason, setProgressOverrideReason] = useState('');
 
   // New states to fix ReferenceErrors
   const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
@@ -149,6 +151,40 @@ export default function FieldProjectRecord() {
   }, [effectiveProjectList, selectedProjectId]);
 
   const selectedProject = useMemo(() => effectiveProjectList.find(p => p.id === selectedProjectId), [effectiveProjectList, selectedProjectId]);
+  const relatedWorkOrders = useMemo(
+    () => workOrderList.filter((wo) => String(wo.projectId || '').trim() === String(selectedProjectId || '').trim()),
+    [workOrderList, selectedProjectId]
+  );
+  const computedAutoProgress = useMemo(() => {
+    if (relatedWorkOrders.length === 0) return null;
+    const totalTarget = relatedWorkOrders.reduce((sum, wo) => sum + Number(wo.targetQty || 0), 0);
+    const totalCompleted = relatedWorkOrders.reduce((sum, wo) => sum + Number(wo.completedQty || 0), 0);
+    if (totalTarget <= 0) return null;
+    return Math.min(100, Math.max(0, Math.round((totalCompleted / totalTarget) * 100)));
+  }, [relatedWorkOrders]);
+  const storedAutoProgress =
+    typeof selectedProject?.progressAuto === 'number' && Number.isFinite(selectedProject.progressAuto)
+      ? Math.min(100, Math.max(0, Math.round(selectedProject.progressAuto)))
+      : null;
+  const hasProgressOverride =
+    typeof selectedProject?.progressOverride === 'number' && Number.isFinite(selectedProject.progressOverride);
+  const effectiveAutoProgress =
+    computedAutoProgress ??
+    storedAutoProgress ??
+    (!hasProgressOverride && typeof selectedProject?.progress === 'number'
+      ? Math.min(100, Math.max(0, Math.round(selectedProject.progress)))
+      : 0);
+  const effectiveOverrideProgress = hasProgressOverride
+    ? Math.min(100, Math.max(0, Math.round(Number(selectedProject?.progressOverride))))
+    : null;
+  const effectiveFinalProgress = hasProgressOverride
+    ? effectiveOverrideProgress ?? effectiveAutoProgress
+    : computedAutoProgress ?? storedAutoProgress ?? Math.min(100, Math.max(0, Math.round(Number(selectedProject?.progress || 0))));
+
+  useEffect(() => {
+    setProgressOverrideInput(hasProgressOverride && effectiveOverrideProgress !== null ? String(effectiveOverrideProgress) : '');
+    setProgressOverrideReason(String(selectedProject?.progressOverrideReason || ''));
+  }, [selectedProject?.id, hasProgressOverride, effectiveOverrideProgress, selectedProject?.progressOverrideReason]);
   const projectPayloadKasbon = useMemo(() => {
     const raw = (selectedProject?.kasbon || []) as any[];
     return raw.map((k) => ({
@@ -337,6 +373,97 @@ export default function FieldProjectRecord() {
       status: 'Success',
     });
     setShowFinalizeModal(true);
+  };
+
+  const patchProjectCache = (nextProjectPatch: Partial<Project>) => {
+    setServerProjectList((prev) =>
+      prev
+        ? prev.map((project) =>
+            project.id === selectedProjectId ? { ...project, ...nextProjectPatch } : project
+          )
+        : prev
+    );
+  };
+
+  const handleSaveProgressOverride = async () => {
+    if (!selectedProject) return;
+    if (!hasPrivilegedAccess) {
+      toast.error('Hanya SPV/OWNER/Admin/Manager yang bisa override progress.');
+      return;
+    }
+
+    const parsedOverride = Number(progressOverrideInput);
+    if (!Number.isFinite(parsedOverride)) {
+      toast.error('Isi angka override progress yang valid.');
+      return;
+    }
+
+    const clampedOverride = Math.min(100, Math.max(0, Math.round(parsedOverride)));
+    const reason = progressOverrideReason.trim();
+    if (reason.length < 5) {
+      toast.error('Alasan override progress minimal 5 karakter.');
+      return;
+    }
+
+    const overridePayload: Partial<Project> = {
+      progressAuto: effectiveAutoProgress,
+      progressOverride: clampedOverride,
+      progressOverrideReason: reason,
+      progressOverrideAt: new Date().toISOString(),
+      progressOverrideBy: currentUser?.fullName || currentUser?.username || 'System',
+      progressOverrideByUserId: currentUser?.id || null,
+      progressOverrideByRole: currentRole || null,
+      progressFinalSource: 'override',
+      progress: clampedOverride,
+    };
+
+    const ok = await updateProject(selectedProject.id, overridePayload);
+    if (!ok) return;
+
+    patchProjectCache(overridePayload);
+    addAuditLog({
+      action: 'PROJECT_PROGRESS_OVERRIDE_SET',
+      module: 'HR',
+      entityType: 'Project',
+      entityId: selectedProject.id,
+      description: `Override progress project ${selectedProject.namaProject}: auto ${effectiveAutoProgress}% -> final ${clampedOverride}% | alasan: ${reason}`,
+    });
+    toast.success('Override progress project berhasil disimpan.');
+  };
+
+  const handleClearProgressOverride = async () => {
+    if (!selectedProject) return;
+    if (!hasPrivilegedAccess) {
+      toast.error('Hanya SPV/OWNER/Admin/Manager yang bisa clear override progress.');
+      return;
+    }
+
+    const clearPayload: Partial<Project> = {
+      progressAuto: effectiveAutoProgress,
+      progressOverride: null,
+      progressOverrideReason: null,
+      progressOverrideAt: null,
+      progressOverrideBy: null,
+      progressOverrideByUserId: null,
+      progressOverrideByRole: null,
+      progressFinalSource: 'auto',
+      progress: effectiveAutoProgress,
+    };
+
+    const ok = await updateProject(selectedProject.id, clearPayload);
+    if (!ok) return;
+
+    patchProjectCache(clearPayload);
+    setProgressOverrideInput('');
+    setProgressOverrideReason('');
+    addAuditLog({
+      action: 'PROJECT_PROGRESS_OVERRIDE_CLEARED',
+      module: 'HR',
+      entityType: 'Project',
+      entityId: selectedProject.id,
+      description: `Override progress project ${selectedProject.namaProject} dibersihkan. Kembali ke auto progress ${effectiveAutoProgress}%`,
+    });
+    toast.success('Override progress dibersihkan. Progress final kembali ikut auto progress.');
   };
 
   const downloadBlob = (content: string, mime: string, filename: string) => {
@@ -866,22 +993,70 @@ export default function FieldProjectRecord() {
                   {selectedProject?.customer || 'General Site'}
                </h3>
             </div>
-            <div className="flex justify-end items-center gap-4">
-               <div className="text-right">
-                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Physical Progress</p>
-                  <div className="flex items-center gap-3">
-                    <input 
-                      type="number" 
-                      value={selectedProject?.progress || 0} 
-                      onChange={(e) => updateProject(selectedProjectId, { progress: parseInt(e.target.value) })}
-                      className="w-16 bg-white/10 border border-white/20 rounded-lg px-2 py-1 text-lg font-black text-center focus:bg-white/20 outline-none"
-                    />
-                    <span className="text-2xl font-black italic">%</span>
+            <div className="flex flex-col items-stretch gap-3 md:items-end">
+               <div className="w-full max-w-md rounded-2xl border border-white/10 bg-white/5 p-4">
+                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-3">Physical Progress</p>
+                  <div className="grid grid-cols-3 gap-2 text-center">
+                    <div className="rounded-xl border border-white/10 bg-black/10 px-2 py-3">
+                      <p className="text-[8px] font-black uppercase tracking-widest text-slate-400">Auto WO</p>
+                      <p className="mt-1 text-xl font-black italic">{effectiveAutoProgress}%</p>
+                    </div>
+                    <div className="rounded-xl border border-white/10 bg-black/10 px-2 py-3">
+                      <p className="text-[8px] font-black uppercase tracking-widest text-slate-400">Override</p>
+                      <p className="mt-1 text-xl font-black italic">{effectiveOverrideProgress ?? '-'}</p>
+                    </div>
+                    <div className="rounded-xl border border-blue-400/40 bg-blue-500/10 px-2 py-3">
+                      <p className="text-[8px] font-black uppercase tracking-widest text-slate-300">Final</p>
+                      <p className="mt-1 text-xl font-black italic text-white">{effectiveFinalProgress}%</p>
+                    </div>
                   </div>
+                  <div className="mt-3 flex items-center justify-between text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                    <span>Source: {hasProgressOverride ? 'Override Manual' : computedAutoProgress !== null || storedAutoProgress !== null ? 'Auto WO' : 'Manual Legacy'}</span>
+                    {relatedWorkOrders.length > 0 && <span>{relatedWorkOrders.length} WO</span>}
+                  </div>
+                  <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-[96px,1fr,auto]">
+                    <input
+                      type="number"
+                      min={0}
+                      max={100}
+                      value={progressOverrideInput}
+                      onChange={(e) => setProgressOverrideInput(e.target.value)}
+                      placeholder="Override %"
+                      className="w-full rounded-xl border border-white/15 bg-white/10 px-3 py-2 text-sm font-black text-white outline-none placeholder:text-slate-400 focus:bg-white/15"
+                      disabled={!hasPrivilegedAccess}
+                    />
+                    <input
+                      type="text"
+                      value={progressOverrideReason}
+                      onChange={(e) => setProgressOverrideReason(e.target.value)}
+                      placeholder="Alasan koreksi progress lapangan"
+                      className="w-full rounded-xl border border-white/15 bg-white/10 px-3 py-2 text-sm font-semibold text-white outline-none placeholder:text-slate-400 focus:bg-white/15"
+                      disabled={!hasPrivilegedAccess}
+                    />
+                    <div className="flex gap-2">
+                      <button
+                        onClick={handleSaveProgressOverride}
+                        disabled={!hasPrivilegedAccess}
+                        className="rounded-xl border border-white/15 bg-white/10 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-white transition hover:bg-white/20 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        Save
+                      </button>
+                      <button
+                        onClick={handleClearProgressOverride}
+                        disabled={!hasPrivilegedAccess || !hasProgressOverride}
+                        className="rounded-xl border border-white/15 bg-black/20 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-slate-200 transition hover:bg-black/30 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        Clear
+                      </button>
+                    </div>
+                  </div>
+                  {!hasPrivilegedAccess && (
+                    <p className="mt-2 text-[10px] font-semibold text-amber-200">Override hanya bisa disimpan oleh SPV/OWNER/Admin/Manager.</p>
+                  )}
                </div>
                <button
                  onClick={handleFinalizeReport}
-                 className="p-4 bg-white/10 hover:bg-white/20 rounded-2xl transition-all border border-white/10"
+                 className="self-end p-4 bg-white/10 hover:bg-white/20 rounded-2xl transition-all border border-white/10"
                >
                   <Download size={20} />
                </button>

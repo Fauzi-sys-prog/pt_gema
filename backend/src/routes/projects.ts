@@ -236,6 +236,17 @@ function readNumber(payload: Record<string, unknown>, key: string): number | nul
   return null;
 }
 
+function clampProgress(value: unknown, fallback = 0): number {
+  const numeric =
+    typeof value === "number" && Number.isFinite(value)
+      ? value
+      : typeof value === "string" && value.trim()
+        ? Number(value)
+        : fallback;
+  if (!Number.isFinite(numeric)) return fallback;
+  return Math.min(100, Math.max(0, Math.round(numeric)));
+}
+
 function normalizeWorkflowStatus(value: unknown): string {
   return String(value ?? "").trim().toUpperCase();
 }
@@ -271,6 +282,46 @@ function normalizeProjectPayloadForPersistence(payload: Record<string, unknown>)
   if (customerName) {
     normalized.customer = customerName;
     normalized.customerName = customerName;
+  }
+
+  const progressAutoRaw = readNumber(normalized, "progressAuto");
+  const progressOverrideRaw =
+    Object.prototype.hasOwnProperty.call(normalized, "progressOverride")
+      ? readNumber(normalized, "progressOverride")
+      : null;
+  const legacyProgressRaw = readNumber(normalized, "progress");
+  const hasOverride =
+    Object.prototype.hasOwnProperty.call(normalized, "progressOverride") &&
+    progressOverrideRaw !== null;
+
+  if (progressAutoRaw !== null) {
+    normalized.progressAuto = clampProgress(progressAutoRaw);
+  }
+
+  if (Object.prototype.hasOwnProperty.call(normalized, "progressOverride")) {
+    normalized.progressOverride =
+      progressOverrideRaw === null ? null : clampProgress(progressOverrideRaw);
+  }
+
+  const finalProgress = hasOverride
+    ? clampProgress(progressOverrideRaw)
+    : progressAutoRaw !== null
+      ? clampProgress(progressAutoRaw)
+      : clampProgress(legacyProgressRaw ?? 0);
+
+  normalized.progress = finalProgress;
+  normalized.progressFinalSource = hasOverride
+    ? "override"
+    : progressAutoRaw !== null
+      ? "auto"
+      : "manual";
+
+  if (!hasOverride && Object.prototype.hasOwnProperty.call(normalized, "progressOverride")) {
+    normalized.progressOverrideReason = null;
+    normalized.progressOverrideAt = null;
+    normalized.progressOverrideBy = null;
+    normalized.progressOverrideByUserId = null;
+    normalized.progressOverrideByRole = null;
   }
 
   return normalized;
@@ -1239,6 +1290,20 @@ projectsRouter.patch("/projects/:id", authenticate, async (req: AuthRequest, res
       ...(req.body as Record<string, unknown>),
       id,
     };
+
+    if (Object.prototype.hasOwnProperty.call(incomingPayload, "progressOverride")) {
+      const incomingOverride = readNumber(incomingPayload, "progressOverride");
+      if (incomingOverride !== null) {
+        const reason = String(merged.progressOverrideReason || "").trim();
+        if (reason.length < 5) {
+          return sendError(res, 400, {
+            code: "PROGRESS_OVERRIDE_REASON_REQUIRED",
+            message: "Alasan override progress minimal 5 karakter",
+            legacyError: "Alasan override progress minimal 5 karakter",
+          });
+        }
+      }
+    }
 
     if (Object.prototype.hasOwnProperty.call(incomingPayload, "boq")) {
       merged.nilaiKontrak = calculateProjectBoqContractValue(merged.boq);

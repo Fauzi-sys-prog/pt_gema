@@ -48,13 +48,56 @@ function readString(payload: Record<string, unknown>, key: string): string | nul
   return typeof value === "string" && value.trim() ? value : null;
 }
 
+function readFirstString(
+  payload: Record<string, unknown>,
+  keys: string[],
+): string | null {
+  for (const key of keys) {
+    const value = readString(payload, key);
+    if (value) return value;
+  }
+  return null;
+}
+
+function readStringArray(
+  payload: Record<string, unknown>,
+  key: string,
+): string[] | undefined {
+  const value = payload[key];
+  if (!Array.isArray(value)) return undefined;
+  const items = value
+    .filter((item): item is string => typeof item === "string")
+    .map((item) => item.trim())
+    .filter(Boolean);
+  return items.length > 0 ? items : undefined;
+}
+
+function normalizeFieldFit(payload: Record<string, unknown>): string | undefined {
+  const value = readString(payload, "fieldFit");
+  if (!value) return undefined;
+  const normalized = value.toLowerCase();
+  if (["high", "medium", "partial", "low", "unknown"].includes(normalized)) {
+    return normalized;
+  }
+  return value;
+}
+
 function toDataCollectionMeta(item: Record<string, unknown>) {
   return {
-    namaResponden: readString(item, "namaResponden"),
+    namaResponden: readFirstString(item, ["namaResponden", "title", "sourceFileName"]),
     lokasi: readString(item, "lokasi"),
-    tipePekerjaan: readString(item, "tipePekerjaan"),
-    status: readString(item, "status"),
-    tanggalSurvey: readString(item, "tanggalSurvey"),
+    tipePekerjaan: readFirstString(item, [
+      "tipePekerjaan",
+      "effectiveCategory",
+      "kategori",
+      "detectedCategory",
+    ]),
+    status: readFirstString(item, ["status"]),
+    tanggalSurvey: readFirstString(item, [
+      "tanggalSurvey",
+      "tanggalPengumpulan",
+      "importedAt",
+    ]),
   };
 }
 
@@ -84,14 +127,57 @@ function ensurePayloadWithId(id: string, payload: unknown): Record<string, unkno
 
 function normalizeDataCollectionPayload(id: string, payload: unknown): Record<string, unknown> {
   const shaped = ensurePayloadWithId(id, payload);
+  const normalizedNamaResponden = readFirstString(shaped, [
+    "namaResponden",
+    "title",
+    "sourceFileName",
+  ]);
+  const normalizedTanggal = readFirstString(shaped, [
+    "tanggalPengumpulan",
+    "tanggalSurvey",
+    "importedAt",
+  ]);
+  const normalizedKategori = readFirstString(shaped, [
+    "kategori",
+    "effectiveCategory",
+    "detectedCategory",
+    "tipePekerjaan",
+  ]);
+  const normalizedTipePekerjaan = readFirstString(shaped, [
+    "tipePekerjaan",
+    "effectiveCategory",
+    "kategori",
+    "detectedCategory",
+  ]);
+  const normalizedStatus =
+    readFirstString(shaped, ["status"]) ??
+    (readFirstString(shaped, ["sourceType", "sourceFileName", "importBatchId"]) ? "Imported" : null);
+
   return {
     ...shaped,
     id,
-    namaResponden: readString(shaped, "namaResponden") ?? undefined,
+    noKoleksi: readFirstString(shaped, ["noKoleksi"]) ?? id,
+    namaResponden: normalizedNamaResponden ?? undefined,
     lokasi: readString(shaped, "lokasi") ?? undefined,
-    tipePekerjaan: readString(shaped, "tipePekerjaan") ?? undefined,
-    status: readString(shaped, "status") ?? undefined,
-    tanggalSurvey: readString(shaped, "tanggalSurvey") ?? undefined,
+    tipePekerjaan: normalizedTipePekerjaan ?? undefined,
+    status: normalizedStatus ?? undefined,
+    tanggalSurvey: normalizedTanggal ?? undefined,
+    tanggalPengumpulan: normalizedTanggal ?? undefined,
+    kategori: normalizedKategori ?? undefined,
+    namaKolektor: readString(shaped, "namaKolektor") ?? undefined,
+    jenisKontrak: readString(shaped, "jenisKontrak") ?? undefined,
+    priority: readString(shaped, "priority") ?? undefined,
+    title: readString(shaped, "title") ?? undefined,
+    sourceType: readString(shaped, "sourceType") ?? undefined,
+    sourceFileName: readString(shaped, "sourceFileName") ?? undefined,
+    sourceFile: readString(shaped, "sourceFile") ?? undefined,
+    importBatchId: readString(shaped, "importBatchId") ?? undefined,
+    importedAt: readString(shaped, "importedAt") ?? undefined,
+    detectedCategory: readString(shaped, "detectedCategory") ?? undefined,
+    effectiveCategory: readString(shaped, "effectiveCategory") ?? undefined,
+    fieldFit: normalizeFieldFit(shaped),
+    recommendedModules: readStringArray(shaped, "recommendedModules"),
+    mismatchNotes: readStringArray(shaped, "mismatchNotes"),
   };
 }
 

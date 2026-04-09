@@ -84,6 +84,135 @@ interface Material {
   status?: string;
 }
 
+const DATA_COLLECTION_MODULE_LABELS: Record<string, string> = {
+  quotations: "Quotation",
+  "purchase-orders": "Purchase Order",
+  "surat-jalan": "Surat Jalan",
+  "customer-invoices": "Invoice Customer",
+  "accounts-receivable": "Accounts Receivable",
+  "accounts-payable": "Accounts Payable",
+  "working-expense-sheets": "Biaya Kerja",
+  attendances: "Absensi",
+  payroll: "Payroll",
+  kasbons: "Kasbon",
+  employees: "Karyawan",
+  "inventory-center": "Inventory Center",
+  "stock-items": "Master Stok",
+  "stock-out": "Stock Out",
+  "project-material-usage": "Pemakaian Material",
+  "bank-reconciliations": "Rekonsiliasi Bank",
+  "petty-cash-transactions": "Kas Kecil",
+  "berita-acara": "Berita Acara",
+  "archive-registry": "Arsip",
+  "sales-analytics": "Sales Analytics",
+  "surat-keluar": "Surat Keluar",
+  "data-collections": "Data Collection",
+};
+
+const formatModuleLabel = (module: string) =>
+  DATA_COLLECTION_MODULE_LABELS[module] ||
+  module
+    .split(/[-_]/g)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+
+const isImportedDataCollection = (
+  item?: Partial<DataCollectionType> | null,
+) =>
+  Boolean(
+    item &&
+      (String(item.sourceType || "")
+        .toLowerCase()
+        .includes("import") ||
+        item.importBatchId ||
+        item.sourceFileName ||
+        item.status === "Imported"),
+  );
+
+const getFieldFitValue = (item?: Partial<DataCollectionType> | null) => {
+  const raw = String(item?.fieldFit || "").toLowerCase();
+  if (["high", "medium", "partial", "low"].includes(raw)) {
+    return raw as "high" | "medium" | "partial" | "low";
+  }
+  return "unknown";
+};
+
+const getFieldFitColor = (fieldFit: ReturnType<typeof getFieldFitValue>) => {
+  switch (fieldFit) {
+    case "high":
+      return "bg-emerald-100 text-emerald-700 border-emerald-200";
+    case "medium":
+      return "bg-sky-100 text-sky-700 border-sky-200";
+    case "partial":
+      return "bg-amber-100 text-amber-700 border-amber-200";
+    case "low":
+      return "bg-slate-100 text-slate-700 border-slate-200";
+    default:
+      return "bg-gray-100 text-gray-700 border-gray-200";
+  }
+};
+
+const getFieldFitLabel = (fieldFit: ReturnType<typeof getFieldFitValue>) => {
+  switch (fieldFit) {
+    case "high":
+      return "High Fit";
+    case "medium":
+      return "Medium Fit";
+    case "partial":
+      return "Partial Fit";
+    case "low":
+      return "Low Fit";
+    default:
+      return "Unknown Fit";
+  }
+};
+
+const getCollectionRecommendedModules = (
+  item?: Partial<DataCollectionType> | null,
+) =>
+  Array.isArray(item?.recommendedModules)
+    ? item.recommendedModules.filter(
+        (module): module is string =>
+          typeof module === "string" && module.trim().length > 0,
+      )
+    : [];
+
+const getCollectionCategory = (
+  item?: Partial<DataCollectionType> | null,
+) =>
+  item?.effectiveCategory ||
+  item?.kategori ||
+  item?.detectedCategory ||
+  item?.tipePekerjaan ||
+  "Survey";
+
+const getCollectionDate = (item?: Partial<DataCollectionType> | null) =>
+  item?.tanggalPengumpulan || item?.importedAt || "";
+
+const getCollectionCode = (item?: Partial<DataCollectionType> | null) =>
+  item?.noKoleksi || item?.id || "-";
+
+const getCollectionCollector = (item?: Partial<DataCollectionType> | null) =>
+  item?.namaKolektor ||
+  (isImportedDataCollection(item) ? "Imported Document" : "-");
+
+const canCreateQuotationFromCollection = (
+  item?: Partial<DataCollectionType> | null,
+) => {
+  if (!item) return false;
+  if (!isImportedDataCollection(item)) return true;
+  const modules = getCollectionRecommendedModules(item);
+  return getFieldFitValue(item) === "high" && modules.includes("quotations");
+};
+
+const getPrimaryRecommendedModuleLabel = (
+  item?: Partial<DataCollectionType> | null,
+) => {
+  const modules = getCollectionRecommendedModules(item);
+  return modules.length > 0 ? formatModuleLabel(modules[0]) : "Review Mapping";
+};
+
 const inlineSectionLoader = (
   <div className="rounded-2xl border border-dashed border-gray-300 bg-white/80 px-4 py-6 text-center text-sm font-semibold text-gray-500">
     Menyiapkan ringkasan section...
@@ -229,6 +358,16 @@ export default function DataCollection() {
   const [serverDataCollectionList, setServerDataCollectionList] = useState<DataCollectionType[] | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const effectiveDataCollectionList = serverDataCollectionList ?? dataCollectionList;
+  const selectedIsImported = isImportedDataCollection(selectedItem);
+  const selectedCanCreateQuotation = canCreateQuotationFromCollection(selectedItem);
+  const selectedFieldFit = getFieldFitValue(selectedItem);
+  const selectedRecommendedModules = getCollectionRecommendedModules(selectedItem);
+  const selectedCategory = getCollectionCategory(selectedItem);
+  const selectedCollector = getCollectionCollector(selectedItem);
+  const selectedDisplayCode = getCollectionCode(selectedItem);
+  const selectedDisplayDate = getCollectionDate(selectedItem);
+  const selectedPrimaryModule = getPrimaryRecommendedModuleLabel(selectedItem);
+  const selectedPriority = selectedItem?.priority || "Medium";
 
   const [searchTerm, setSearchTerm] = useState("");
   const [showModal, setShowModal] = useState(false);
@@ -368,7 +507,7 @@ export default function DataCollection() {
     schedule: [] as Schedule[],
     consumables: [] as Consumable[],
     equipment: [] as Equipment[],
-    status: "Draft" as "Draft" | "Verified" | "Completed",
+    status: "Draft" as "Draft" | "Verified" | "Completed" | "Imported",
     notes: "",
     priority: "Medium" as "Low" | "Medium" | "High" | "Urgent",
     tags: [] as string[],
@@ -432,6 +571,19 @@ export default function DataCollection() {
         (item.lokasi || "").toLowerCase().includes(search) ||
         (item.namaKolektor || "")
           .toLowerCase()
+          .includes(search) ||
+        (item.sourceFileName || "")
+          .toLowerCase()
+          .includes(search) ||
+        (item.title || "")
+          .toLowerCase()
+          .includes(search) ||
+        getCollectionCategory(item)
+          .toLowerCase()
+          .includes(search) ||
+        getCollectionRecommendedModules(item)
+          .join(" ")
+          .toLowerCase()
           .includes(search);
 
       return matchSearch;
@@ -441,6 +593,9 @@ export default function DataCollection() {
   // Statistics
   const stats = {
     total: (effectiveDataCollectionList || []).length,
+    imported: (effectiveDataCollectionList || []).filter((d) =>
+      isImportedDataCollection(d),
+    ).length,
     completed: (effectiveDataCollectionList || []).filter(
       (d) => d && d.status === "Completed",
     ).length,
@@ -450,9 +605,11 @@ export default function DataCollection() {
     draft: (effectiveDataCollectionList || []).filter(
       (d) => d && d.status === "Draft",
     ).length,
+    quotationReady: (effectiveDataCollectionList || []).filter((d) =>
+      canCreateQuotationFromCollection(d),
+    ).length,
     totalMaterials: (effectiveDataCollectionList || []).reduce(
-      (sum, d) =>
-        sum + (d && d.materials ? d.materials.length : 0),
+      (sum, d) => sum + (d && d.materials ? d.materials.length : 0),
       0,
     ),
   };
@@ -1036,9 +1193,15 @@ export default function DataCollection() {
 
   const getStatusColor = (status: string) => {
     switch (status) {
+      case "Imported":
+        return "bg-violet-100 text-violet-700 border-violet-200";
+      case "Verified":
+        return "bg-emerald-100 text-emerald-700 border-emerald-200";
+      case "Completed":
+        return "bg-blue-100 text-blue-700 border-blue-200";
       case "Draft":
       default:
-        return "bg-gray-100 text-gray-700";
+        return "bg-gray-100 text-gray-700 border-gray-200";
     }
   };
 
@@ -1102,7 +1265,7 @@ export default function DataCollection() {
         <div>
           <h1 className="text-gray-900">Data Collection</h1>
           <p className="text-gray-600">
-            Kelola data pengumpulan yang akan menjadi Project
+            Kelola survey lapangan dan dokumen hasil import sebelum dinaikkan ke modul operasional
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -1128,10 +1291,14 @@ export default function DataCollection() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-6 gap-4">
         <div className="bg-white p-6 rounded-lg border-2 border-gray-900">
           <div className="text-gray-600 mb-2">Total Data</div>
           <div className="text-gray-900">{stats.total}</div>
+        </div>
+        <div className="bg-white p-6 rounded-lg border border-gray-200">
+          <div className="text-gray-600 mb-2">Imported Docs</div>
+          <div className="text-violet-600">{stats.imported}</div>
         </div>
         <div className="bg-white p-6 rounded-lg border border-gray-200">
           <div className="text-gray-600 mb-2">Completed</div>
@@ -1146,12 +1313,8 @@ export default function DataCollection() {
           <div className="text-gray-600">{stats.draft}</div>
         </div>
         <div className="bg-white p-6 rounded-lg border border-gray-200">
-          <div className="text-gray-600 mb-2">
-            Total Materials
-          </div>
-          <div className="text-red-600">
-            {stats.totalMaterials}
-          </div>
+          <div className="text-gray-600 mb-2">Ready Quotation</div>
+          <div className="text-emerald-600">{stats.quotationReady}</div>
         </div>
       </div>
 
@@ -1194,6 +1357,21 @@ export default function DataCollection() {
               },
             ],
           },
+          {
+            title: "Dokumen Import",
+            items: [
+              {
+                label: "High Fit",
+                tone: "success",
+                description: "Dokumen import sudah cukup rapi dan modul tujuannya jelas, jadi aman untuk dinaikkan ke transaksi live.",
+              },
+              {
+                label: "Partial / Low Fit",
+                tone: "warning",
+                description: "Dokumen tetap aman disimpan di DB, tapi sebaiknya direview dulu karena field input app belum 1:1 dengan file sumber.",
+              },
+            ],
+          },
         ]}
       />
 
@@ -1206,7 +1384,7 @@ export default function DataCollection() {
           />
           <input
             type="text"
-            placeholder="Cari data collection..."
+            placeholder="Cari data collection, dokumen import, file sumber, atau modul tujuan..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
@@ -1218,15 +1396,31 @@ export default function DataCollection() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {filteredData.map((item) => {
           const materialCount = item.materials?.length || 0;
+          const isImported = isImportedDataCollection(item);
+          const fieldFit = getFieldFitValue(item);
+          const recommendedModules = getCollectionRecommendedModules(item);
+          const canCreateQuotation = canCreateQuotationFromCollection(item);
+          const primaryRecommendedModule = getPrimaryRecommendedModuleLabel(item);
+          const displayCategory = getCollectionCategory(item);
+          const displayCode = getCollectionCode(item);
+          const displayDate = getCollectionDate(item);
+          const displayCollector = getCollectionCollector(item);
           
           // Check if this data collection has quotations
           const hasQuotation = quotationList?.some((q: any) => q.dataCollectionId === item.id);
           const quotationCount = quotationList?.filter((q: any) => q.dataCollectionId === item.id).length || 0;
+          const cardBorderClass = isImported
+            ? fieldFit === "high"
+              ? "border-emerald-500"
+              : fieldFit === "medium" || fieldFit === "partial"
+                ? "border-amber-400"
+                : "border-slate-400"
+            : "border-red-600";
 
           return (
             <div
               key={item.id}
-              className="bg-white rounded-lg border-2 border-red-600 p-6 hover:shadow-lg transition-shadow"
+              className={`bg-white rounded-lg border-2 p-6 hover:shadow-lg transition-shadow ${cardBorderClass}`}
             >
               <div className="flex items-start justify-between mb-4">
                 <div>
@@ -1234,7 +1428,7 @@ export default function DataCollection() {
                     {item.namaResponden}
                   </div>
                   <div className="text-gray-600 font-mono text-sm">
-                    {item.noKoleksi}
+                    {displayCode}
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
@@ -1256,13 +1450,13 @@ export default function DataCollection() {
                 <div className="flex items-center justify-between text-gray-600">
                   <span>Kategori:</span>
                   <span className="text-gray-900 font-semibold">
-                    {item.kategori}
+                    {displayCategory}
                   </span>
                 </div>
                 <div className="flex items-center gap-2 text-gray-600">
                   <Calendar size={16} />
                   <span>
-                    {formatDisplayDate(item.tanggalPengumpulan)}
+                    {formatDisplayDate(displayDate)}
                   </span>
                 </div>
                 <div className="flex items-center gap-2 text-gray-600">
@@ -1271,9 +1465,48 @@ export default function DataCollection() {
                 </div>
                 <div className="flex items-center gap-2 text-gray-600">
                   <Users size={16} />
-                  <span>{item.namaKolektor}</span>
+                  <span>{displayCollector}</span>
                 </div>
               </div>
+
+              {isImported && (
+                <div className="mb-4 rounded-xl border border-dashed border-gray-300 bg-gray-50 p-4 space-y-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-gray-500">
+                      <ClipboardList size={14} className="text-violet-600" />
+                      Dokumen Import
+                    </div>
+                    <span className={`px-3 py-1 rounded-full border text-xs font-bold ${getFieldFitColor(fieldFit)}`}>
+                      {getFieldFitLabel(fieldFit)}
+                    </span>
+                  </div>
+                  <div className="text-sm font-semibold text-gray-900 break-all">
+                    {item.sourceFileName || item.title || "Dokumen sumber tanpa nama file"}
+                  </div>
+                  {recommendedModules.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {recommendedModules.slice(0, 3).map((module) => (
+                        <span
+                          key={module}
+                          className="px-2.5 py-1 rounded-full bg-white border border-gray-200 text-xs font-semibold text-gray-700"
+                        >
+                          {formatModuleLabel(module)}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  {item.mismatchNotes && item.mismatchNotes.length > 0 ? (
+                    <div className="flex items-start gap-2 text-xs text-amber-700">
+                      <AlertCircle size={14} className="mt-0.5 shrink-0" />
+                      <span>{item.mismatchNotes[0]}</span>
+                    </div>
+                  ) : (
+                    <div className="text-xs text-emerald-700 font-medium">
+                      Metadata import sudah cukup rapi untuk dipakai sebagai sumber data modul tujuan.
+                    </div>
+                  )}
+                </div>
+              )}
 
               <div className="mb-4">
                 <div className="flex items-center justify-between text-gray-600 mb-2">
@@ -1287,9 +1520,9 @@ export default function DataCollection() {
                 </div>
                 <div className="flex items-center gap-2">
                   <span
-                    className={`px-3 py-1 rounded-full text-sm font-semibold ${getPriorityColor(item.priority)}`}
+                    className={`px-3 py-1 rounded-full text-sm font-semibold ${getPriorityColor(item.priority || "Medium")}`}
                   >
-                    {item.priority}
+                    {item.priority || "Medium"}
                   </span>
                   {hasQuotation && (
                     <span className="px-3 py-1 bg-gradient-to-r from-red-600 to-gray-900 text-white rounded-full text-xs font-bold flex items-center gap-1">
@@ -1378,7 +1611,7 @@ export default function DataCollection() {
                       View All
                     </button>
                   </div>
-                ) : (
+                ) : canCreateQuotation ? (
                   <button
                     onClick={() => {
                       navigate("/sales/quotation", {
@@ -1391,8 +1624,16 @@ export default function DataCollection() {
                     className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-gradient-to-r from-red-600 to-gray-900 text-white rounded-lg hover:from-red-700 hover:to-black transition-colors font-semibold"
                   >
                     <Calculator size={18} />
-                    Create Quotation
+                    {isImported ? "Naikkan ke Quotation" : "Create Quotation"}
                   </button>
+                ) : (
+                  <div className="w-full rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                    <div className="font-bold mb-1">Belum aman diarahkan ke quotation.</div>
+                    <div>
+                      Modul yang lebih cocok saat ini:{" "}
+                      <span className="font-semibold">{primaryRecommendedModule}</span>
+                    </div>
+                  </div>
                 )}
               </div>
             </div>
@@ -1722,11 +1963,14 @@ export default function DataCollection() {
                           onChange={(e) =>
                             setFormData({
                               ...formData,
-                              status: e.target.value as "Draft" | "Verified" | "Completed",
+                              status: e.target.value as "Draft" | "Verified" | "Completed" | "Imported",
                             })
                           }
                           className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-600 focus:border-transparent font-bold"
                         >
+                          {formData.status === "Imported" && (
+                            <option value="Imported">Imported</option>
+                          )}
                           <option value="Draft">Draft</option>
                           <option value="Verified">Verified</option>
                           <option value="Completed">Completed</option>
@@ -2689,7 +2933,7 @@ export default function DataCollection() {
                     {selectedItem.namaResponden}
                   </h2>
                   <div className="inline-block px-3 py-1 bg-gray-200 text-gray-700 rounded text-sm font-mono font-bold border border-gray-300">
-                    {selectedItem.noKoleksi}
+                    {selectedDisplayCode}
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
@@ -2704,22 +2948,33 @@ export default function DataCollection() {
                     </span>
                   </div>
 
-                  <button
-                    onClick={() => {
-                      setShowDetailModal(false);
-                      navigate("/sales/quotation", {
-                        state: {
-                          openQuotationModal: true,
-                          selectedDataCollectionId:
-                            selectedItem.id,
-                        },
-                      });
-                    }}
-                    className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-all font-bold shadow-sm ml-4"
-                  >
-                    <Send size={18} />
-                    Buat Quotation
-                  </button>
+                  {selectedCanCreateQuotation ? (
+                    <button
+                      onClick={() => {
+                        setShowDetailModal(false);
+                        navigate("/sales/quotation", {
+                          state: {
+                            openQuotationModal: true,
+                            selectedDataCollectionId:
+                              selectedItem.id,
+                          },
+                        });
+                      }}
+                      className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-all font-bold shadow-sm ml-4"
+                    >
+                      <Send size={18} />
+                      {selectedIsImported ? "Naikkan ke Quotation" : "Buat Quotation"}
+                    </button>
+                  ) : selectedIsImported ? (
+                    <div className="hidden md:flex flex-col items-end ml-4">
+                      <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">
+                        Arah Modul
+                      </span>
+                      <span className={`px-4 py-1.5 rounded-full text-xs font-black uppercase tracking-tighter shadow-sm border ${getFieldFitColor(selectedFieldFit)}`}>
+                        {selectedPrimaryModule}
+                      </span>
+                    </div>
+                  ) : null}
 
                   <button
                     onClick={() => setShowDetailModal(false)}
@@ -2830,7 +3085,7 @@ export default function DataCollection() {
                         Kategori
                       </span>
                       <span className="text-gray-900 font-semibold">
-                        {selectedItem.kategori}
+                        {selectedCategory}
                       </span>
                     </div>
                     <div className="flex items-center justify-between">
@@ -2838,9 +3093,7 @@ export default function DataCollection() {
                         Tanggal Pengumpulan
                       </span>
                       <span className="text-gray-900 font-bold">
-                        {formatDisplayDate(
-                          selectedItem.tanggalPengumpulan,
-                        )}
+                        {formatDisplayDate(selectedDisplayDate)}
                       </span>
                     </div>
                     <div className="flex items-center justify-between">
@@ -2856,7 +3109,7 @@ export default function DataCollection() {
                         Kolektor
                       </span>
                       <span className="text-gray-900">
-                        {selectedItem.namaKolektor}
+                        {selectedCollector}
                       </span>
                     </div>
                     <div className="flex items-center justify-between">
@@ -2880,11 +3133,69 @@ export default function DataCollection() {
                         Priority
                       </span>
                       <span
-                        className={`px-3 py-1 rounded-full text-sm font-semibold ${getPriorityColor(selectedItem.priority)}`}
+                        className={`px-3 py-1 rounded-full text-sm font-semibold ${getPriorityColor(selectedPriority)}`}
                       >
-                        {selectedItem.priority}
+                        {selectedPriority}
                       </span>
                     </div>
+                    {selectedIsImported && (
+                      <div className="mt-4 rounded-xl border border-dashed border-gray-300 bg-gray-50 p-4 space-y-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-gray-500">
+                            <ClipboardList size={14} className="text-violet-600" />
+                            Mapping Dokumen Import
+                          </div>
+                          <span className={`px-3 py-1 rounded-full border text-xs font-bold ${getFieldFitColor(selectedFieldFit)}`}>
+                            {getFieldFitLabel(selectedFieldFit)}
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                          <div>
+                            <div className="text-gray-500 text-xs font-black uppercase tracking-widest mb-1">
+                              File Sumber
+                            </div>
+                            <div className="font-semibold text-gray-900 break-all">
+                              {selectedItem.sourceFileName || selectedItem.title || "-"}
+                            </div>
+                          </div>
+                          <div>
+                            <div className="text-gray-500 text-xs font-black uppercase tracking-widest mb-1">
+                              Batch Import
+                            </div>
+                            <div className="font-semibold text-gray-900 break-all">
+                              {selectedItem.importBatchId || "-"}
+                            </div>
+                          </div>
+                        </div>
+                        {selectedRecommendedModules.length > 0 && (
+                          <div>
+                            <div className="text-gray-500 text-xs font-black uppercase tracking-widest mb-2">
+                              Modul Tujuan
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                              {selectedRecommendedModules.map((module) => (
+                                <span
+                                  key={module}
+                                  className="px-2.5 py-1 rounded-full bg-white border border-gray-200 text-xs font-semibold text-gray-700"
+                                >
+                                  {formatModuleLabel(module)}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        {selectedItem.mismatchNotes && selectedItem.mismatchNotes.length > 0 && (
+                          <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                            <div className="font-bold mb-1">Catatan Review</div>
+                            <ul className="space-y-1">
+                              {selectedItem.mismatchNotes.map((note, idx) => (
+                                <li key={`${selectedItem.id}-note-${idx}`}>{note}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                      </div>
+                    )}
                     {selectedItem.signature && (
                       <div className="mt-4 pt-4 border-t border-gray-100">
                         <span className="text-gray-600 block mb-2 font-bold text-xs uppercase tracking-wider text-red-600">
@@ -2942,30 +3253,39 @@ export default function DataCollection() {
                             size={16}
                             className="text-red-600"
                           />
-                          Executive Survey Analysis
+                          {selectedIsImported ? "Import Mapping Summary" : "Executive Survey Analysis"}
                         </h3>
                         <div className="px-3 py-1 bg-red-600 text-white text-[10px] font-black uppercase tracking-tighter rounded italic">
-                          Predictive Model
+                          {selectedIsImported ? "Import Safety" : "Predictive Model"}
                         </div>
                       </div>
 
                       <div className="grid grid-cols-3 gap-4">
                         <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
                           <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">
-                            Complexity
+                            {selectedIsImported ? "Field Fit" : "Complexity"}
                           </div>
                           <div className="text-xl font-black text-gray-900">
-                            {selectedItem.materials?.length > 10
-                              ? "HIGH"
-                              : "MEDIUM"}
+                            {selectedIsImported
+                              ? getFieldFitLabel(selectedFieldFit).toUpperCase()
+                              : selectedItem.materials?.length > 10
+                                ? "HIGH"
+                                : "MEDIUM"}
                           </div>
                           <div className="w-full bg-gray-100 h-1.5 rounded-full mt-2 overflow-hidden">
                             <div
-                              className="bg-red-600 h-full"
+                              className={`${selectedIsImported ? "bg-violet-600" : "bg-red-600"} h-full`}
                               style={{
-                                width:
-                                  selectedItem.materials
-                                    ?.length > 10
+                                width: selectedIsImported
+                                  ? selectedFieldFit === "high"
+                                    ? "92%"
+                                    : selectedFieldFit === "medium"
+                                      ? "72%"
+                                      : selectedFieldFit === "partial"
+                                        ? "55%"
+                                        : "28%"
+                                  : selectedItem.materials
+                                      ?.length > 10
                                     ? "85%"
                                     : "45%",
                               }}
@@ -2974,20 +3294,25 @@ export default function DataCollection() {
                         </div>
                         <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
                           <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">
-                            Manpower Intensity
+                            {selectedIsImported ? "Target Module" : "Manpower Intensity"}
                           </div>
                           <div className="text-xl font-black text-gray-900">
-                            {selectedItem.manpower?.length > 5
-                              ? "INTENSE"
-                              : "NORMAL"}
+                            {selectedIsImported
+                              ? selectedPrimaryModule.toUpperCase()
+                              : selectedItem.manpower?.length > 5
+                                ? "INTENSE"
+                                : "NORMAL"}
                           </div>
                           <div className="w-full bg-gray-100 h-1.5 rounded-full mt-2 overflow-hidden">
                             <div
-                              className="bg-blue-600 h-full"
+                              className={`${selectedIsImported ? "bg-amber-500" : "bg-blue-600"} h-full`}
                               style={{
-                                width:
-                                  selectedItem.manpower
-                                    ?.length > 5
+                                width: selectedIsImported
+                                  ? selectedRecommendedModules.length > 0
+                                    ? "88%"
+                                    : "35%"
+                                  : selectedItem.manpower
+                                      ?.length > 5
                                     ? "90%"
                                     : "50%",
                               }}
@@ -2996,20 +3321,27 @@ export default function DataCollection() {
                         </div>
                         <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
                           <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">
-                            Project Readiness
+                            {selectedIsImported ? "Promotion Status" : "Project Readiness"}
                           </div>
                           <div className="text-xl font-black text-gray-900">
-                            {selectedItem.status === "Verified"
-                              ? "100%"
-                              : "65%"}
+                            {selectedIsImported
+                              ? selectedCanCreateQuotation
+                                ? "READY"
+                                : "REVIEW"
+                              : selectedItem.status === "Verified"
+                                ? "100%"
+                                : "65%"}
                           </div>
                           <div className="w-full bg-gray-100 h-1.5 rounded-full mt-2 overflow-hidden">
                             <div
-                              className="bg-emerald-600 h-full"
+                              className={`${selectedIsImported ? "bg-emerald-600" : "bg-emerald-600"} h-full`}
                               style={{
-                                width:
-                                  selectedItem.status ===
-                                  "Verified"
+                                width: selectedIsImported
+                                  ? selectedCanCreateQuotation
+                                    ? "100%"
+                                    : "48%"
+                                  : selectedItem.status ===
+                                      "Verified"
                                     ? "100%"
                                     : "65%",
                               }}

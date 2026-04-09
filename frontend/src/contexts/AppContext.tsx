@@ -257,6 +257,14 @@ export interface Project {
   nilaiKontrak: number;
   status: string;
   progress: number;
+  progressAuto?: number;
+  progressOverride?: number | null;
+  progressOverrideReason?: string | null;
+  progressOverrideAt?: string | null;
+  progressOverrideBy?: string | null;
+  progressOverrideByUserId?: string | null;
+  progressOverrideByRole?: string | null;
+  progressFinalSource?: "manual" | "auto" | "override" | string;
   endDate: string;
 
   budget?: any;
@@ -576,11 +584,23 @@ export interface DataCollection {
   equipment?: any[];
   scopeOfWork?: string[];
   exclusions?: string[];
-  status: "Draft" | "Verified" | "Completed";
+  status: "Draft" | "Verified" | "Completed" | "Imported";
   notes?: string;
   priority: "Low" | "Medium" | "High" | "Urgent";
   tags?: string[];
   signature?: string;
+  title?: string;
+  sourceType?: string;
+  sourceFileName?: string;
+  sourceFile?: string;
+  importBatchId?: string;
+  importedAt?: string;
+  detectedCategory?: string;
+  effectiveCategory?: string;
+  fieldFit?: "high" | "medium" | "partial" | "low" | "unknown";
+  recommendedModules?: string[];
+  mismatchNotes?: string[];
+  extracted?: Record<string, any> | any;
 }
 
 export interface Payroll {
@@ -2939,10 +2959,30 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         const totalCompleted = projectWOs.reduce((sum, w) => sum + (w.completedQty || 0), 0);
         if (totalTarget > 0) {
           const newProgress = Math.min(100, Math.round((totalCompleted / totalTarget) * 100));
-          setProjectList((prev) => prev.map((p) => (p.id === targetWO.projectId ? { ...p, progress: newProgress } : p)));
-          api.patch(`/projects/${targetWO.projectId}`, { progress: newProgress }).catch((err) => {
-            console.error("Failed to sync project progress from production:", err);
-          });
+          setProjectList((prev) =>
+            prev.map((p) => {
+              if (p.id !== targetWO.projectId) return p;
+              const hasOverride = typeof p.progressOverride === "number" && Number.isFinite(p.progressOverride);
+              return {
+                ...p,
+                progressAuto: newProgress,
+                progress: hasOverride ? Math.min(100, Math.max(0, Math.round(Number(p.progressOverride)))) : newProgress,
+                progressFinalSource: hasOverride ? "override" : "auto",
+              };
+            })
+          );
+          api
+            .patch(`/projects/${targetWO.projectId}`, { progressAuto: newProgress })
+            .then((res) => {
+              if (res?.data) {
+                setProjectList((prev) =>
+                  prev.map((p) => (p.id === targetWO.projectId ? (res.data as Project) : p))
+                );
+              }
+            })
+            .catch((err) => {
+              console.error("Failed to sync project progress from production:", err);
+            });
         }
       }
 
