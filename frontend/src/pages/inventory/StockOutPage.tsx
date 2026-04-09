@@ -303,39 +303,39 @@ export default function StockOutPage() {
   return (
     <div className="p-4 md:p-8 space-y-8 bg-[#F8FAFC] min-h-screen">
       {/* Header Section */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 bg-white p-8 rounded-3xl shadow-sm border border-slate-200 relative overflow-hidden">
+      <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-6 bg-white p-5 sm:p-8 rounded-3xl shadow-sm border border-slate-200 relative overflow-hidden">
         <div className="absolute top-0 right-0 w-32 h-32 bg-rose-50 rounded-full -mr-16 -mt-16 opacity-50" />
         
-        <div className="relative flex items-center gap-5">
-          <div className="w-16 h-16 bg-slate-800 rounded-2xl flex items-center justify-center text-white shadow-xl shadow-slate-200 rotate-3">
+        <div className="relative flex items-start sm:items-center gap-4 sm:gap-5">
+          <div className="w-14 h-14 sm:w-16 sm:h-16 bg-slate-800 rounded-2xl flex items-center justify-center text-white shadow-xl shadow-slate-200 rotate-3 shrink-0">
             <ArrowDownRight size={32} />
           </div>
           <div>
-            <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight italic uppercase">Stok Keluar (Outbound)</h1>
-            <div className="flex items-center gap-2 mt-1">
+            <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight italic uppercase">Stok Keluar (Outbound)</h1>
+            <div className="flex items-center gap-2 mt-1 flex-wrap">
               <span className="w-2 h-2 bg-indigo-500 rounded-full animate-pulse" />
               <p className="text-sm text-slate-500 font-bold uppercase tracking-widest">Project Issue & material release</p>
             </div>
           </div>
         </div>
         
-        <div className="flex items-center gap-3">
+        <div className="flex w-full flex-col gap-3 sm:flex-row sm:flex-wrap xl:w-auto xl:justify-end">
           <button
             onClick={() => void fetchStockOutSources()}
             disabled={isRefreshing}
-            className="px-6 py-4 bg-white border-2 border-slate-200 text-slate-900 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-slate-50 transition-all disabled:opacity-60"
+            className="px-6 py-4 bg-white border-2 border-slate-200 text-slate-900 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-slate-50 transition-all disabled:opacity-60 w-full sm:w-auto"
           >
             {isRefreshing ? 'Refreshing...' : 'Refresh'}
           </button>
           <button 
             onClick={() => navigate('/inventory/stock-journal')}
-            className="px-6 py-4 bg-white border-2 border-slate-200 text-slate-900 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-slate-50 transition-all flex items-center gap-2"
+            className="px-6 py-4 bg-white border-2 border-slate-200 text-slate-900 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-slate-50 transition-all flex items-center justify-center gap-2 w-full sm:w-auto"
           >
             <History size={18} /> Mutasi
           </button>
           <button 
             onClick={() => setShowModal(true)}
-          className="relative px-8 py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-black text-xs uppercase tracking-[0.2em] transition-all flex items-center justify-center gap-3 shadow-lg shadow-indigo-100 active:scale-95"
+          className="relative px-8 py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-black text-xs uppercase tracking-[0.2em] transition-all flex items-center justify-center gap-3 shadow-lg shadow-indigo-100 active:scale-95 w-full sm:w-auto"
         >
           <Plus size={20} /> Entry Stok Keluar
         </button>
@@ -371,7 +371,7 @@ export default function StockOutPage() {
       {/* Table */}
       <div className="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
+          <table className="w-full min-w-[920px] text-left border-collapse">
             <thead>
               <tr className="bg-slate-50/50 border-b border-slate-100">
                 <th className="px-8 py-6 text-[11px] font-black text-slate-400 uppercase tracking-[0.2em]">No Jurnal</th>
@@ -420,9 +420,9 @@ export default function StockOutPage() {
       {showModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-start justify-center z-[100] overflow-y-auto p-4 sm:items-center">
           <div className="my-4 w-full max-w-5xl max-h-[calc(100vh-2rem)] overflow-auto rounded-[2.5rem] border border-slate-200 bg-white shadow-2xl sm:my-8 sm:max-h-[90vh]">
-            <div className="sticky top-0 bg-white border-b border-slate-100 px-4 sm:px-8 py-5 sm:py-6 flex justify-between items-center z-10">
+            <div className="sticky top-0 bg-white border-b border-slate-100 px-4 sm:px-8 py-5 sm:py-6 flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center z-10">
               <h3 className="text-2xl font-black uppercase italic tracking-tighter">Entry Stok Keluar Baru</h3>
-              <button onClick={() => setShowModal(false)} className="w-10 h-10 bg-slate-50 text-slate-400 rounded-xl flex items-center justify-center hover:bg-red-50 hover:text-red-600 transition-all">
+              <button onClick={() => setShowModal(false)} className="w-10 h-10 bg-slate-50 text-slate-400 rounded-xl flex items-center justify-center hover:bg-red-50 hover:text-red-600 transition-all self-end sm:self-auto">
                 <X size={20} />
               </button>
             </div>
@@ -502,7 +502,7 @@ export default function StockOutPage() {
               </div>
 
               {/* REAL-TIME COST IMPACT (Executive Feature) */}
-              <div className="bg-indigo-900 p-6 rounded-[2rem] text-white flex justify-between items-center shadow-xl shadow-indigo-100 overflow-hidden relative group">
+              <div className="bg-indigo-900 p-6 rounded-[2rem] text-white flex flex-col gap-4 sm:flex-row sm:justify-between sm:items-center shadow-xl shadow-indigo-100 overflow-hidden relative group">
                 <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full -mr-16 -mt-16 group-hover:scale-150 transition-transform duration-700" />
                 <div className="relative z-10">
                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-indigo-300 mb-1">Estimated Material Cost Release</p>
@@ -529,8 +529,8 @@ export default function StockOutPage() {
                 
                 <div className="space-y-3">
                   {formData.items.map((item, index) => (
-                    <div key={index} className="grid grid-cols-12 gap-3 items-end bg-slate-50 p-5 rounded-3xl border border-slate-100">
-                      <div className="col-span-3">
+                    <div key={index} className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end bg-slate-50 p-5 rounded-3xl border border-slate-100">
+                      <div className="col-span-1 sm:col-span-3">
                         <label className="block text-[9px] font-black text-slate-400 uppercase mb-1.5 ml-1 flex justify-between">
                           SKU
                           <div className="flex gap-1">
@@ -572,15 +572,15 @@ export default function StockOutPage() {
                           required 
                         />
                       </div>
-                      <div className="col-span-4">
+                      <div className="col-span-1 sm:col-span-4">
                         <label className="block text-[9px] font-black text-slate-400 uppercase mb-1.5 ml-1">Deskripsi Barang</label>
                         <input type="text" value={item.nama} onChange={(e) => updateItem(index, 'nama', e.target.value)} className="w-full px-4 py-2.5 bg-white border-2 border-slate-100 rounded-xl text-xs font-bold outline-none focus:border-indigo-500 transition-colors" required />
                       </div>
-                      <div className="col-span-2">
+                      <div className="col-span-1 sm:col-span-2">
                         <label className="block text-[9px] font-black text-slate-400 uppercase mb-1.5 ml-1">Batch #</label>
                         <input type="text" value={item.batchNo} onChange={(e) => updateItem(index, 'batchNo', e.target.value)} className="w-full px-4 py-2.5 bg-white border-2 border-slate-100 rounded-xl text-xs font-bold outline-none focus:border-indigo-500 transition-colors" placeholder="Lot (Optional)" />
                       </div>
-                      <div className="col-span-1">
+                      <div className="col-span-1 relative">
                         <label className="block text-[9px] font-black text-slate-400 uppercase mb-1.5 ml-1">Qty</label>
                         <input 
                           type="number" 
@@ -629,7 +629,7 @@ export default function StockOutPage() {
                 ))}
               </datalist>
 
-              <div className="flex gap-4 pt-4">
+              <div className="flex flex-col-reverse sm:flex-row gap-4 pt-4">
                 <button type="button" onClick={() => setShowModal(false)} className="flex-1 py-4 text-[11px] font-black uppercase tracking-widest text-slate-400">Batal</button>
                 <button type="submit" className="flex-[2] py-4 bg-rose-600 text-white rounded-2xl text-[11px] font-black uppercase tracking-widest shadow-lg shadow-rose-100">Posting Pengeluaran</button>
               </div>
@@ -640,17 +640,17 @@ export default function StockOutPage() {
 
       {/* Detail Modal */}
       {showDetailModal && selectedStockOut && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
-          <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-3xl overflow-hidden">
-            <div className="p-8 bg-slate-900 text-white flex justify-between items-start">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-start justify-center z-[100] p-3 sm:p-4 overflow-y-auto sm:items-center">
+          <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-3xl overflow-hidden my-3 sm:my-6 max-h-[calc(100vh-1.5rem)] sm:max-h-[90vh] overflow-y-auto">
+            <div className="p-5 sm:p-8 bg-slate-900 text-white flex justify-between items-start">
               <div>
                 <h3 className="text-2xl font-black uppercase italic tracking-tighter">Detail Pengeluaran</h3>
                 <p className="text-white/50 text-[10px] font-black uppercase tracking-widest mt-1">{selectedStockOut.noStockOut}</p>
               </div>
               <button onClick={() => setShowDetailModal(false)} className="p-2 bg-white/10 rounded-xl hover:bg-white/20 transition-all"><X size={20} /></button>
             </div>
-            <div className="p-8 space-y-6">
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+            <div className="p-5 sm:p-8 space-y-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6">
                 <div>
                   <p className="text-[9px] font-black text-slate-400 uppercase mb-1">Tgl Keluar</p>
                   <p className="font-black text-slate-900 italic">{new Date(selectedStockOut.tanggal).toLocaleDateString('id-ID')}</p>
@@ -700,7 +700,7 @@ export default function StockOutPage() {
                 </div>
               )}
 
-              <div className="flex gap-4">
+              <div className="flex flex-col sm:flex-row gap-4">
                 <button 
                   onClick={() => setShowPrintView(true)}
                   className="flex-1 py-4 bg-slate-900 text-white rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] flex items-center justify-center gap-2 hover:bg-black transition-all"

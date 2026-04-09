@@ -759,18 +759,18 @@ export default function PurchaseOrderPage() {
           <h1 className="text-3xl font-bold mb-2">🛒 Purchase Order</h1>
           <p className="text-gray-600 italic">Manajemen Pembelian & Pesanan Barang</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
           {poList.length > 0 && (
             <button
               onClick={handleClearAllPO}
-              className="bg-red-50 hover:bg-red-100 text-red-600 px-4 py-2 rounded-lg font-bold flex items-center gap-2 border border-red-200 transition-all"
+              className="bg-red-50 hover:bg-red-100 text-red-600 px-4 py-2 rounded-lg font-bold flex items-center justify-center gap-2 border border-red-200 transition-all w-full sm:w-auto"
             >
               <Trash2 size={20} /> Hapus Semua
             </button>
           )}
           <button
             onClick={() => { resetForm(); setShowModal(true); }}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-bold flex items-center gap-2 shadow-md transition-all"
+            className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-bold flex items-center justify-center gap-2 shadow-md transition-all w-full sm:w-auto"
           >
             <Plus size={20} /> Buat PO Baru
           </button>
@@ -864,7 +864,8 @@ export default function PurchaseOrderPage() {
 
       {/* Table */}
       <div className="bg-white rounded-xl border shadow-sm overflow-hidden mb-6">
-        <table className="w-full text-left">
+        <div className="overflow-x-auto">
+        <table className="w-full min-w-[980px] text-left">
           <thead className="bg-gray-50 border-b text-xs font-bold text-gray-500 uppercase">
             <tr>
               <th className="px-6 py-4">No PO / Tanggal</th>
@@ -902,7 +903,7 @@ export default function PurchaseOrderPage() {
                   </span>
                 </td>
                 <td className="px-6 py-4">
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <button onClick={() => { setSelectedPO(po); setShowDetailModal(true); }} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg" title="Lihat Detail"><Eye size={18} /></button>
                     {po.status === 'Draft' && (
                       <>
@@ -942,18 +943,19 @@ export default function PurchaseOrderPage() {
             ))}
           </tbody>
         </table>
+        </div>
       </div>
 
       {/* Modal Input */}
       {showModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-start justify-center overflow-y-auto z-[100] p-4 sm:items-center">
           <div className="my-4 flex max-h-[calc(100vh-2rem)] w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl sm:my-8 sm:max-h-[90vh]">
-            <div className="p-4 sm:p-6 border-b flex justify-between items-center bg-gray-50">
+            <div className="p-4 sm:p-6 border-b flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center bg-gray-50">
               <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
                 <FileText size={24} className="text-blue-600" />
                 {editMode ? 'Edit Purchase Order' : 'Buat Purchase Order Baru'}
               </h2>
-              <button onClick={() => { setShowModal(false); resetForm(); }} className="text-gray-400 hover:text-gray-600"><X size={28} /></button>
+              <button onClick={() => { setShowModal(false); resetForm(); }} className="self-end text-gray-400 hover:text-gray-600 sm:self-auto"><X size={28} /></button>
             </div>
             <form onSubmit={handleSubmit} className="p-4 sm:p-6 overflow-y-auto flex-grow bg-white">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
@@ -963,7 +965,7 @@ export default function PurchaseOrderPage() {
                     <label className="block text-[10px] font-black italic text-gray-500 uppercase mb-1 tracking-widest">No. PO</label>
                     <input type="text" name="noPO" value={formData.noPO || ''} onChange={handleInputChange} className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 font-black italic uppercase tracking-tighter" placeholder="Contoh: 49/GMT/PO/III/2025" />
                   </div>
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
                       <label className="block text-[10px] font-black italic text-gray-500 uppercase mb-1 tracking-widest">Tanggal</label>
                       <input type="date" name="tanggal" value={formData.tanggal || ''} onChange={handleInputChange} className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 font-black italic" />
@@ -973,7 +975,7 @@ export default function PurchaseOrderPage() {
                       <input type="text" name="ref" value={formData.ref || ''} onChange={handleInputChange} className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 font-black italic uppercase tracking-tighter" placeholder="Optional" />
                     </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
                       <label className="block text-[10px] font-black italic text-gray-500 uppercase mb-1 tracking-widest">TOP (Hari)</label>
                       <input type="number" name="top" value={formData.top || 0} onChange={handleInputChange} className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 font-black italic" placeholder="30" />
@@ -999,7 +1001,7 @@ export default function PurchaseOrderPage() {
 
                 <div className="space-y-4">
                   <h3 className="font-black italic text-purple-800 border-b pb-1 flex items-center gap-2 uppercase tracking-tighter">📍 Lokasi & Project</h3>
-                  <div className="flex items-end gap-2">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
                     <div className="flex-grow">
                       <label className="block text-[10px] font-black italic text-gray-500 uppercase mb-1 tracking-widest">Project</label>
                       <select name="projectId" value={formData.projectId || ''} onChange={handleInputChange} className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 font-black italic uppercase tracking-tighter">
@@ -1061,7 +1063,7 @@ export default function PurchaseOrderPage() {
                             toast.error("Proyek ini belum memiliki BOQ atau semua item sudah teralokasi.");
                           }
                         }}
-                        className="px-3 py-2 bg-indigo-600 text-white rounded-lg text-xs font-bold hover:bg-indigo-700 transition-colors flex items-center gap-1"
+                        className="px-3 py-2 bg-indigo-600 text-white rounded-lg text-xs font-bold hover:bg-indigo-700 transition-colors flex items-center justify-center gap-1 w-full sm:w-auto"
                         title="Tarik data dari Bill of Quantities Proyek"
                       >
                         <LinkIcon size={14} /> BOQ
@@ -1092,12 +1094,12 @@ export default function PurchaseOrderPage() {
                 <div className="space-y-4">
                   {items.map((item, index) => (
                     <div key={index} className="bg-gray-50 p-4 rounded-2xl border border-gray-100 shadow-sm transition-all hover:border-blue-200">
-                      <div className="flex gap-4 items-start">
-                        <div className="w-8 h-8 rounded-full bg-white border border-gray-200 flex items-center justify-center text-xs font-black text-gray-400 mt-6">{index + 1}</div>
+                      <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+                        <div className="w-8 h-8 rounded-full bg-white border border-gray-200 flex items-center justify-center text-xs font-black text-gray-400 sm:mt-6">{index + 1}</div>
                         
                         <div className="flex-grow space-y-3">
-                          <div className="grid grid-cols-12 gap-4">
-                            <div className="col-span-12 lg:col-span-6">
+                          <div className="grid grid-cols-1 sm:grid-cols-12 gap-4">
+                            <div className="col-span-1 sm:col-span-12 lg:col-span-6">
                               <div className="flex justify-between items-center mb-1">
                                 <label className="block text-[10px] font-black italic text-gray-400 uppercase tracking-widest">Nama Barang / Spesifikasi</label>
                                 {item.isNewSku ? (
@@ -1130,17 +1132,17 @@ export default function PurchaseOrderPage() {
                               </datalist>
                             </div>
 
-                            <div className="col-span-6 lg:col-span-2">
+                            <div className="col-span-1 sm:col-span-6 lg:col-span-2">
                               <label className="block text-[10px] font-black italic text-gray-400 uppercase tracking-widest mb-1">Qty</label>
                               <input type="number" value={item.qty ?? 0} onChange={e => handleItemChange(index, 'qty', Number(e.target.value))} className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl focus:ring-4 focus:ring-blue-500/10 outline-none font-black italic" />
                             </div>
 
-                            <div className="col-span-6 lg:col-span-2">
+                            <div className="col-span-1 sm:col-span-6 lg:col-span-2">
                               <label className="block text-[10px] font-black italic text-gray-400 uppercase tracking-widest mb-1">Unit</label>
                               <input type="text" value={item.unit || ''} onChange={e => handleItemChange(index, 'unit', e.target.value)} className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl focus:ring-4 focus:ring-blue-500/10 outline-none font-black italic uppercase tracking-widest" />
                             </div>
 
-                            <div className="col-span-12 lg:col-span-2">
+                            <div className="col-span-1 sm:col-span-12 lg:col-span-2">
                               <label className="block text-[10px] font-black italic text-gray-400 uppercase tracking-widest mb-1">Harga Satuan</label>
                               <input type="number" value={item.harga ?? 0} onChange={e => handleItemChange(index, 'harga', Number(e.target.value))} className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl focus:ring-4 focus:ring-blue-500/10 outline-none font-black italic text-indigo-600" />
                             </div>
@@ -1151,7 +1153,7 @@ export default function PurchaseOrderPage() {
                               <div className="flex-shrink-0">
                                 <Package className="w-5 h-5 text-indigo-500" />
                               </div>
-                              <div className="flex-grow grid grid-cols-2 gap-4">
+                              <div className="flex-grow grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <div>
                                   <label className="block text-[9px] font-black italic text-indigo-400 uppercase tracking-widest mb-1">Kategori SKU Baru</label>
                                   <input 
@@ -1177,7 +1179,7 @@ export default function PurchaseOrderPage() {
                           )}
                         </div>
 
-                        <button type="button" onClick={() => removeItem(index)} className="p-2 text-rose-500 hover:bg-rose-50 rounded-xl mt-6 transition-colors">
+                        <button type="button" onClick={() => removeItem(index)} className="p-2 text-rose-500 hover:bg-rose-50 rounded-xl self-end sm:mt-6 sm:self-auto transition-colors">
                           <Trash2 size={20} />
                         </button>
                       </div>
@@ -1197,10 +1199,10 @@ export default function PurchaseOrderPage() {
 
       {/* Detail Modal (Print Layout) */}
       {showDetailModal && selectedPO && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[100] p-4 overflow-y-auto">
-          <div className="bg-white w-full max-w-[21cm] min-h-[29.7cm] shadow-2xl relative my-8 print:my-0 print:shadow-none print:w-full">
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-start justify-center z-[100] p-3 sm:p-4 overflow-y-auto sm:items-center">
+          <div className="bg-white w-full max-w-[21cm] min-h-[29.7cm] max-h-[calc(100vh-1.5rem)] overflow-y-auto shadow-2xl relative my-3 sm:my-8 print:my-0 print:shadow-none print:w-full print:max-h-none print:overflow-visible">
             {/* Close & Download Buttons (Hidden during print) */}
-            <div className="absolute -top-14 right-0 flex gap-3 print:hidden items-center">
+            <div className="sticky top-0 z-20 flex flex-col gap-3 border-b bg-white/95 p-3 backdrop-blur print:hidden sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
                 <button onClick={() => handleDownloadWord(selectedPO)} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2 transition-all shadow-lg">
                   <FileDown size={18} /> Export PO Word + Excel
                 </button>
@@ -1229,7 +1231,7 @@ export default function PurchaseOrderPage() {
               </button>
               <button 
                 onClick={() => setShowDetailModal(false)} 
-                className="bg-red-600 hover:bg-red-700 text-white p-2.5 rounded-full transition-all shadow-xl border-2 border-white ml-2"
+                className="bg-red-600 hover:bg-red-700 text-white p-2.5 rounded-full transition-all shadow-xl border-2 border-white sm:ml-2 self-end sm:self-auto"
                 title="Tutup Detail"
               >
                 <X size={24} strokeWidth={3} />

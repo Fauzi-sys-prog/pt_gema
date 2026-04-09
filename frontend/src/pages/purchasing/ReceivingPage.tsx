@@ -416,24 +416,24 @@ export default function ReceivingPage() {
       </div>
 
       <div className="mb-6">
-        <div className="flex gap-3">
+        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
           <button
             onClick={() => void fetchReceivingSources()}
             disabled={isRefreshing}
-            className="bg-white hover:bg-slate-50 text-slate-700 px-4 py-2 rounded-lg inline-flex items-center gap-2 font-bold border border-slate-200 disabled:opacity-60"
+            className="bg-white hover:bg-slate-50 text-slate-700 px-4 py-2 rounded-lg inline-flex items-center justify-center gap-2 font-bold border border-slate-200 disabled:opacity-60 w-full sm:w-auto"
           >
             {isRefreshing ? 'Refreshing...' : 'Refresh'}
           </button>
           <button
             onClick={() => { resetForm(); setShowModal(true); }}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg inline-flex items-center gap-2 font-bold"
+            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg inline-flex items-center justify-center gap-2 font-bold w-full sm:w-auto"
           >
             <Plus size={20} />
             Tambah Receiving
           </button>
           <button
             onClick={handleExportCsv}
-            className="bg-white hover:bg-slate-50 text-slate-700 px-4 py-2 rounded-lg inline-flex items-center gap-2 font-bold border border-slate-200"
+            className="bg-white hover:bg-slate-50 text-slate-700 px-4 py-2 rounded-lg inline-flex items-center justify-center gap-2 font-bold border border-slate-200 w-full sm:w-auto"
           >
             <FileCheck size={18} />
             Export Word + Excel
@@ -443,7 +443,7 @@ export default function ReceivingPage() {
 
       <div className="bg-white rounded-lg border shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full">
+          <table className="w-full min-w-[980px]">
             <thead className="bg-slate-900 text-white uppercase italic text-[10px] font-black tracking-widest">
               <tr>
                 <th className="px-6 py-4 text-left">No. Receiving / Tgl</th>
@@ -509,17 +509,17 @@ export default function ReceivingPage() {
       </div>
 
       {showModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-3xl max-w-6xl w-full max-h-[90vh] overflow-y-auto shadow-2xl">
-            <div className="p-8 border-b sticky top-0 bg-white z-10 flex items-center justify-between">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-start justify-center z-50 p-3 sm:p-4 overflow-y-auto sm:items-center">
+          <div className="bg-white rounded-3xl max-w-6xl w-full max-h-[calc(100vh-1.5rem)] sm:max-h-[90vh] overflow-y-auto shadow-2xl my-3 sm:my-6">
+            <div className="p-5 sm:p-8 border-b sticky top-0 bg-white z-10 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <h2 className="text-2xl font-black italic uppercase tracking-tighter">Tambah Receiving Baru</h2>
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Konfirmasi Fisik Barang Datang</p>
               </div>
-              <button onClick={() => setShowModal(false)} className="p-3 bg-slate-50 text-slate-400 rounded-2xl hover:text-rose-600 transition-colors"><X size={24} /></button>
+              <button onClick={() => setShowModal(false)} className="self-end p-3 bg-slate-50 text-slate-400 rounded-2xl hover:text-rose-600 transition-colors sm:self-auto"><X size={24} /></button>
             </div>
 
-            <div className="p-8 space-y-8">
+            <div className="p-5 sm:p-8 space-y-8">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                   <label className="block text-[10px] font-black italic text-gray-700 mb-2 uppercase tracking-widest">No. PO <span className="text-red-500">*</span></label>
@@ -601,7 +601,8 @@ export default function ReceivingPage() {
                     <button type="button" onClick={handleAutoGenerateAllBatch} className="text-[10px] font-black italic uppercase text-purple-600 bg-purple-50 px-4 py-2 rounded-xl border border-purple-100 hover:bg-purple-100 transition-all">Auto-fill Batch No</button>
                   </div>
                   <div className="border-2 border-slate-50 rounded-[32px] overflow-hidden">
-                    <table className="w-full border-collapse">
+                    <div className="overflow-x-auto">
+                    <table className="w-full min-w-[860px] border-collapse">
                       <thead className="bg-slate-50 border-b-2 border-slate-100">
                         <tr>
                           <th className="px-6 py-4 text-left text-[10px] font-black uppercase tracking-widest">Material</th>
@@ -681,14 +682,15 @@ export default function ReceivingPage() {
                         </tbody>
                       ))}
                     </table>
+                    </div>
                   </div>
                 </div>
               )}
             </div>
 
-            <div className="p-8 border-t bg-slate-50 flex justify-end gap-4 rounded-b-3xl">
-              <button onClick={() => setShowModal(false)} className="px-8 py-4 font-black uppercase text-[10px] text-slate-400 hover:text-slate-600 transition-colors">Batal</button>
-              <button onClick={handleSubmit} className="px-10 py-4 bg-indigo-600 text-white rounded-2xl font-black uppercase text-[10px] shadow-xl shadow-indigo-200 hover:bg-indigo-700 transition-all active:scale-95">Simpan Receiving</button>
+            <div className="p-5 sm:p-8 border-t bg-slate-50 flex flex-col-reverse gap-4 rounded-b-3xl sm:flex-row sm:justify-end">
+              <button onClick={() => setShowModal(false)} className="px-8 py-4 font-black uppercase text-[10px] text-slate-400 hover:text-slate-600 transition-colors w-full sm:w-auto">Batal</button>
+              <button onClick={handleSubmit} className="px-10 py-4 bg-indigo-600 text-white rounded-2xl font-black uppercase text-[10px] shadow-xl shadow-indigo-200 hover:bg-indigo-700 transition-all active:scale-95 w-full sm:w-auto">Simpan Receiving</button>
             </div>
           </div>
         </div>
@@ -779,14 +781,14 @@ export default function ReceivingPage() {
               )}
             </div>
 
-            <div className="p-8 border-t bg-slate-50 flex justify-between items-center rounded-b-3xl">
+            <div className="p-5 sm:p-8 border-t bg-slate-50 flex flex-col gap-4 rounded-b-3xl sm:flex-row sm:justify-between sm:items-center">
               <div className="flex items-center gap-2">
                 <ShieldCheck className="text-emerald-500" size={18} />
                 <span className="text-[10px] font-black uppercase italic text-slate-400">Inventory Sync Completed • Ledger ID: {selectedReceiving.id}</span>
               </div>
               <button
                 onClick={handlePrintGrn}
-                className="px-8 py-3 bg-slate-900 text-white rounded-xl font-black uppercase text-[10px] shadow-xl shadow-slate-200 hover:bg-black transition-all flex items-center gap-2"
+                className="px-8 py-3 bg-slate-900 text-white rounded-xl font-black uppercase text-[10px] shadow-xl shadow-slate-200 hover:bg-black transition-all flex items-center justify-center gap-2 w-full sm:w-auto"
               >
                 <Printer size={16} /> Print GRN
               </button>
@@ -796,12 +798,12 @@ export default function ReceivingPage() {
       )}
 
       {previewImage && (
-        <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-[100] flex items-center justify-center p-10" onClick={() => setPreviewImage(null)}>
-          <div className="absolute top-10 right-10 flex flex-col items-center gap-2">
-            <button onClick={() => setPreviewImage(null)} className="p-4 bg-white/10 hover:bg-white/20 text-white rounded-full transition-colors"><X size={32} /></button>
+        <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-[100] flex items-center justify-center p-4 sm:p-10" onClick={() => setPreviewImage(null)}>
+          <div className="absolute top-4 right-4 sm:top-10 sm:right-10 flex flex-col items-center gap-2">
+            <button onClick={() => setPreviewImage(null)} className="p-3 sm:p-4 bg-white/10 hover:bg-white/20 text-white rounded-full transition-colors"><X size={32} /></button>
             <span className="text-[10px] font-black text-white/50 uppercase tracking-widest">Close Esc</span>
           </div>
-          <div className="max-w-5xl w-full flex flex-col items-center gap-6" onClick={e => e.stopPropagation()}>
+          <div className="max-w-5xl w-full flex flex-col items-center gap-4 sm:gap-6" onClick={e => e.stopPropagation()}>
             <img src={previewImage.url} alt={previewImage.title} className="max-h-[80vh] w-auto rounded-2xl shadow-2xl border-4 border-white/10" />
             <h3 className="text-white font-black italic uppercase tracking-widest text-lg">{previewImage.title}</h3>
           </div>
