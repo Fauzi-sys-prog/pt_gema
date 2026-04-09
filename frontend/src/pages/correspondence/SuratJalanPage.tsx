@@ -592,16 +592,16 @@ export default function SuratJalanPage() {
       {/* Digital Document Preview Modal */}
       <AnimatePresence>
         {showPreview && selectedSJ && (
-          <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-xl z-[100] flex items-start justify-center p-4 overflow-y-auto">
+          <div className="fixed inset-0 z-[100] flex items-start justify-center overflow-y-auto bg-slate-900/90 p-3 backdrop-blur-xl sm:p-4">
             <motion.div 
               initial={{ opacity: 0, scale: 0.95, y: 30 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 30 }}
-              className="bg-white w-full max-w-5xl rounded-[4rem] overflow-hidden shadow-2xl flex flex-col max-h-[95vh]"
+              className="my-3 flex max-h-[calc(100vh-1.5rem)] w-full max-w-5xl flex-col overflow-hidden rounded-[2rem] bg-white shadow-2xl sm:my-4 sm:max-h-[95vh] sm:rounded-[4rem]"
             >
-              <div className="p-10 bg-slate-50 border-b border-slate-100 flex justify-between items-center">
-                <div className="flex items-center gap-6">
-                  <div className="w-16 h-16 bg-slate-900 text-white rounded-[1.5rem] flex items-center justify-center shadow-xl rotate-3">
+              <div className="flex flex-col gap-4 border-b border-slate-100 bg-slate-50 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-10">
+                <div className="flex items-center gap-4 sm:gap-6">
+                  <div className="flex h-14 w-14 items-center justify-center rounded-[1.25rem] bg-slate-900 text-white shadow-xl rotate-3 sm:h-16 sm:w-16 sm:rounded-[1.5rem]">
                     <FileText size={32} />
                   </div>
                   <div>
@@ -609,13 +609,13 @@ export default function SuratJalanPage() {
                     <p className="text-[10px] text-slate-400 font-bold uppercase tracking-[0.2em] mt-1">Verified Logistics Transmission Record</p>
                   </div>
                 </div>
-                <div className="flex gap-4">
+                <div className="grid grid-cols-2 gap-3 sm:flex sm:flex-wrap sm:justify-end sm:gap-4">
                    <button 
                      onClick={() => {
                        navigate('/surat-menyurat/berita-acara');
                        toast.info('Silakan gunakan Auto-fill dari Surat Jalan untuk generate BAST');
                      }}
-                     className="px-6 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-2xl hover:shadow-lg transition-all flex items-center gap-2 text-sm font-black uppercase"
+                     className="col-span-2 flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-purple-600 to-indigo-600 px-6 py-3 text-sm font-black uppercase text-white transition-all hover:shadow-lg sm:col-span-1"
                    >
                       <FileSignature size={20} /> Generate BAST
                    </button>
@@ -631,8 +631,8 @@ export default function SuratJalanPage() {
                 </div>
               </div>
 
-              <div className="flex-1 overflow-auto p-16 bg-slate-100 print:bg-white" id="sj-print">
-                <div className="bg-white p-20 shadow-xl border border-slate-200 mx-auto max-w-[850px] min-h-[1100px] flex flex-col relative overflow-hidden">
+              <div className="flex-1 overflow-auto bg-slate-100 p-4 print:bg-white sm:p-8 lg:p-16" id="sj-print">
+                <div className="relative mx-auto flex min-h-[1100px] max-w-[850px] flex-col overflow-hidden border border-slate-200 bg-white p-6 shadow-xl sm:p-10 lg:p-20">
                   {/* Watermark/Logo */}
                   <div className="absolute top-10 right-10 opacity-5 grayscale">
                     <Truck size={200} />
@@ -670,7 +670,7 @@ export default function SuratJalanPage() {
 
                   {/* Info Grid - Only for Material Delivery */}
                   {selectedSJ.sjType === 'Material Delivery' && (
-                    <div className="grid grid-cols-2 gap-20 mb-16">
+                    <div className="mb-16 grid grid-cols-1 gap-8 lg:grid-cols-2 lg:gap-20">
                       <div className="bg-slate-50 p-8 rounded-3xl border border-slate-100">
                         <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-4 italic">Delivery Consignee:</p>
                         <h4 className="text-xl font-black text-slate-900 uppercase mb-2 italic">{selectedSJ.tujuan}</h4>
@@ -748,7 +748,7 @@ export default function SuratJalanPage() {
 
                   {/* Footer Notes - Only for Material Delivery */}
                   {selectedSJ.sjType === 'Material Delivery' && (
-                    <div className="mt-12 p-8 bg-slate-900 rounded-[2rem] text-white flex items-center justify-between shadow-xl">
+                    <div className="mt-12 flex flex-col gap-4 rounded-[2rem] bg-slate-900 p-6 text-white shadow-xl sm:flex-row sm:items-center sm:justify-between sm:p-8">
                         <div className="flex items-center gap-4">
                            <QrCode size={48} className="text-indigo-400" />
                            <div>
@@ -756,7 +756,7 @@ export default function SuratJalanPage() {
                               <p className="text-[9px] text-slate-400 font-bold uppercase mt-1">Scan to verify document authenticity & GPS coordinates.</p>
                            </div>
                         </div>
-                        <div className="text-right">
+                        <div className="text-left sm:text-right">
                            <p className="text-[10px] font-black uppercase italic text-indigo-400">Compliance Verified</p>
                            <p className="text-[11px] font-black uppercase italic tracking-tighter mt-1">GTP-SYSTEM-AUTO-AUTH</p>
                         </div>
@@ -764,7 +764,7 @@ export default function SuratJalanPage() {
                   )}
 
                   {/* Signatures */}
-                  <div className="grid grid-cols-3 gap-12 mt-16 text-center">
+                  <div className="mt-16 grid grid-cols-1 gap-10 text-center sm:grid-cols-3 sm:gap-12">
                     <div>
                       <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-20">
                         {selectedSJ.sjType === 'Material Delivery' ? 'Recipient / Client' : 'Penerima'}
@@ -800,17 +800,17 @@ export default function SuratJalanPage() {
       {/* Create SJ Modal (Commander View) */}
       <AnimatePresence>
         {showCreateModal && (
-          <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-xl z-[100] flex items-center justify-center p-4">
+          <div className="fixed inset-0 z-[100] flex items-start justify-center overflow-y-auto bg-slate-900/90 p-3 backdrop-blur-xl sm:items-center sm:p-4">
             <motion.div 
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.9 }}
-              className="bg-white w-full max-w-5xl rounded-[4rem] overflow-hidden shadow-2xl flex flex-col h-[95vh] max-h-[95vh] my-auto"
+              className="my-3 flex h-auto max-h-[calc(100vh-1.5rem)] w-full max-w-5xl flex-col overflow-hidden rounded-[2rem] bg-white shadow-2xl sm:my-auto sm:h-[95vh] sm:max-h-[95vh] sm:rounded-[4rem]"
             >
               <form onSubmit={handleCreateSJ} className="flex flex-col h-full min-h-0">
-                <div className="p-10 bg-slate-50 border-b border-slate-100 flex justify-between items-center shrink-0">
-                  <div className="flex items-center gap-6">
-                    <div className="w-16 h-16 bg-slate-900 text-white rounded-[1.5rem] flex items-center justify-center shadow-xl -rotate-3">
+                <div className="flex shrink-0 flex-col gap-4 border-b border-slate-100 bg-slate-50 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-10">
+                  <div className="flex items-center gap-4 sm:gap-6">
+                    <div className="flex h-14 w-14 items-center justify-center rounded-[1.25rem] bg-slate-900 text-white shadow-xl -rotate-3 sm:h-16 sm:w-16 sm:rounded-[1.5rem]">
                       <Plus size={32} />
                     </div>
                     <div>
@@ -823,17 +823,17 @@ export default function SuratJalanPage() {
                   </button>
                 </div>
 
-                <div className="px-12 pt-4 pb-2 bg-white border-b border-slate-100 shrink-0">
+                <div className="shrink-0 border-b border-slate-100 bg-white px-5 pb-2 pt-4 sm:px-12">
                   <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-indigo-50 text-indigo-600 text-[10px] font-black uppercase tracking-widest">
                     <ChevronRight size={12} className="rotate-90" /> Scroll untuk lanjut isi form
                   </div>
                 </div>
 
-                <div className="flex-1 min-h-0 overflow-y-scroll overflow-x-hidden custom-scrollbar p-12 pt-6 pr-8">
+                <div className="custom-scrollbar flex-1 min-h-0 overflow-y-scroll overflow-x-hidden p-5 pb-8 pr-3 pt-5 sm:p-12 sm:pb-12 sm:pt-6 sm:pr-8">
                   {/* TYPE TOGGLE - NEW */}
                   <div className="mb-12 bg-gradient-to-r from-indigo-600 to-purple-600 p-8 rounded-[2.5rem] shadow-2xl">
                     <h4 className="text-[10px] font-black text-white/70 uppercase tracking-widest mb-6 italic">Pilih Jenis Dokumen Surat Jalan:</h4>
-                    <div className="flex gap-6">
+                    <div className="flex flex-col gap-4 sm:flex-row sm:gap-6">
                       <label className={`flex-1 p-8 rounded-[2rem] border-4 cursor-pointer transition-all ${formData.sjType === 'Material Delivery' ? 'bg-white border-white shadow-2xl' : 'bg-white/10 border-white/20 hover:bg-white/20'}`}>
                         <input 
                           type="radio" 
@@ -910,7 +910,7 @@ export default function SuratJalanPage() {
                        </div>
 
                        <div className="space-y-6 px-2">
-                          <div className="grid grid-cols-2 gap-6">
+                          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
                             <div className="space-y-2">
                               <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Document No.</label>
                               <input type="text" required value={formData.noSurat} onChange={(e) => setFormData({...formData, noSurat: e.target.value})} className="w-full px-6 py-4 bg-slate-50 border-none rounded-2xl text-sm font-bold outline-none focus:ring-4 focus:ring-indigo-100 transition-all" />
@@ -984,29 +984,29 @@ export default function SuratJalanPage() {
                       </button>
                     </div>
 
-                    <div className="space-y-3 bg-slate-50 p-6 rounded-[2.5rem] border border-slate-100">
+                    <div className="space-y-3 rounded-[2.5rem] border border-slate-100 bg-slate-50 p-4 sm:p-6">
                       {formData.items.map((item, idx) => (
-                        <div key={idx} className={`grid ${formData.sjType === 'Material Delivery' ? 'grid-cols-12' : 'grid-cols-11'} gap-4 items-center bg-white p-4 rounded-2xl shadow-sm border border-slate-100 group`}>
-                          <div className={formData.sjType === 'Material Delivery' ? 'col-span-5' : 'col-span-4'}>
+                        <div key={idx} className={`grid items-center gap-4 rounded-2xl border border-slate-100 bg-white p-4 shadow-sm group ${formData.sjType === 'Material Delivery' ? 'grid-cols-1 sm:grid-cols-12' : 'grid-cols-1 sm:grid-cols-11'}`}>
+                          <div className={formData.sjType === 'Material Delivery' ? 'col-span-1 sm:col-span-5' : 'col-span-1 sm:col-span-4'}>
                             <input type="text" required placeholder={formData.sjType === 'Material Delivery' ? 'Material Description' : 'Nama Barang / Equipment'} value={item.namaItem} onChange={(e) => updateItem(idx, 'namaItem', e.target.value)} className="w-full px-4 py-2 bg-slate-50 border-none rounded-lg text-xs font-black uppercase italic outline-none" />
                           </div>
-                          <div className="col-span-2 text-center">
+                          <div className="col-span-1 text-center sm:col-span-2">
                             <input type="number" required placeholder="Qty" value={item.jumlah} onChange={(e) => updateItem(idx, 'jumlah', parseFloat(e.target.value))} className="w-full px-4 py-2 bg-slate-50 border-none rounded-lg text-xs font-black text-center outline-none" />
                           </div>
-                          <div className="col-span-2">
+                          <div className="col-span-1 sm:col-span-2">
                             <input type="text" required placeholder="Unit" value={item.satuan} onChange={(e) => updateItem(idx, 'satuan', e.target.value)} className="w-full px-4 py-2 bg-slate-50 border-none rounded-lg text-xs font-black uppercase text-center outline-none" />
                           </div>
                           {formData.sjType === 'Material Delivery' ? (
-                            <div className="col-span-2">
+                            <div className="col-span-1 sm:col-span-2">
                               <input type="text" placeholder="Batch ID" value={item.batchNo} readOnly className="w-full px-4 py-2 bg-indigo-50 border-none rounded-lg text-[9px] font-black text-indigo-600 uppercase text-center outline-none" />
                             </div>
                           ) : (
-                            <div className="col-span-3">
+                            <div className="col-span-1 sm:col-span-3">
                               <input type="text" placeholder="Keterangan (optional)" value={item.keterangan || ''} onChange={(e) => updateItem(idx, 'keterangan', e.target.value)} className="w-full px-4 py-2 bg-amber-50 border-none rounded-lg text-[9px] font-bold italic outline-none" />
                             </div>
                           )}
                           <div className="col-span-1 text-right">
-                            <button type="button" onClick={() => removeItem(idx)} className="p-2 text-slate-300 hover:text-rose-500 transition-all opacity-0 group-hover:opacity-100">
+                            <button type="button" onClick={() => removeItem(idx)} className="p-2 text-slate-300 transition-all hover:text-rose-500 sm:opacity-0 sm:group-hover:opacity-100">
                               <X size={18} />
                             </button>
                           </div>
@@ -1016,8 +1016,8 @@ export default function SuratJalanPage() {
                   </div>
                 </div>
 
-                <div className="p-12 bg-slate-50 border-t border-slate-100 flex justify-end shrink-0 sticky bottom-0">
-                  <button type="submit" disabled={isSubmitting} className="px-12 py-5 bg-indigo-600 text-white rounded-[2rem] text-[12px] font-black uppercase tracking-[0.2em] shadow-2xl shadow-indigo-200 flex items-center gap-4 hover:bg-indigo-700 transition-all disabled:opacity-50">
+                <div className="sticky bottom-0 flex shrink-0 justify-end border-t border-slate-100 bg-slate-50 p-5 sm:p-12">
+                  <button type="submit" disabled={isSubmitting} className="flex w-full items-center justify-center gap-4 rounded-[2rem] bg-indigo-600 px-8 py-5 text-[12px] font-black uppercase tracking-[0.2em] text-white shadow-2xl shadow-indigo-200 transition-all hover:bg-indigo-700 disabled:opacity-50 sm:w-auto sm:px-12">
                     {isSubmitting ? <Activity className="animate-spin" size={20} /> : <Truck size={20} />}
                     Finalize & Dispatch Manifest
                   </button>

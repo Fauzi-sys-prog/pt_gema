@@ -294,32 +294,32 @@ export default function AccountsPayablePage() {
   return (
     <div className="p-3 sm:p-6 space-y-4 sm:space-y-8 bg-[#F8FAFC] min-h-screen">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+      <div className="flex flex-col justify-between gap-4 xl:flex-row xl:items-center xl:gap-6">
         <div>
            <div className="flex items-center gap-3 mb-2">
               <span className="px-3 py-1 bg-rose-600 text-white text-[10px] font-black rounded-lg uppercase tracking-widest shadow-lg shadow-rose-200">Financial Ledger</span>
               <span className="text-slate-400 font-bold text-xs uppercase italic">PT GTP Accounts Payable</span>
            </div>
-           <h1 className="text-3xl font-black text-slate-900 tracking-tighter uppercase italic flex items-center gap-3">
+           <h1 className="flex items-center gap-3 text-3xl font-black uppercase italic tracking-tighter text-slate-900">
               <Wallet className="text-rose-600" size={32} />
               Buku Hutang Vendor
            </h1>
            <p className="text-slate-500 font-bold text-sm uppercase italic tracking-wide">Manajemen Kewajiban & Arus Kas Keluar</p>
         </div>
-        <div className="flex gap-3">
+        <div className="flex w-full flex-col gap-3 sm:flex-row sm:flex-wrap xl:w-auto xl:justify-end">
           <button
             onClick={() => fetchApSummary(false)}
             disabled={summaryLoading}
-            className="bg-white border-2 border-slate-200 text-slate-600 px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-sm flex items-center gap-2 hover:bg-slate-50 transition-all disabled:opacity-60"
+            className="flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-slate-200 bg-white px-6 py-3 text-[10px] font-black uppercase tracking-widest text-slate-600 shadow-sm transition-all hover:bg-slate-50 disabled:opacity-60 sm:w-auto"
           >
             {summaryLoading ? 'Refreshing...' : 'Refresh'}
           </button>
-          <button onClick={handleExportPayableReport} className="bg-white border-2 border-slate-200 text-slate-600 px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-sm flex items-center gap-2 hover:bg-slate-50 transition-all">
+          <button onClick={handleExportPayableReport} className="flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-slate-200 bg-white px-6 py-3 text-[10px] font-black uppercase tracking-widest text-slate-600 shadow-sm transition-all hover:bg-slate-50 sm:w-auto">
             <Download size={18} /> Laporan Hutang
           </button>
           <button 
             onClick={() => setShowCreateModal(true)}
-            className="bg-slate-900 text-white px-8 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-xl flex items-center gap-2 hover:bg-black transition-all"
+            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-900 px-8 py-3 text-[10px] font-black uppercase tracking-widest text-white shadow-xl transition-all hover:bg-black sm:w-auto"
           >
             <Plus size={18} /> Catat Invoice Vendor
           </button>
@@ -403,7 +403,7 @@ export default function AccountsPayablePage() {
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full text-left">
+          <table className="w-full min-w-[980px] text-left">
             <thead>
               <tr className="bg-slate-50/50">
                 <th className="px-10 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Vendor & Invoice</th>
@@ -451,7 +451,7 @@ export default function AccountsPayablePage() {
                     </span>
                   </td>
                   <td className="px-10 py-8 text-right">
-                    <div className="flex justify-end gap-2">
+                    <div className="flex flex-wrap justify-end gap-2">
                       <button onClick={() => handleQuickView(inv)} className="p-3 bg-white border border-slate-100 text-slate-400 hover:text-blue-600 hover:border-blue-200 rounded-xl transition-all shadow-sm">
                         <Eye size={16} />
                       </button>
@@ -474,10 +474,10 @@ export default function AccountsPayablePage() {
                             setPaymentAmount(Math.max(0, Number(inv.totalAmount || 0) - Number(inv.paidAmount || 0)));
                             setShowPayModal(true);
                           }}
-                          className="px-6 py-3 bg-slate-900 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-black transition-all shadow-lg shadow-slate-200 flex items-center gap-2"
-                        >
-                          <CreditCard size={14} /> Bayar
-                        </button>
+                        className="flex w-full items-center justify-center gap-2 rounded-xl bg-slate-900 px-6 py-3 text-[10px] font-black uppercase tracking-widest text-white shadow-lg shadow-slate-200 transition-all hover:bg-black sm:w-auto"
+                      >
+                        <CreditCard size={14} /> Bayar
+                      </button>
                       )}
                     </div>
                   </td>
@@ -566,7 +566,7 @@ export default function AccountsPayablePage() {
               initial={{ opacity: 0, scale: 0.9, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.9, y: 20 }}
-              className="my-4 w-full max-w-2xl overflow-hidden rounded-[2rem] bg-white shadow-2xl sm:my-8 sm:rounded-[3.5rem]"
+              className="my-4 w-full max-w-2xl max-h-[calc(100vh-2rem)] overflow-hidden rounded-[2rem] bg-white shadow-2xl sm:my-8 sm:max-h-[90vh] sm:rounded-[3.5rem]"
             >
               <form onSubmit={handleCreateInvoice}>
                 <div className="p-6 sm:p-10 border-b border-slate-100 flex justify-between items-center bg-slate-50">

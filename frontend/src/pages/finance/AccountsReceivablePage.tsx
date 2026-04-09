@@ -1562,7 +1562,7 @@ export default function AccountsReceivablePage() {
                 </div>
               </div>
 
-              <div className="flex gap-3 mt-6">
+              <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row">
                 <button
                   onClick={handleSubmitInvoice}
                   className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
@@ -1899,7 +1899,7 @@ export default function AccountsReceivablePage() {
 
               <div className="space-y-6">
                 {/* Header */}
-                <div className="flex justify-between">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                   <div>
                     <div className="text-sm text-gray-600">No. Invoice</div>
                     <div className="text-2xl font-bold">{selectedInvoice.noInvoice}</div>
