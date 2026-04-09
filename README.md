@@ -153,7 +153,14 @@ Required GitHub repository secrets:
 - `PROD_HOST`
 - `PROD_PORT`
 - `PROD_USERNAME`
-- `PROD_PASSWORD`
+- `PROD_SSH_KEY`
+
+Current production SSH settings expect key-based login:
+
+- `PROD_HOST`: `31.97.110.79`
+- `PROD_PORT`: `22`
+- `PROD_USERNAME`: `root`
+- `PROD_SSH_KEY`: private key content for the production deploy user
 
 Expected server app path:
 
