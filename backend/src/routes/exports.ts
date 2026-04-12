@@ -3,6 +3,10 @@ import { prisma } from "../prisma";
 import { authenticate } from "../middlewares/auth";
 import { AuthRequest } from "../types/auth";
 import { COMPANY_LOGO_DATA_URI } from "../constants/companyLogo";
+import {
+  mapProjectBeritaAcaraToLegacyPayload,
+  mapProjectSpkToLegacyPayload,
+} from "./dataLogisticsMappers";
 
 export const exportsRouter = Router();
 
@@ -337,6 +341,19 @@ async function getProjectPayload(id: string): Promise<Record<string, unknown> | 
 }
 
 async function getAppEntityPayload(resource: string, id: string): Promise<Record<string, unknown> | null> {
+  if (resource === "berita-acara") {
+    const row = await prisma.projectBeritaAcara.findUnique({ where: { id } });
+    return row ? mapProjectBeritaAcaraToLegacyPayload(row) : null;
+  }
+
+  if (resource === "spk-records") {
+    const row = await prisma.projectSpkRecord.findUnique({
+      where: { id },
+      include: { technicians: true, attachments: true },
+    });
+    return row ? mapProjectSpkToLegacyPayload(row) : null;
+  }
+
   if (resource === "invoices") {
     const invoice = await prisma.invoiceRecord.findUnique({
       where: { id },
@@ -411,6 +428,72 @@ async function getAppEntityPayload(resource: string, id: string): Promise<Record
           total: item.total,
           sourceRef: item.sourceRef ?? undefined,
           batchNo: item.batchNo ?? undefined,
+        })),
+      };
+    }
+  }
+
+  if (resource === "customer-invoices") {
+    const invoice = await prisma.financeCustomerInvoice.findUnique({
+      where: { id },
+      include: {
+        items: {
+          orderBy: { id: "asc" },
+        },
+        payments: {
+          orderBy: { tanggal: "asc" },
+        },
+      },
+    });
+
+    if (invoice) {
+      return {
+        id: invoice.id,
+        projectId: invoice.projectId ?? undefined,
+        customerId: invoice.customerId ?? undefined,
+        noInvoice: invoice.number,
+        tanggal: invoice.tanggal.toISOString().slice(0, 10),
+        jatuhTempo: invoice.dueDate ? invoice.dueDate.toISOString().slice(0, 10) : undefined,
+        dueDate: invoice.dueDate ? invoice.dueDate.toISOString().slice(0, 10) : undefined,
+        customer: invoice.customerName,
+        customerName: invoice.customerName,
+        alamat: undefined,
+        noPO: invoice.noPO ?? undefined,
+        subtotal: invoice.subtotal,
+        ppn: invoice.ppn,
+        pph: invoice.pph,
+        totalBayar: invoice.totalAmount,
+        totalNominal: invoice.totalAmount,
+        paidAmount: invoice.paidAmount,
+        outstandingAmount: invoice.outstandingAmount,
+        status: invoice.status,
+        projectName: invoice.projectName ?? undefined,
+        perihal: invoice.perihal ?? undefined,
+        termin: invoice.termin ?? undefined,
+        buktiTransfer: invoice.buktiTransfer ?? undefined,
+        noKwitansi: invoice.noKwitansi ?? undefined,
+        tanggalBayar: invoice.tanggalBayar ? invoice.tanggalBayar.toISOString().slice(0, 10) : undefined,
+        remark: invoice.remark ?? undefined,
+        createdBy: invoice.createdBy ?? undefined,
+        sentAt: invoice.sentAt ? invoice.sentAt.toISOString() : undefined,
+        items: invoice.items.map((item) => ({
+          deskripsi: item.description,
+          qty: item.qty,
+          unit: item.unit,
+          hargaSatuan: item.unitPrice,
+          jumlah: item.amount,
+          total: item.amount,
+        })),
+        paymentHistory: invoice.payments.map((item) => ({
+          id: item.id,
+          tanggal: item.tanggal.toISOString().slice(0, 10),
+          nominal: item.nominal,
+          metodeBayar: item.method,
+          noBukti: item.proofNo ?? undefined,
+          bankName: item.bankName ?? undefined,
+          remark: item.remark ?? undefined,
+          createdBy: item.createdBy ?? undefined,
+          createdAt: item.paidAt ? item.paidAt.toISOString() : undefined,
         })),
       };
     }
@@ -632,6 +715,143 @@ async function getAppEntityPayload(resource: string, id: string): Promise<Record
           satuan: item.unit,
           unit: item.unit,
           batchNo: item.batchNo || undefined,
+        })),
+      };
+    }
+  }
+
+  if (resource === "surat-jalan") {
+    const row = await prisma.logisticsSuratJalan.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        noSurat: true,
+        tanggal: true,
+        sjType: true,
+        tujuan: true,
+        alamat: true,
+        upPerson: true,
+        noPO: true,
+        projectId: true,
+        assetId: true,
+        sopir: true,
+        noPolisi: true,
+        pengirim: true,
+        deliveryStatus: true,
+        podName: true,
+        podTime: true,
+        podPhoto: true,
+        podSignature: true,
+        expectedReturnDate: true,
+        actualReturnDate: true,
+        returnStatus: true,
+        workflowStatus: true,
+        items: {
+          select: {
+            itemKode: true,
+            namaItem: true,
+            jumlah: true,
+            satuan: true,
+            batchNo: true,
+            keterangan: true,
+          },
+          orderBy: { id: "asc" },
+        },
+      },
+    });
+    if (row) {
+      return {
+        id: row.id,
+        noSurat: row.noSurat,
+        tanggal: row.tanggal.toISOString().slice(0, 10),
+        sjType: row.sjType,
+        tujuan: row.tujuan,
+        alamat: row.alamat,
+        upPerson: row.upPerson ?? undefined,
+        noPO: row.noPO ?? undefined,
+        projectId: row.projectId ?? undefined,
+        assetId: row.assetId ?? undefined,
+        sopir: row.sopir ?? undefined,
+        noPolisi: row.noPolisi ?? undefined,
+        pengirim: row.pengirim ?? undefined,
+        deliveryStatus: row.deliveryStatus,
+        podName: row.podName ?? undefined,
+        podTime: row.podTime ? row.podTime.toISOString() : undefined,
+        podPhoto: row.podPhoto ?? undefined,
+        podSignature: row.podSignature ?? undefined,
+        expectedReturnDate: row.expectedReturnDate ? row.expectedReturnDate.toISOString().slice(0, 10) : undefined,
+        actualReturnDate: row.actualReturnDate ? row.actualReturnDate.toISOString().slice(0, 10) : undefined,
+        returnStatus: row.returnStatus ?? undefined,
+        workflowStatus: row.workflowStatus,
+        status: row.workflowStatus,
+        items: row.items.map((item) => ({
+          itemKode: item.itemKode ?? undefined,
+          namaItem: item.namaItem,
+          jumlah: item.jumlah,
+          satuan: item.satuan,
+          batchNo: item.batchNo ?? undefined,
+          keterangan: item.keterangan ?? undefined,
+        })),
+      };
+    }
+  }
+
+  if (resource === "proof-of-delivery") {
+    const row = await prisma.logisticsProofOfDelivery.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        suratJalanId: true,
+        projectId: true,
+        workOrderId: true,
+        status: true,
+        receiverName: true,
+        deliveredAt: true,
+        photo: true,
+        signature: true,
+        noSurat: true,
+        tujuan: true,
+        receiver: true,
+        driver: true,
+        plate: true,
+        note: true,
+        items: {
+          select: {
+            itemKode: true,
+            namaItem: true,
+            jumlah: true,
+            satuan: true,
+            batchNo: true,
+            keterangan: true,
+          },
+          orderBy: { id: "asc" },
+        },
+      },
+    });
+    if (row) {
+      return {
+        id: row.id,
+        suratJalanId: row.suratJalanId,
+        projectId: row.projectId ?? undefined,
+        workOrderId: row.workOrderId ?? undefined,
+        status: row.status,
+        receiverName: row.receiverName,
+        deliveredAt: row.deliveredAt.toISOString(),
+        photo: row.photo ?? undefined,
+        signature: row.signature ?? undefined,
+        noSurat: row.noSurat ?? undefined,
+        tujuan: row.tujuan ?? undefined,
+        receiver: row.receiver ?? undefined,
+        driver: row.driver ?? undefined,
+        plate: row.plate ?? undefined,
+        note: row.note ?? undefined,
+        items: row.items.map((item) => ({
+          itemKode: item.itemKode ?? undefined,
+          namaItem: item.namaItem,
+          jumlah: item.jumlah,
+          satuan: item.satuan,
+          batchNo: item.batchNo ?? undefined,
+          keterangan: item.keterangan ?? undefined,
         })),
       };
     }
@@ -1779,20 +1999,179 @@ function invoiceExportHtml(payload: Record<string, unknown>): string {
 
 function suratJalanExportHtml(payload: Record<string, unknown>): string {
   const items = asRecords(payload.items);
-  const signer = payload.pengirim || payload.createdBy;
-  const meta = keyValueTableHtml("Informasi Surat Jalan", [
-    { label: "ID", key: "id", value: payload.id },
-    { label: "No Surat Jalan", key: "noSuratJalan", value: payload.noSuratJalan || payload.nomor },
-    { label: "Tanggal", key: "tanggal", value: payload.tanggal },
-    { label: "Tujuan", key: "tujuan", value: payload.tujuan || payload.customer },
-    { label: "Alamat Tujuan", key: "alamatTujuan", value: payload.alamatTujuan || payload.alamat },
-    { label: "Pengirim", key: "pengirim", value: payload.pengirim },
-    { label: "Penerima", key: "penerima", value: payload.penerima },
-    { label: "Keterangan", key: "keterangan", value: payload.keterangan },
-    { label: "Status", key: "status", value: payload.status },
-  ]);
-  const itemsTable = listTable("Rincian Barang / Pekerjaan", items, ["namaBarang", "qty", "unit", "keterangan"]);
-  return `${companyLetterheadHtml("Surat Jalan")} ${meta} ${itemsTable} ${companyFooterHtml(signer)}`;
+  const number = toText(payload.noSurat || payload.noSuratJalan || payload.nomor || payload.id, "-");
+  const recipient = toText(payload.tujuan || payload.customer || payload.penerima, "-");
+  const recipientAddress = toText(payload.alamatTujuan || payload.alamat || payload.address, "");
+  const attention = toText(payload.upPerson || payload.attention, "");
+  const poOrSpk = toText(payload.noPO || payload.noSPK || payload.spkNumber || payload.projectId, "-");
+  const poOrSpkDate = formatCellByKey(
+    "tanggalPO",
+    payload.tanggalPO || payload.tanggalSpk || payload.tanggalPOorSPK || payload.tanggal
+  );
+  const vehicleNumber = toText(payload.noPolisi || payload.noKendaraan || payload.plate, "-");
+  const signer = payload.pengirim || payload.createdBy || "Management";
+  const paddedRows = Array.from({ length: Math.max(items.length, 10) }, (_, index) => {
+    const item = items[index] || {};
+    const itemName = toText(item.namaBarang || item.namaItem || item.nama || item.deskripsi, "");
+    const qtyValue = numFromUnknown(item.qty ?? item.jumlah);
+    const unit = toText(item.unit || item.satuan, "").trim();
+    const quantityLabel =
+      qtyValue !== null
+        ? `${qtyValue.toLocaleString("id-ID")}${unit ? ` ${unit}` : ""}`.trim()
+        : unit || "";
+    const itemNote = toText(item.keterangan || item.catatan || item.batchNo, "");
+    return {
+      quantity: quantityLabel,
+      description: [itemName, itemNote].filter(Boolean).join(itemNote && itemName ? " - " : ""),
+    };
+  });
+  const itemsRows = paddedRows
+    .map(
+      (row) => `
+        <tr>
+          <td style="border:1px solid #111;padding:8px 10px;height:28px;font-size:12px;">${escapeHtml(row.quantity || "")}</td>
+          <td style="border:1px solid #111;padding:8px 10px;height:28px;font-size:12px;">${escapeHtml(row.description || "")}</td>
+        </tr>
+      `
+    )
+    .join("");
+
+  return `
+    <div style="width:100%;color:#111;">
+      <table style="width:100%;border-collapse:collapse;margin-bottom:10px;">
+        <tr>
+          <td style="width:120px;vertical-align:top;padding-right:10px;">
+            <div style="width:100px;height:72px;display:flex;align-items:center;justify-content:center;">
+              <img src="${COMPANY_LOGO_DATA_URI}" alt="Logo Gema Teknik" style="max-width:98px;max-height:68px;object-fit:contain;" />
+            </div>
+          </td>
+          <td style="vertical-align:top;">
+            <div style="font-family:'Times New Roman',serif;font-size:26px;font-style:italic;font-weight:700;line-height:1.05;">
+              GEMA TEKNIK PERKASA
+            </div>
+            <div style="font-size:12px;line-height:1.35;margin-top:4px;">
+              Jl. Nurushoba II No. 170 Kav. Pondok Muslim<br/>
+              Setia Mekar Tambun Selatan Bekasi 17510<br/>
+              Phone : 88354139, 085100420221 &nbsp; Fax : 021.88354139<br/>
+              Email : gemateknik@gmail.com &nbsp; Website : gemateknik.co.id
+            </div>
+          </td>
+          <td style="width:280px;vertical-align:top;padding-left:12px;">
+            <div style="font-size:12px;text-align:left;margin-top:6px;">
+              <span style="display:inline-block;width:32px;">No.</span>: ${escapeHtml(number)}
+            </div>
+          </td>
+        </tr>
+      </table>
+
+      <table style="width:100%;border-collapse:collapse;margin-bottom:12px;">
+        <tr>
+          <td style="width:46%;border:1px solid #111;vertical-align:top;padding:10px 12px;">
+            <div style="font-weight:700;font-size:13px;margin-bottom:6px;">Kepada :</div>
+            <div style="font-size:12px;line-height:1.6;min-height:86px;">
+              ${escapeHtml(recipient)}<br/>
+              ${recipientAddress ? `${escapeHtml(recipientAddress)}<br/>` : ""}
+              ${attention ? `UP: ${escapeHtml(attention)}` : ""}
+            </div>
+          </td>
+          <td style="width:54%;vertical-align:top;padding-left:12px;">
+            <div style="text-align:center;font-family:'Times New Roman',serif;font-size:22px;font-weight:700;letter-spacing:.4px;margin:8px 0 6px;">
+              SURAT JALAN
+            </div>
+            <table style="width:100%;border-collapse:collapse;border:1px solid #111;">
+              <tr>
+                <td style="width:44%;padding:6px 10px 4px;font-size:12px;">Tanggal</td>
+                <td style="padding:6px 10px 4px;font-size:12px;">: ${escapeHtml(formatCellByKey("tanggal", payload.tanggal))}</td>
+              </tr>
+              <tr>
+                <td style="padding:4px 10px;font-size:12px;">SPK / PO No.</td>
+                <td style="padding:4px 10px;font-size:12px;">: ${escapeHtml(poOrSpk)}</td>
+              </tr>
+              <tr>
+                <td style="padding:4px 10px;font-size:12px;">Tanggal PO / SPK</td>
+                <td style="padding:4px 10px;font-size:12px;">: ${escapeHtml(poOrSpkDate)}</td>
+              </tr>
+              <tr>
+                <td style="padding:4px 10px 8px;font-size:12px;">No. Kend.</td>
+                <td style="padding:4px 10px 8px;font-size:12px;">: ${escapeHtml(vehicleNumber)}</td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+      </table>
+
+      <table style="width:100%;border-collapse:collapse;margin-bottom:18px;">
+        <thead>
+          <tr>
+            <th style="width:28%;border:1px solid #111;padding:8px 10px;font-size:13px;text-align:left;background:#fff;">Banyaknya</th>
+            <th style="border:1px solid #111;padding:8px 10px;font-size:13px;text-align:left;background:#fff;">Keterangan</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${itemsRows}
+        </tbody>
+      </table>
+
+      <table style="width:100%;border-collapse:collapse;margin-top:34px;font-size:13px;">
+        <tr>
+          <td style="width:50%;text-align:center;padding-top:18px;">
+            <div style="font-weight:700;margin-bottom:70px;">Diterima,</div>
+            <div style="font-weight:700;">( ${escapeHtml(toText(payload.penerima || "", "")) || "........................"} )</div>
+          </td>
+          <td style="width:50%;text-align:center;padding-top:18px;">
+            <div style="font-weight:700;margin-bottom:70px;">Hormat kami,</div>
+            <div style="font-weight:700;">( ${escapeHtml(toText(signer, "")) || "........................"} )</div>
+          </td>
+        </tr>
+      </table>
+    </div>
+  `;
+}
+
+function proofOfDeliveryExportHtml(payload: Record<string, unknown>): string {
+  const items = Array.isArray(payload.items) ? payload.items.map((row) => asRecord(row)) : [];
+  const photo = readString(payload, "photo") || readString(payload, "podPhoto");
+  const signature = readString(payload, "signature") || readString(payload, "podSignature");
+  const mediaBlock = `
+    <div style="display:flex;gap:16px;margin-top:14px;">
+      <div style="flex:1;">
+        <div style="font-size:12px;font-weight:700;margin-bottom:6px;">POD Photo</div>
+        ${
+          photo
+            ? `<div style="border:1px solid #d1d5db;border-radius:8px;padding:8px;background:#fff;"><img src="${escapeHtml(photo)}" alt="POD Photo" style="max-width:100%;max-height:220px;object-fit:contain;" /></div>`
+            : `<div style="border:1px dashed #d1d5db;border-radius:8px;padding:24px;text-align:center;color:#6b7280;">No photo uploaded</div>`
+        }
+      </div>
+      <div style="flex:1;">
+        <div style="font-size:12px;font-weight:700;margin-bottom:6px;">Receiver Signature</div>
+        ${
+          signature
+            ? `<div style="border:1px solid #d1d5db;border-radius:8px;padding:8px;background:#fff;"><img src="${escapeHtml(signature)}" alt="Receiver Signature" style="max-width:100%;max-height:220px;object-fit:contain;" /></div>`
+            : `<div style="border:1px dashed #d1d5db;border-radius:8px;padding:24px;text-align:center;color:#6b7280;">No signature uploaded</div>`
+        }
+      </div>
+    </div>
+  `;
+
+  return `
+    ${companyLetterheadHtml("Proof Of Delivery")}
+    ${keyValueTableHtml("Delivery Confirmation", [
+      { label: "POD Number", key: "id", value: payload.id },
+      { label: "Surat Jalan", key: "noSurat", value: payload.noSurat || payload.suratJalanId },
+      { label: "Delivery Status", key: "status", value: payload.status },
+      { label: "Delivered At", key: "deliveredAt", value: payload.deliveredAt || payload.podTime },
+      { label: "Receiver Name", key: "receiverName", value: payload.receiverName || payload.receiver },
+      { label: "Destination", key: "tujuan", value: payload.tujuan },
+      { label: "Driver", key: "driver", value: payload.driver },
+      { label: "Vehicle Plate", key: "plate", value: payload.plate },
+      { label: "Project", key: "projectId", value: payload.projectId },
+      { label: "Work Order", key: "workOrderId", value: payload.workOrderId },
+      { label: "Note", key: "note", value: payload.note },
+    ])}
+    ${items.length ? listTable("Delivered Items", items, ["itemKode", "namaItem", "jumlah", "satuan", "batchNo", "keterangan"]) : ""}
+    ${mediaBlock}
+    ${companyFooterHtml(payload.receiverName || payload.receiver || payload.approvedBy)}
+  `;
 }
 
 function beritaAcaraExportHtml(payload: Record<string, unknown>): string {
@@ -1800,7 +2179,7 @@ function beritaAcaraExportHtml(payload: Record<string, unknown>): string {
   const pekerjaan = asRecords(payload.pekerjaanList || payload.items);
   const meta = keyValueTableHtml("Informasi Berita Acara", [
     { label: "ID", key: "id", value: payload.id },
-    { label: "No Berita Acara", key: "noBeritaAcara", value: payload.noBeritaAcara || payload.nomor },
+    { label: "No Berita Acara", key: "noBeritaAcara", value: payload.noBeritaAcara || payload.noBA || payload.nomor },
     { label: "Tanggal", key: "tanggal", value: payload.tanggal },
     { label: "Judul", key: "judul", value: payload.judul || payload.perihal },
     { label: "Pihak Pertama", key: "pihakPertama", value: payload.pihakPertama },
@@ -2035,6 +2414,249 @@ function payrollReportExportHtml(payload: Record<string, unknown>): string {
       "netSalary",
     ])}
     ${companyFooterHtml(generatedBy)}
+  `;
+}
+
+function payrollSlipExportHtml(payload: Record<string, unknown>): string {
+  const periodLabel = toText(payload.periodLabel || payload.period, "-");
+  const generatedAt = payload.generatedAt || new Date().toISOString();
+  const generatedBy = toText(payload.generatedBy, "Finance/HR");
+  const employeeName = toText(payload.name || payload.employeeName, "-");
+  const employeeId = toText(payload.employeeId, "-");
+  const position = toText(payload.position, "-");
+  const department = toText(payload.department, "-");
+  const employmentType = toText(payload.employmentType, "-");
+  const attendanceCount = toNum(payload.attendanceCount);
+  const presentCount = toNum(payload.presentCount);
+  const lateCount = toNum(payload.lateCount);
+  const absentCount = toNum(payload.absentCount);
+  const leaveCount = toNum(payload.leaveCount);
+  const sickCount = toNum(payload.sickCount);
+  const permissionCount = toNum(payload.permissionCount);
+  const totalHours = toNum(payload.totalHours);
+  const totalOvertime = toNum(payload.totalOvertime);
+  const baseSalary = toNum(payload.baseSalary || payload.salary);
+  const transportAllowance = toNum(payload.transportAllowance);
+  const mealAllowanceRate = toNum(payload.mealAllowanceRate);
+  const mealAllowance = toNum(payload.mealAllowance);
+  const attendanceIncentive = toNum(payload.attendanceIncentive);
+  const overtimePay = toNum(payload.overtimePay);
+  const grossSalary = toNum(payload.grossSalary);
+  const totalKasbon = toNum(payload.totalKasbon);
+  const bpjsHealthDeduction = toNum(payload.bpjsHealthDeduction);
+  const jhtDeduction = toNum(payload.jhtDeduction);
+  const jpDeduction = toNum(payload.jpDeduction);
+  const pph21Amount = toNum(payload.pph21Amount);
+  const totalDeductions =
+    toNum(payload.totalDeductions) ||
+    totalKasbon + bpjsHealthDeduction + jhtDeduction + jpDeduction + pph21Amount;
+  const netSalary = toNum(payload.netSalary);
+  const bank = toText(payload.bank, "-");
+  const bankAccount = toText(payload.bankAccount, "-");
+  const npwp = toText(payload.npwp, "-");
+  const bpjsKesehatan = toText(payload.bpjsKesehatan, "-");
+  const bpjsKetenagakerjaan = toText(payload.bpjsKetenagakerjaan, "-");
+  const totalIncome =
+    grossSalary ||
+    baseSalary + transportAllowance + mealAllowance + attendanceIncentive + overtimePay;
+  const paidAttendanceCount =
+    mealAllowanceRate > 0 ? Math.round(mealAllowance / mealAllowanceRate) : presentCount;
+
+  const earningsRows = [
+    {
+      label: "Gaji Pokok",
+      detail: position !== "-" ? `Gaji dasar ${position}` : "Gaji dasar bulanan",
+      value: baseSalary,
+    },
+    {
+      label: "Tunjangan Transport",
+      detail: "Transport tetap",
+      value: transportAllowance,
+    },
+    {
+      label: "Tunjangan Makan",
+      detail: `${paidAttendanceCount.toLocaleString("id-ID")} hari x Rp ${idr(mealAllowanceRate)}`,
+      value: mealAllowance,
+    },
+    {
+      label: "Insentif Kehadiran",
+      detail: "Insentif kehadiran periode berjalan",
+      value: attendanceIncentive,
+    },
+    {
+      label: "Tunjangan Lembur",
+      detail: `${totalOvertime.toLocaleString("id-ID")} jam lembur`,
+      value: overtimePay,
+    },
+  ];
+
+  const deductionRows = [
+    { label: "Kasbon", detail: "Pinjaman / kasbon aktif", value: totalKasbon },
+    { label: "BPJS Kesehatan", detail: "Potongan karyawan", value: bpjsHealthDeduction },
+    { label: "JHT", detail: "Jaminan hari tua", value: jhtDeduction },
+    { label: "JP", detail: "Jaminan pensiun", value: jpDeduction },
+    { label: "PPh21 Manual", detail: "Input manual wave 1", value: pph21Amount },
+  ];
+
+  const earningHtml = earningsRows
+    .map(
+      (row, index) => `
+        <tr>
+          <td style="padding:7px 8px;border:1px solid #111;text-align:center;width:42px;">${index + 1}</td>
+          <td style="padding:7px 8px;border:1px solid #111;">${escapeHtml(row.label)}</td>
+          <td style="padding:7px 8px;border:1px solid #111;">${escapeHtml(row.detail)}</td>
+          <td style="padding:7px 8px;border:1px solid #111;text-align:right;white-space:nowrap;">Rp ${idr(row.value)}</td>
+        </tr>
+      `,
+    )
+    .join("");
+
+  const deductionHtml = deductionRows
+    .map(
+      (row, index) => `
+        <tr>
+          <td style="padding:7px 8px;border:1px solid #111;text-align:center;width:42px;">${index + 1}</td>
+          <td style="padding:7px 8px;border:1px solid #111;">${escapeHtml(row.label)}</td>
+          <td style="padding:7px 8px;border:1px solid #111;">${escapeHtml(row.detail)}</td>
+          <td style="padding:7px 8px;border:1px solid #111;text-align:right;white-space:nowrap;">Rp ${idr(row.value)}</td>
+        </tr>
+      `,
+    )
+    .join("");
+
+  return `
+    <div style="font-family:Arial, Helvetica, sans-serif;color:#111;font-size:12px;line-height:1.35;">
+      <table style="width:100%;border-collapse:collapse;border:1.6px solid #111;margin-bottom:0;">
+        <tr>
+          <td style="width:68%;padding:12px 14px;border-right:1.6px solid #111;vertical-align:top;">
+            <table style="width:100%;border-collapse:collapse;">
+              <tr>
+                <td style="width:82px;vertical-align:top;">
+                  <div style="width:72px;height:54px;border:1.6px solid #111;display:flex;align-items:center;justify-content:center;background:#fff;">
+                    <img src="${COMPANY_LOGO_DATA_URI}" alt="Logo Gema Teknik" style="max-width:66px;max-height:48px;object-fit:contain;" />
+                  </div>
+                </td>
+                <td style="vertical-align:top;">
+                  <div style="font-size:19px;font-weight:700;line-height:1.15;">${escapeHtml(COMPANY_NAME)}</div>
+                  <div style="font-size:11px;margin-top:3px;">${escapeHtml(COMPANY_ADDRESS)}</div>
+                  <div style="font-size:11px;margin-top:2px;">${escapeHtml(COMPANY_CONTACT)}</div>
+                </td>
+              </tr>
+            </table>
+          </td>
+          <td style="width:32%;padding:12px 14px;vertical-align:top;text-align:center;">
+            <div style="font-size:16px;font-weight:700;letter-spacing:.5px;">SLIP GAJI</div>
+            <div style="margin-top:6px;font-size:12px;">Periode: ${escapeHtml(periodLabel)}</div>
+            <div style="margin-top:4px;font-size:11px;color:#333;">Dicetak ${escapeHtml(formatTanggalIndonesia(generatedAt))}</div>
+          </td>
+        </tr>
+      </table>
+
+      <table style="width:100%;border-collapse:collapse;border:1.6px solid #111;border-top:none;margin-bottom:0;">
+        <tr>
+          <td style="padding:0;border-right:1.6px solid #111;vertical-align:top;width:55%;">
+            <table style="width:100%;border-collapse:collapse;">
+              <tr><td style="padding:8px 10px;width:34%;border-right:1px solid #111;">Nama</td><td style="padding:8px 10px;">${escapeHtml(employeeName)}</td></tr>
+              <tr><td style="padding:8px 10px;border-top:1px solid #111;border-right:1px solid #111;">NIK / ID</td><td style="padding:8px 10px;border-top:1px solid #111;">${escapeHtml(employeeId)}</td></tr>
+              <tr><td style="padding:8px 10px;border-top:1px solid #111;border-right:1px solid #111;">Jabatan</td><td style="padding:8px 10px;border-top:1px solid #111;">${escapeHtml(position)}</td></tr>
+              <tr><td style="padding:8px 10px;border-top:1px solid #111;border-right:1px solid #111;">Departemen</td><td style="padding:8px 10px;border-top:1px solid #111;">${escapeHtml(department)}</td></tr>
+              <tr><td style="padding:8px 10px;border-top:1px solid #111;border-right:1px solid #111;">Tipe Karyawan</td><td style="padding:8px 10px;border-top:1px solid #111;">${escapeHtml(employmentType)}</td></tr>
+              <tr><td style="padding:8px 10px;border-top:1px solid #111;border-right:1px solid #111;">Bank</td><td style="padding:8px 10px;border-top:1px solid #111;">${escapeHtml(bank)}</td></tr>
+              <tr><td style="padding:8px 10px;border-top:1px solid #111;border-right:1px solid #111;">No. Rekening</td><td style="padding:8px 10px;border-top:1px solid #111;">${escapeHtml(bankAccount)}</td></tr>
+            </table>
+          </td>
+          <td style="padding:10px 12px;vertical-align:top;width:45%;">
+            <div style="font-weight:700;letter-spacing:.5px;margin-bottom:6px;">REKAP KEHADIRAN</div>
+            <div style="font-size:12px;">Hadir: ${presentCount.toLocaleString("id-ID")} | Terlambat: ${lateCount.toLocaleString("id-ID")} | Alpha: ${absentCount.toLocaleString("id-ID")}</div>
+            <div style="font-size:12px;margin-top:4px;">Izin: ${permissionCount.toLocaleString("id-ID")} | Sakit: ${sickCount.toLocaleString("id-ID")} | Cuti: ${leaveCount.toLocaleString("id-ID")}</div>
+            <div style="font-size:12px;margin-top:8px;">Jam Kerja: ${totalHours.toLocaleString("id-ID")} | Lembur: ${totalOvertime.toLocaleString("id-ID")} jam</div>
+            <div style="font-size:11px;color:#444;margin-top:6px;">Hari kerja dibayar: ${paidAttendanceCount.toLocaleString("id-ID")} | Total record absensi: ${attendanceCount.toLocaleString("id-ID")}</div>
+          </td>
+        </tr>
+      </table>
+
+      <table style="width:100%;border-collapse:collapse;border:1.6px solid #111;border-top:none;margin-bottom:0;">
+        <tr>
+          <td style="width:54%;padding:0;border-right:1.6px solid #111;vertical-align:top;">
+            <table style="width:100%;border-collapse:collapse;">
+              <thead>
+                <tr>
+                  <th style="padding:8px;border-bottom:1.6px solid #111;border-right:1px solid #111;text-align:center;width:42px;">No</th>
+                  <th style="padding:8px;border-bottom:1.6px solid #111;border-right:1px solid #111;text-align:left;">PENDAPATAN</th>
+                  <th style="padding:8px;border-bottom:1.6px solid #111;border-right:1px solid #111;text-align:left;">Keterangan</th>
+                  <th style="padding:8px;border-bottom:1.6px solid #111;text-align:right;">Nominal</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${earningHtml}
+                <tr>
+                  <td colspan="3" style="padding:8px;border:1px solid #111;font-weight:700;">Total Pendapatan Kotor</td>
+                  <td style="padding:8px;border:1px solid #111;text-align:right;font-weight:700;">Rp ${idr(totalIncome)}</td>
+                </tr>
+              </tbody>
+            </table>
+          </td>
+          <td style="width:46%;padding:0;vertical-align:top;">
+            <table style="width:100%;border-collapse:collapse;">
+              <thead>
+                <tr>
+                  <th style="padding:8px;border-bottom:1.6px solid #111;border-right:1px solid #111;text-align:center;width:42px;">No</th>
+                  <th style="padding:8px;border-bottom:1.6px solid #111;border-right:1px solid #111;text-align:left;">POTONGAN</th>
+                  <th style="padding:8px;border-bottom:1.6px solid #111;border-right:1px solid #111;text-align:left;">Keterangan</th>
+                  <th style="padding:8px;border-bottom:1.6px solid #111;text-align:right;">Nominal</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${deductionHtml}
+                <tr>
+                  <td colspan="3" style="padding:8px;border:1px solid #111;font-weight:700;">Total Potongan</td>
+                  <td style="padding:8px;border:1px solid #111;text-align:right;font-weight:700;">Rp ${idr(totalDeductions)}</td>
+                </tr>
+              </tbody>
+            </table>
+          </td>
+        </tr>
+      </table>
+
+      <table style="width:100%;border-collapse:collapse;border:1.6px solid #111;border-top:none;margin-bottom:0;">
+        <tr>
+          <td style="padding:12px 14px;width:62%;border-right:1.6px solid #111;vertical-align:top;">
+            <div style="font-size:11px;line-height:1.6;">
+              <div style="font-weight:700;margin-bottom:4px;">Catatan:</div>
+              <div>- Slip ini dihitung dari data absensi, lembur, kasbon, dan setting payroll.</div>
+              <div>- PPh21 saat ini masih manual per karyawan.</div>
+              <div>- Uang makan dihitung dari ${paidAttendanceCount.toLocaleString("id-ID")} hari hadir dengan tarif Rp ${idr(mealAllowanceRate)} / hari.</div>
+              <div>- NPWP: ${escapeHtml(npwp)} | BPJS Kes: ${escapeHtml(bpjsKesehatan)} | BPJS TK: ${escapeHtml(bpjsKetenagakerjaan)}</div>
+            </div>
+          </td>
+          <td style="padding:10px 14px;width:38%;vertical-align:top;">
+            <div style="font-size:11px;color:#333;letter-spacing:.4px;">TAKE HOME PAY</div>
+            <div style="font-size:24px;font-weight:700;margin-top:4px;">Rp ${idr(netSalary)}</div>
+            <div style="font-size:11px;margin-top:6px;">Gaji Bersih Diterima</div>
+          </td>
+        </tr>
+      </table>
+
+      <table style="width:100%;border-collapse:collapse;border:1.6px solid #111;border-top:none;">
+        <tr>
+          <td style="padding:12px 10px;width:33.33%;text-align:center;vertical-align:top;">
+            <div>Mengetahui,</div>
+            <div style="height:58px;"></div>
+            <div style="font-weight:700;text-decoration:underline;">Management</div>
+          </td>
+          <td style="padding:12px 10px;width:33.33%;text-align:center;vertical-align:top;border-left:1px solid #111;border-right:1px solid #111;">
+            <div>Disiapkan Oleh,</div>
+            <div style="height:58px;"></div>
+            <div style="font-weight:700;text-decoration:underline;">${escapeHtml(generatedBy)}</div>
+          </td>
+          <td style="padding:12px 10px;width:33.33%;text-align:center;vertical-align:top;">
+            <div>Menerima,</div>
+            <div style="height:58px;"></div>
+            <div style="font-weight:700;text-decoration:underline;">${escapeHtml(employeeName)}</div>
+          </td>
+        </tr>
+      </table>
+    </div>
   `;
 }
 
@@ -2636,6 +3258,18 @@ exportsRouter.get("/exports/invoices/:id/excel", authenticate, async (req: AuthR
   return sendExcel(res, `invoice-${req.params.id}`, invoiceExportHtml(payload));
 });
 
+exportsRouter.get("/exports/customer-invoices/:id/word", authenticate, async (req: AuthRequest, res: Response) => {
+  const payload = await getAppEntityPayload("customer-invoices", req.params.id);
+  if (!payload) return res.status(404).json({ error: "Customer invoice not found" });
+  return sendWord(res, `customer-invoice-${req.params.id}`, invoiceExportHtml(payload));
+});
+
+exportsRouter.get("/exports/customer-invoices/:id/excel", authenticate, async (req: AuthRequest, res: Response) => {
+  const payload = await getAppEntityPayload("customer-invoices", req.params.id);
+  if (!payload) return res.status(404).json({ error: "Customer invoice not found" });
+  return sendExcel(res, `customer-invoice-${req.params.id}`, invoiceExportHtml(payload));
+});
+
 exportsRouter.get("/exports/surat-jalan/:id/word", authenticate, async (req: AuthRequest, res: Response) => {
   const payload = await getAppEntityPayload("surat-jalan", req.params.id);
   if (!payload) return res.status(404).json({ error: "Surat jalan not found" });
@@ -2646,6 +3280,18 @@ exportsRouter.get("/exports/surat-jalan/:id/excel", authenticate, async (req: Au
   const payload = await getAppEntityPayload("surat-jalan", req.params.id);
   if (!payload) return res.status(404).json({ error: "Surat jalan not found" });
   return sendExcel(res, `surat-jalan-${req.params.id}`, suratJalanExportHtml(payload));
+});
+
+exportsRouter.get("/exports/proof-of-delivery/:id/word", authenticate, async (req: AuthRequest, res: Response) => {
+  const payload = await getAppEntityPayload("proof-of-delivery", req.params.id);
+  if (!payload) return res.status(404).json({ error: "Proof of delivery not found" });
+  return sendWord(res, `proof-of-delivery-${req.params.id}`, proofOfDeliveryExportHtml(payload));
+});
+
+exportsRouter.get("/exports/proof-of-delivery/:id/excel", authenticate, async (req: AuthRequest, res: Response) => {
+  const payload = await getAppEntityPayload("proof-of-delivery", req.params.id);
+  if (!payload) return res.status(404).json({ error: "Proof of delivery not found" });
+  return sendExcel(res, `proof-of-delivery-${req.params.id}`, proofOfDeliveryExportHtml(payload));
 });
 
 exportsRouter.get("/exports/berita-acara/:id/word", authenticate, async (req: AuthRequest, res: Response) => {
@@ -2780,6 +3426,32 @@ exportsRouter.post("/exports/payroll-report/excel", authenticate, async (req: Au
     .replace(/[^\w.-]+/g, "-")
     .toLowerCase();
   return sendExcel(res, `payroll-report-${periodSlug}`, payrollReportExportHtml(payload));
+});
+
+exportsRouter.post("/exports/payroll-slip/word", authenticate, async (req: AuthRequest, res: Response) => {
+  const payload = asRecord(req.body);
+  const employeeName = toText(payload.name || payload.employeeName, "").trim();
+  if (!employeeName) {
+    return res.status(400).json({ error: "Payroll slip payload is empty" });
+  }
+  const employeeSlug = employeeName.replace(/[^\w.-]+/g, "-").toLowerCase() || "employee";
+  const periodSlug = toText(payload.periodLabel, new Date().toISOString().slice(0, 10))
+    .replace(/[^\w.-]+/g, "-")
+    .toLowerCase();
+  return sendWord(res, `payroll-slip-${employeeSlug}-${periodSlug}`, payrollSlipExportHtml(payload));
+});
+
+exportsRouter.post("/exports/payroll-slip/excel", authenticate, async (req: AuthRequest, res: Response) => {
+  const payload = asRecord(req.body);
+  const employeeName = toText(payload.name || payload.employeeName, "").trim();
+  if (!employeeName) {
+    return res.status(400).json({ error: "Payroll slip payload is empty" });
+  }
+  const employeeSlug = employeeName.replace(/[^\w.-]+/g, "-").toLowerCase() || "employee";
+  const periodSlug = toText(payload.periodLabel, new Date().toISOString().slice(0, 10))
+    .replace(/[^\w.-]+/g, "-")
+    .toLowerCase();
+  return sendExcel(res, `payroll-slip-${employeeSlug}-${periodSlug}`, payrollSlipExportHtml(payload));
 });
 
 exportsRouter.post("/exports/receivable-report/word", authenticate, async (req: AuthRequest, res: Response) => {
@@ -3088,6 +3760,12 @@ exportsRouter.get("/exports/preview/:resource/:id", authenticate, async (req: Au
     return sendPreview(res, suratJalanExportHtml(payload));
   }
 
+  if (resource === "proof-of-delivery") {
+    const payload = await getAppEntityPayload("proof-of-delivery", id);
+    if (!payload) return res.status(404).json({ error: "Proof of delivery not found" });
+    return sendPreview(res, proofOfDeliveryExportHtml(payload));
+  }
+
   if (resource === "berita-acara") {
     const payload = await getAppEntityPayload("berita-acara", id);
     if (!payload) return res.status(404).json({ error: "Berita acara not found" });
@@ -3126,6 +3804,7 @@ exportsRouter.get("/exports/preview/:resource/:id", authenticate, async (req: Au
       "projects",
       "invoices",
       "surat-jalan",
+      "proof-of-delivery",
       "berita-acara",
       "purchase-orders",
       "stock-outs",
