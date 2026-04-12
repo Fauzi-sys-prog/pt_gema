@@ -442,6 +442,10 @@ operationsRouter.post("/production/submit-lhp", authenticate, async (req: AuthRe
       const outputQty = asNumber(reportInput.outputQty, 0);
       const reportId = asString(reportInput.id) || `lhp-${Date.now()}`;
       const isAutoDeduct = !selectedItem || selectedItem.toLowerCase() === "auto";
+      const manualIntent =
+        reportInput.manualMode === true ||
+        ["finished-goods", "material-issue"].includes(asString(reportInput.manualModeType) || "") ||
+        (!woIdInput && !woNumberInput);
 
       if (outputQty <= 0) {
         throw new Error("outputQty harus lebih dari 0");
@@ -525,7 +529,12 @@ operationsRouter.post("/production/submit-lhp", authenticate, async (req: AuthRe
         }
       }
 
-      const isManualReport = !legacyWo && !relationalWo;
+      if (manualIntent && (woIdInput || woNumberInput) && (!legacyWo || !relationalWo)) {
+        legacyWo = null;
+        relationalWo = null;
+      }
+
+      const isManualReport = manualIntent || (!legacyWo && !relationalWo);
       const manualModeType =
         isManualReport && asString(reportInput.manualModeType) === "finished-goods"
           ? "finished-goods"

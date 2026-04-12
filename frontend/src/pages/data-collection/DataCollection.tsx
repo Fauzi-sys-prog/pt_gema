@@ -357,6 +357,8 @@ export default function DataCollection() {
   const navigate = useNavigate();
   const [serverDataCollectionList, setServerDataCollectionList] = useState<DataCollectionType[] | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [selectedItem, setSelectedItem] =
+    useState<DataCollectionType | null>(null);
   const effectiveDataCollectionList = serverDataCollectionList ?? dataCollectionList;
   const selectedIsImported = isImportedDataCollection(selectedItem);
   const selectedCanCreateQuotation = canCreateQuotationFromCollection(selectedItem);
@@ -372,8 +374,6 @@ export default function DataCollection() {
   const [searchTerm, setSearchTerm] = useState("");
   const [showModal, setShowModal] = useState(false);
   const [showDetailModal, setShowDetailModal] = useState(false);
-  const [selectedItem, setSelectedItem] =
-    useState<DataCollectionType | null>(null);
   const [exportingKey, setExportingKey] = useState("");
   const [activeTab, setActiveTab] = useState<
     | "overview"
@@ -526,6 +526,51 @@ export default function DataCollection() {
     }
   };
 
+  const syncServerMirrorCreate = (item: DataCollectionType) => {
+    setServerDataCollectionList((prev) => {
+      if (!prev) return prev;
+      const next = prev.filter((existing) => existing.id !== item.id);
+      return [item, ...next];
+    });
+  };
+
+  const syncServerMirrorUpdate = (
+    id: string,
+    updates: Partial<DataCollectionType>,
+  ) => {
+    setServerDataCollectionList((prev) => {
+      if (!prev) return prev;
+      return prev.map((item) =>
+        item.id === id ? ({ ...item, ...updates } as DataCollectionType) : item,
+      );
+    });
+  };
+
+  const syncServerMirrorDelete = (id: string) => {
+    setServerDataCollectionList((prev) => {
+      if (!prev) return prev;
+      return prev.filter((item) => item.id !== id);
+    });
+  };
+
+  const createDataCollectionRecord = (item: DataCollectionType) => {
+    syncServerMirrorCreate(item);
+    addDataCollection(item);
+  };
+
+  const updateDataCollectionRecord = (
+    id: string,
+    updates: Partial<DataCollectionType>,
+  ) => {
+    syncServerMirrorUpdate(id, updates);
+    updateDataCollection(id, updates);
+  };
+
+  const deleteDataCollectionRecord = (id: string) => {
+    syncServerMirrorDelete(id);
+    deleteDataCollection(id);
+  };
+
   useEffect(() => {
     fetchDataCollections();
   }, []);
@@ -620,7 +665,7 @@ export default function DataCollection() {
     let finalId = editingId;
 
     if (editingId) {
-      updateDataCollection(editingId, {
+      updateDataCollectionRecord(editingId, {
         ...formData,
         signature: signatureData || undefined,
       });
@@ -638,7 +683,7 @@ export default function DataCollection() {
         signature: signatureData || undefined,
       };
 
-      addDataCollection(newData);
+      createDataCollectionRecord(newData);
       toast.success("Data Collection berhasil disimpan");
     }
 
@@ -654,6 +699,9 @@ export default function DataCollection() {
     } else {
       resetForm();
     }
+
+    // Force-sync list from backend to avoid stale cards after create/update.
+    void fetchDataCollections();
   };
 
   const resetForm = () => {
@@ -696,8 +744,10 @@ export default function DataCollection() {
     if (
       window.confirm("Apakah Anda yakin ingin menghapus data ini?")
     ) {
-      deleteDataCollection(id);
+      deleteDataCollectionRecord(id);
       toast.success("Data Collection berhasil dihapus");
+      // Force-sync list from backend to avoid stale cards after delete.
+      void fetchDataCollections();
     }
   };
 
@@ -827,7 +877,7 @@ export default function DataCollection() {
 
       setSelectedItem(updatedItem);
       // Sync with main context
-      updateDataCollection(selectedItem.id, {
+      updateDataCollectionRecord(selectedItem.id, {
         materials: updatedMaterials,
       });
     } else if (showModal) {
@@ -857,7 +907,7 @@ export default function DataCollection() {
           materials: updatedMaterials,
         });
         // Sync with main context
-        updateDataCollection(selectedItem.id, {
+        updateDataCollectionRecord(selectedItem.id, {
           materials: updatedMaterials,
         });
         toast.success("Material berhasil dihapus");
@@ -886,7 +936,7 @@ export default function DataCollection() {
       });
 
       // Sync with main context
-      updateDataCollection(selectedItem.id, {
+      updateDataCollectionRecord(selectedItem.id, {
         manpower: updatedManpower,
       });
     } else if (showModal) {
@@ -923,7 +973,7 @@ export default function DataCollection() {
           manpower: updatedManpower,
         });
         // Sync with main context
-        updateDataCollection(selectedItem.id, {
+        updateDataCollectionRecord(selectedItem.id, {
           manpower: updatedManpower,
         });
         toast.success("Manpower berhasil dihapus");
@@ -952,7 +1002,7 @@ export default function DataCollection() {
       });
 
       // Sync with main context
-      updateDataCollection(selectedItem.id, {
+      updateDataCollectionRecord(selectedItem.id, {
         schedule: updatedSchedule,
       });
     } else if (showModal) {
@@ -989,7 +1039,7 @@ export default function DataCollection() {
           schedule: updatedSchedule,
         });
         // Sync with main context
-        updateDataCollection(selectedItem.id, {
+        updateDataCollectionRecord(selectedItem.id, {
           schedule: updatedSchedule,
         });
         toast.success("Schedule berhasil dihapus");
@@ -1022,7 +1072,7 @@ export default function DataCollection() {
       });
 
       // Sync with main context
-      updateDataCollection(selectedItem.id, {
+      updateDataCollectionRecord(selectedItem.id, {
         consumables: updatedConsumables,
       });
     } else if (showModal) {
@@ -1067,7 +1117,7 @@ export default function DataCollection() {
           consumables: updatedConsumables,
         });
         // Sync with main context
-        updateDataCollection(selectedItem.id, {
+        updateDataCollectionRecord(selectedItem.id, {
           consumables: updatedConsumables,
         });
         toast.success("Consumable berhasil dihapus");
@@ -1096,7 +1146,7 @@ export default function DataCollection() {
       });
 
       // Sync with main context
-      updateDataCollection(selectedItem.id, {
+      updateDataCollectionRecord(selectedItem.id, {
         equipment: updatedEquipment,
       });
     } else if (showModal) {
@@ -1133,7 +1183,7 @@ export default function DataCollection() {
           equipment: updatedEquipment,
         });
         // Sync with main context
-        updateDataCollection(selectedItem.id, {
+        updateDataCollectionRecord(selectedItem.id, {
           equipment: updatedEquipment,
         });
         toast.success("Equipment berhasil dihapus");
@@ -4226,7 +4276,7 @@ export default function DataCollection() {
                                 signature: data,
                               });
                               // Sync with main context
-                              updateDataCollection(
+                              updateDataCollectionRecord(
                                 selectedItem.id,
                                 {
                                   signature: data,
@@ -4298,7 +4348,7 @@ export default function DataCollection() {
                                   ...updatedData,
                                 });
 
-                                updateDataCollection(
+                                updateDataCollectionRecord(
                                   selectedItem.id,
                                   updatedData,
                                 );
