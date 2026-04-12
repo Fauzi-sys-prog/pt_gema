@@ -354,6 +354,49 @@ async function getAppEntityPayload(resource: string, id: string): Promise<Record
     return row ? mapProjectSpkToLegacyPayload(row) : null;
   }
 
+  if (resource === "vendor-invoices") {
+    const row = await prisma.financeVendorInvoice.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        vendorId: true,
+        projectId: true,
+        purchaseOrderId: true,
+        number: true,
+        noPO: true,
+        supplierName: true,
+        totalAmount: true,
+        paidAmount: true,
+        outstandingAmount: true,
+        ppn: true,
+        status: true,
+        tanggal: true,
+        dueDate: true,
+      },
+    });
+    if (row) {
+      return {
+        id: row.id,
+        vendorId: row.vendorId ?? undefined,
+        projectId: row.projectId ?? undefined,
+        noInvoiceVendor: row.number,
+        noInvoice: row.number,
+        supplier: row.supplierName,
+        vendorName: row.supplierName,
+        noPO: row.noPO ?? undefined,
+        totalAmount: row.totalAmount,
+        amount: row.totalAmount,
+        paidAmount: row.paidAmount,
+        outstandingAmount: row.outstandingAmount,
+        ppn: row.ppn,
+        status: row.status,
+        tanggal: row.tanggal ? row.tanggal.toISOString().slice(0, 10) : undefined,
+        jatuhTempo: row.dueDate ? row.dueDate.toISOString().slice(0, 10) : undefined,
+        purchaseOrderId: row.purchaseOrderId ?? undefined,
+      };
+    }
+  }
+
   if (resource === "invoices") {
     const invoice = await prisma.invoiceRecord.findUnique({
       where: { id },
