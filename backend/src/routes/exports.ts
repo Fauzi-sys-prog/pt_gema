@@ -7,6 +7,7 @@ import {
   mapProjectBeritaAcaraToLegacyPayload,
   mapProjectSpkToLegacyPayload,
 } from "./dataLogisticsMappers";
+import { mapProductionExecutionReportToLegacyPayload } from "./dataProductionMappers";
 
 export const exportsRouter = Router();
 
@@ -395,6 +396,18 @@ async function getAppEntityPayload(resource: string, id: string): Promise<Record
         purchaseOrderId: row.purchaseOrderId ?? undefined,
       };
     }
+  }
+
+  if (resource === "production-reports") {
+    const row = await prisma.productionExecutionReport.findUnique({
+      where: { id },
+      include: {
+        project: { select: { payload: true } },
+        workOrder: { select: { number: true } },
+        photoAsset: { select: { id: true, publicUrl: true, originalName: true } },
+      },
+    });
+    return row ? mapProductionExecutionReportToLegacyPayload(row) : null;
   }
 
   if (resource === "invoices") {
