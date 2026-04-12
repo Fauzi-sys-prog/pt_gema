@@ -3,6 +3,10 @@ import { prisma } from "../prisma";
 import { authenticate } from "../middlewares/auth";
 import { AuthRequest } from "../types/auth";
 import { COMPANY_LOGO_DATA_URI } from "../constants/companyLogo";
+import {
+  mapProjectBeritaAcaraToLegacyPayload,
+  mapProjectSpkToLegacyPayload,
+} from "./dataLogisticsMappers";
 
 export const exportsRouter = Router();
 
@@ -337,6 +341,19 @@ async function getProjectPayload(id: string): Promise<Record<string, unknown> | 
 }
 
 async function getAppEntityPayload(resource: string, id: string): Promise<Record<string, unknown> | null> {
+  if (resource === "berita-acara") {
+    const row = await prisma.projectBeritaAcara.findUnique({ where: { id } });
+    return row ? mapProjectBeritaAcaraToLegacyPayload(row) : null;
+  }
+
+  if (resource === "spk-records") {
+    const row = await prisma.projectSpkRecord.findUnique({
+      where: { id },
+      include: { technicians: true, attachments: true },
+    });
+    return row ? mapProjectSpkToLegacyPayload(row) : null;
+  }
+
   if (resource === "invoices") {
     const invoice = await prisma.invoiceRecord.findUnique({
       where: { id },
@@ -2705,7 +2722,7 @@ function beritaAcaraExportHtml(payload: Record<string, unknown>): string {
   const pekerjaan = asRecords(payload.pekerjaanList || payload.items);
   const meta = keyValueTableHtml("Informasi Berita Acara", [
     { label: "ID", key: "id", value: payload.id },
-    { label: "No Berita Acara", key: "noBeritaAcara", value: payload.noBeritaAcara || payload.nomor },
+    { label: "No Berita Acara", key: "noBeritaAcara", value: payload.noBeritaAcara || payload.noBA || payload.nomor },
     { label: "Tanggal", key: "tanggal", value: payload.tanggal },
     { label: "Judul", key: "judul", value: payload.judul || payload.perihal },
     { label: "Pihak Pertama", key: "pihakPertama", value: payload.pihakPertama },
@@ -3806,6 +3823,18 @@ exportsRouter.get("/exports/vendor-invoices/:id/excel", authenticate, async (req
   const payload = await getAppEntityPayload("vendor-invoices", req.params.id);
   if (!payload) return res.status(404).json({ error: "Vendor invoice not found" });
   return sendExcel(res, `vendor-invoice-${req.params.id}`, vendorInvoiceExportHtml(payload));
+});
+
+exportsRouter.get("/exports/customer-invoices/:id/word", authenticate, async (req: AuthRequest, res: Response) => {
+  const payload = await getAppEntityPayload("customer-invoices", req.params.id);
+  if (!payload) return res.status(404).json({ error: "Customer invoice not found" });
+  return sendWord(res, `customer-invoice-${req.params.id}`, invoiceExportHtml(payload));
+});
+
+exportsRouter.get("/exports/customer-invoices/:id/excel", authenticate, async (req: AuthRequest, res: Response) => {
+  const payload = await getAppEntityPayload("customer-invoices", req.params.id);
+  if (!payload) return res.status(404).json({ error: "Customer invoice not found" });
+  return sendExcel(res, `customer-invoice-${req.params.id}`, invoiceExportHtml(payload));
 });
 
 exportsRouter.get("/exports/surat-jalan/:id/word", authenticate, async (req: AuthRequest, res: Response) => {
