@@ -55,6 +55,8 @@ export default function FieldProjectRecord() {
   const [attendanceData, setAttendanceData] = useState<Record<string, string>>({});
   const [kasbonAmount, setKasbonAmount] = useState('');
   const [kasbonDate, setKasbonDate] = useState(new Date().toISOString().split('T')[0]);
+  const [kasbonWorkerName, setKasbonWorkerName] = useState('');
+  const [kasbonEmployeeId, setKasbonEmployeeId] = useState('');
   const currentRole = String(currentUser?.role || '').trim().toUpperCase();
   const hasPrivilegedAccess = hasRoleAccess(currentRole, ['OWNER', 'SPV', 'ADMIN', 'MANAGER']);
 
@@ -626,8 +628,10 @@ export default function FieldProjectRecord() {
     }
   };
 
-  const handleAddKasbon = (worker: any) => {
-    setSelectedWorker(worker);
+  const handleAddKasbon = (worker?: ProjectWorker | null) => {
+    setSelectedWorker(worker || null);
+    setKasbonWorkerName(worker?.workerName || '');
+    setKasbonEmployeeId(worker?.employeeId || '');
     setKasbonAmount('');
     setKasbonDate(new Date().toISOString().split('T')[0]);
     setShowKasbonModal(true);
@@ -729,7 +733,11 @@ export default function FieldProjectRecord() {
 
   const submitKasbon = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedWorker) return;
+    const workerName = selectedWorker?.workerName || kasbonWorkerName.trim();
+    if (!workerName) {
+      toast.error('Nama penerima kasbon wajib diisi.');
+      return;
+    }
 
     const amount = parseFloat(kasbonAmount);
     if (isNaN(amount) || amount <= 0) {
@@ -737,11 +745,12 @@ export default function FieldProjectRecord() {
       return;
     }
 
+    const employeeId = selectedWorker?.employeeId || kasbonEmployeeId.trim() || undefined;
     const newKasbon = {
       id: `KSB-${Date.now()}`,
-      projectId: selectedProjectId,
-      employeeId: selectedWorker.employeeId || undefined,
-      employeeName: selectedWorker.workerName,
+      projectId: selectedProjectId || undefined,
+      employeeId,
+      employeeName: workerName,
       date: kasbonDate,
       amount: amount,
       status: 'Approved',
@@ -760,7 +769,9 @@ export default function FieldProjectRecord() {
         module: 'HR',
         entityType: 'Kasbon',
         entityId: String(savedRaw.id || newKasbon.id),
-        description: `Kasbon ${formatCurrency(amount)} untuk ${selectedWorker.workerName} dicatat pada proyek ${selectedProjectId}`,
+        description: selectedProjectId
+          ? `Kasbon ${formatCurrency(amount)} untuk ${workerName} dicatat pada proyek ${selectedProjectId}`
+          : `Kasbon ${formatCurrency(amount)} untuk ${workerName} dicatat tanpa project`,
       });
     } catch (err: any) {
       const apiMessage = err?.response?.data?.message || err?.message || 'Gagal simpan kasbon';
@@ -768,10 +779,12 @@ export default function FieldProjectRecord() {
       return;
     }
 
-    toast.success(`Kasbon senilai ${formatCurrency(amount)} untuk ${selectedWorker.workerName} berhasil dicatat.`);
+    toast.success(`Kasbon senilai ${formatCurrency(amount)} untuk ${workerName} berhasil dicatat.`);
     setShowKasbonModal(false);
     setKasbonAmount('');
     setKasbonDate(new Date().toISOString().split('T')[0]);
+    setKasbonWorkerName('');
+    setKasbonEmployeeId('');
     setSelectedWorker(null);
   };
 
@@ -1281,6 +1294,34 @@ export default function FieldProjectRecord() {
                 </button>
              </div>
            ))}
+           {workerRoster.filter((worker) => String(worker.workerName || '').trim()).length === 0 && (
+             <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
+               <div className="flex items-center justify-between mb-6">
+                 <div className="flex items-center gap-4">
+                   <div className="w-12 h-12 bg-slate-900 text-white rounded-2xl flex items-center justify-center font-black italic">
+                     K
+                   </div>
+                   <div>
+                     <h4 className="text-lg font-black text-slate-900 uppercase italic tracking-tighter leading-none">Kasbon Umum</h4>
+                     <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-1">Tanpa Project</p>
+                   </div>
+                 </div>
+                 <div className="bg-blue-50 px-4 py-2 rounded-xl border border-blue-100 text-right">
+                   <p className="text-[8px] font-black text-blue-400 uppercase tracking-widest mb-0.5">Total Kasbon</p>
+                   <p className="text-sm font-black text-blue-600 italic">{formatCurrency(0)}</p>
+                 </div>
+               </div>
+               <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center text-[10px] font-black uppercase tracking-widest text-slate-400">
+                 Belum ada data kasbon. Input manual tersedia.
+               </div>
+               <button
+                 onClick={() => handleAddKasbon(null)}
+                 className="mt-6 w-full py-3 bg-slate-50 text-slate-400 border border-slate-200 border-dashed rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-100 hover:text-slate-600 transition-all flex items-center justify-center gap-2"
+               >
+                 <Plus size={14} /> Add New Entry
+               </button>
+             </div>
+           )}
         </div>
       ) : activeView === 'equipment' ? (
         getEquipmentView()
@@ -1459,13 +1500,41 @@ export default function FieldProjectRecord() {
                 <div className="space-y-4">
                   <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 flex items-center gap-4">
                     <div className="w-10 h-10 bg-slate-900 text-white rounded-xl flex items-center justify-center font-black italic">
-                         {String(selectedWorker?.workerName || "?").charAt(0)}
+                         {String(selectedWorker?.workerName || kasbonWorkerName || "?").charAt(0)}
                     </div>
                     <div>
                       <p className="text-[10px] font-black text-slate-400 uppercase">Worker Name</p>
-                      <p className="text-sm font-black text-slate-900 uppercase italic">{selectedWorker?.workerName}</p>
+                      <p className="text-sm font-black text-slate-900 uppercase italic">
+                        {selectedWorker?.workerName || kasbonWorkerName || 'Manual Entry'}
+                      </p>
                     </div>
                   </div>
+
+                  {!selectedWorker && (
+                    <div className="grid gap-3">
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-2">Nama Penerima</label>
+                        <input
+                          type="text"
+                          required
+                          value={kasbonWorkerName}
+                          onChange={(e) => setKasbonWorkerName(e.target.value)}
+                          placeholder="Nama pekerja / penerima kasbon"
+                          className="w-full px-4 py-3 bg-slate-50 border-none rounded-2xl text-xs font-bold uppercase italic outline-none focus:ring-4 focus:ring-blue-500/10 transition-all"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-2">Employee ID (Opsional)</label>
+                        <input
+                          type="text"
+                          value={kasbonEmployeeId}
+                          onChange={(e) => setKasbonEmployeeId(e.target.value)}
+                          placeholder="Jika ada, isi ID karyawan"
+                          className="w-full px-4 py-3 bg-slate-50 border-none rounded-2xl text-xs font-bold uppercase italic outline-none focus:ring-4 focus:ring-blue-500/10 transition-all"
+                        />
+                      </div>
+                    </div>
+                  )}
 
                   <div className="space-y-2">
                     <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-2">Tanggal Kasbon</label>
