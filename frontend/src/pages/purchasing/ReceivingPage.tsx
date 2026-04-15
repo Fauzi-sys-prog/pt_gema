@@ -569,6 +569,12 @@ export default function ReceivingPage() {
                   )}
                 </div>
 
+                {formData.poId && (
+                  <div className="md:col-span-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-4 text-[10px] font-black uppercase tracking-widest text-emerald-700">
+                    Receiving ini otomatis membuat Stock In, menambah stok gudang, dan mengubah status PO menjadi Partial atau Received.
+                  </div>
+                )}
+
                 <div>
                   <label className="block text-[10px] font-black italic text-gray-700 mb-2 uppercase tracking-widest">No. Surat Jalan Vendor <span className="text-red-500">*</span></label>
                   <div className="flex gap-2">

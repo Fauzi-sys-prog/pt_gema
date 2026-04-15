@@ -247,7 +247,7 @@ export default function StockInPage() {
             className="px-4 py-3 bg-slate-50 border-none rounded-xl text-xs font-black uppercase tracking-widest text-slate-600 outline-none"
           >
             <option value="all">Semua Tipe</option>
-            <option value="Receiving">Penerimaan (PO / Manual)</option>
+            <option value="Receiving">Receiving Otomatis (dari PO)</option>
             <option value="Return">Retur Proyek</option>
             <option value="Adjustment">Penyesuaian</option>
             <option value="Finished Goods">Finished Goods</option>
@@ -317,6 +317,9 @@ export default function StockInPage() {
                   Mode Manual Inbound aktif: Anda bisa input stok masuk tanpa PO.
                 </div>
               )}
+              <div className="p-4 rounded-2xl border border-blue-200 bg-blue-50 text-blue-700 text-xs font-bold uppercase tracking-wider">
+                Penerimaan barang dari PO wajib lewat menu Receiving. Halaman ini hanya untuk retur, adjustment, finished goods, atau koreksi stok non-PO.
+              </div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div className="p-6 bg-slate-50 rounded-3xl border border-slate-100">
                   <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">No. Surat Jalan / Dokumen</label>
@@ -346,7 +349,6 @@ export default function StockInPage() {
                     className="w-full px-4 py-3 bg-white border-transparent rounded-xl text-sm font-bold outline-none"
                     required
                   >
-                    <option value="Receiving">Penerimaan (PO / Manual)</option>
                     <option value="Return">Retur Proyek</option>
                     <option value="Adjustment">Penyesuaian (Opname)</option>
                     <option value="Finished Goods">Finished Goods</option>

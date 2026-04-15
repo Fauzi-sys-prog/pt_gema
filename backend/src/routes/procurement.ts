@@ -375,6 +375,47 @@ async function resolveLegacyPurchaseOrderId(relationalPurchaseOrderId: string): 
   return legacy?.id;
 }
 
+async function reverseAutoStockIn(stockInId: string) {
+  const movements = await prisma.inventoryStockMovement.findMany({
+    where: { stockInId, direction: "IN" },
+  });
+
+  for (const movement of movements) {
+    const code = asTrimmedString(movement.itemCode);
+    if (!code) continue;
+
+    const item = await prisma.inventoryItem.findFirst({ where: { code } });
+    if (!item) continue;
+
+    const qty = Math.max(0, movement.qty || 0);
+    if (qty <= 0) continue;
+
+    const nextQty = Math.max(0, (item.onHandQty || 0) - qty);
+    await prisma.inventoryItem.update({
+      where: { id: item.id },
+      data: {
+        onHandQty: nextQty,
+        lastStockUpdateAt: new Date(),
+        metadata: {
+          ...(asRecord(item.metadata)),
+          id: item.id,
+          kode: item.code,
+          nama: item.name,
+          stok: nextQty,
+          satuan: item.unit,
+          kategori: asTrimmedString(asRecord(item.metadata).kategori) || item.category || "General",
+          minStock: toFiniteNumber(asRecord(item.metadata).minStock, item.minStock),
+          hargaSatuan: toFiniteNumber(asRecord(item.metadata).hargaSatuan, item.unitPrice ?? 0),
+          supplier: item.supplierName || "",
+          lokasi: item.location,
+          lastUpdate: new Date().toISOString(),
+          expiryDate: asTrimmedString(asRecord(item.metadata).expiryDate) || undefined,
+        } as Prisma.InputJsonValue,
+      },
+    });
+  }
+}
+
 async function syncInventoryFromReceiving(receivingId: string) {
   const receiving = await prisma.procurementReceiving.findUnique({
     where: { id: receivingId },
@@ -397,6 +438,7 @@ async function syncInventoryFromReceiving(receivingId: string) {
     .filter((item) => item.code && item.qty > 0);
   const legacyPoId = await resolveLegacyPurchaseOrderId(receiving.purchaseOrderId);
 
+  await reverseAutoStockIn(stockInId);
   await prisma.inventoryStockMovement.deleteMany({ where: { stockInId } });
   await prisma.inventoryStockIn.deleteMany({ where: { id: stockInId } });
 
@@ -756,6 +798,7 @@ async function deleteResource(resource: ProcurementResource, id: string) {
     await prisma.procurementPurchaseOrder.delete({ where: { id } });
     return;
   }
+  await reverseAutoStockIn(`SI-AUTO-${id}`);
   await prisma.inventoryStockMovement.deleteMany({ where: { stockInId: `SI-AUTO-${id}` } });
   await prisma.inventoryStockIn.deleteMany({ where: { id: `SI-AUTO-${id}` } });
   await prisma.procurementReceiving.delete({ where: { id } });
