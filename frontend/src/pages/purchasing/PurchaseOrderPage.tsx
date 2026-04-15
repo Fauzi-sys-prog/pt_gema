@@ -119,12 +119,15 @@ const toFiniteNonNegative = (value: unknown, fallback = 0) => {
 };
 
 const normalizeKey = (value: unknown) => String(value || '').trim().toLowerCase();
+const PO_WRITE_ROLES = new Set(['OWNER', 'SPV', 'ADMIN', 'MANAGER', 'PURCHASING']);
 
 export default function PurchaseOrderPage() {
-  const { poList, setPoList, addPO, updatePO, projectList, updateProject, stockItemList, setStockItemList } = useApp();
+  const { poList, setPoList, addPO, updatePO, projectList, updateProject, stockItemList, setStockItemList, currentUser } = useApp();
   const location = useLocation();
   const navigate = useNavigate();
   const locationState = location.state as LocationState;
+  const userRole = String(currentUser?.role || '').trim().toUpperCase();
+  const canWritePO = PO_WRITE_ROLES.has(userRole);
   
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
@@ -790,7 +793,7 @@ export default function PurchaseOrderPage() {
           <p className="text-gray-600 italic">Manajemen Pembelian & Pesanan Barang</p>
         </div>
         <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
-          {poList.length > 0 && (
+          {canWritePO && poList.length > 0 && (
             <button
               onClick={handleClearAllPO}
               className="bg-red-50 hover:bg-red-100 text-red-600 px-4 py-2 rounded-lg font-bold flex items-center justify-center gap-2 border border-red-200 transition-all w-full sm:w-auto"
@@ -798,12 +801,18 @@ export default function PurchaseOrderPage() {
               <Trash2 size={20} /> Hapus Semua
             </button>
           )}
-          <button
-            onClick={() => { resetForm(); setShowModal(true); }}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-bold flex items-center justify-center gap-2 shadow-md transition-all w-full sm:w-auto"
-          >
-            <Plus size={20} /> Buat PO Baru
-          </button>
+          {canWritePO ? (
+            <button
+              onClick={() => { resetForm(); setShowModal(true); }}
+              className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-bold flex items-center justify-center gap-2 shadow-md transition-all w-full sm:w-auto"
+            >
+              <Plus size={20} /> Buat PO Baru
+            </button>
+          ) : (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-xs font-bold text-amber-700">
+              Mode Warehouse: lihat PO, export, dan receiving saja.
+            </div>
+          )}
         </div>
       </div>
 
@@ -935,13 +944,13 @@ export default function PurchaseOrderPage() {
                 <td className="px-6 py-4">
                   <div className="flex flex-wrap items-center gap-2">
                     <button onClick={() => { setSelectedPO(po); setShowDetailModal(true); }} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg" title="Lihat Detail"><Eye size={18} /></button>
-                    {po.status === 'Draft' && (
+                    {canWritePO && po.status === 'Draft' && (
                       <>
                         <button onClick={() => { setSelectedPO(po); setFormData(toFormDataFromPO(po)); setItems(po.items.map((it, i) => toEditorItem(it, i))); setEditMode(true); setShowModal(true); }} className="p-2 text-green-600 hover:bg-green-50 rounded-lg" title="Edit"><Edit size={18} /></button>
                         <button onClick={() => { void handleSendPO(po); }} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg" title="Kirim PO (Ready for Receiving)"><Send size={18} /></button>
                       </>
                     )}
-                    {po.status === 'Pending' && (
+                    {canWritePO && po.status === 'Pending' && (
                       <div className="flex gap-1">
                         <button onClick={() => { void handleApprovePO(po); }} className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-lg" title="Approve"><CheckCircle size={18} /></button>
                         <button onClick={() => { void handleRejectPO(po); }} className="p-2 text-rose-600 hover:bg-rose-50 rounded-lg" title="Reject"><XCircle size={18} /></button>
