@@ -251,10 +251,12 @@ export default function PettyCashPage() {
 
     const date = new Date().toISOString().split("T")[0];
     const txId = `PTTY-${Date.now()}`;
+    const topUpRef = `${selectedLedgerView === 'petty-gudang' ? 'TOPUP-PCG' : 'TOPUP-PC'}-${Date.now().toString().slice(-8)}`;
+    const ledgerName = selectedLedgerView === 'petty-gudang' ? 'Petty Cash Gudang' : 'Petty Cash';
     const payload = {
       id: txId,
       date,
-      ref: `PC-TOPUP-${Date.now().toString().slice(-6)}`,
+      ref: topUpRef,
       description: `Top-up ${selectedLedgerView === 'petty-gudang' ? 'kas kecil gudang' : 'kas kecil'} (${topUpRequest.priority}) - ${topUpRequest.notes}`,
       amount: topUpRequest.amount,
       project: selectedLedgerView === 'petty-gudang' ? "General/PettyCash Gudang" : "General/PettyCash",
@@ -266,15 +268,34 @@ export default function PettyCashPage() {
       const res = await api.post('/finance/petty-cash-transactions', payload);
       const saved = { id: txId, ...payload, ...(res?.data || {}) };
       setServerArchive((prev) => [saved, ...prev]);
+      try {
+        await api.post('/finance/bank-reconciliations', {
+          id: `BREC-${topUpRef}`,
+          date,
+          periodLabel: new Date(date).toLocaleDateString('id-ID', { month: 'long', year: 'numeric' }),
+          account: 'BCA-GTP',
+          description: `Top-up ${ledgerName} - ${topUpRequest.notes}`,
+          debit: 0,
+          credit: topUpRequest.amount,
+          balance: 0,
+          status: 'Matched',
+          matchedId: txId,
+          note: `Linked top-up ref ${topUpRef}`,
+        });
+      } catch {
+        toast.warning('Top-up tersimpan, tapi link ke Rekon Bank gagal dibuat.', {
+          description: `Ref ${topUpRef} perlu dicek manual di Rekon Bank.`,
+        });
+      }
       await fetchPettyCashData(true);
       addAuditLog({
         action: "PETTY_TOPUP_REQUESTED",
         module: "Finance",
-        details: `Top-up petty cash diajukan sebesar ${formatCurrency(topUpRequest.amount)}`,
+        details: `Top-up ${ledgerName} diajukan sebesar ${formatCurrency(topUpRequest.amount)} dengan ref ${topUpRef}`,
         status: "Success",
       });
-      toast.success("Permintaan Top-Up Kas Kecil telah diajukan ke Direksi", {
-        description: `Nominal: ${formatCurrency(topUpRequest.amount)}`,
+      toast.success("Top-Up tersimpan dan terhubung ke Rekon Bank", {
+        description: `${topUpRef} - ${formatCurrency(topUpRequest.amount)}`,
       });
       setShowTopUpModal(false);
       setTopUpRequest({ amount: 0, notes: '', priority: 'Normal' });
