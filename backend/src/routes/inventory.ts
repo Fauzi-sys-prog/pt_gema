@@ -203,7 +203,7 @@ async function findInventoryItemByCodeOrName(code: string, name: string) {
 function mapInventoryItem(row: {
   id: string; code: string; name: string; category: string; unit: string; location: string; minStock: number;
   onHandQty: number; unitPrice: number | null; supplierName: string | null; lastStockUpdateAt: Date | null; metadata: Prisma.JsonValue | null;
-}) {
+}, derivedExpiryDate?: string) {
   const legacy = asRecord(row.metadata);
   return {
     ...legacy,
@@ -218,7 +218,42 @@ function mapInventoryItem(row: {
     supplier: asTrimmedString(legacy.supplier) ?? row.supplierName ?? "",
     lokasi: asTrimmedString(legacy.lokasi) ?? row.location,
     lastUpdate: asTrimmedString(legacy.lastUpdate) ?? (row.lastStockUpdateAt ? row.lastStockUpdateAt.toISOString() : undefined),
-    expiryDate: asTrimmedString(legacy.expiryDate) ?? undefined,
+    expiryDate: derivedExpiryDate ?? asTrimmedString(legacy.expiryDate) ?? undefined,
+  };
+}
+
+function formatInventoryDate(value: Date | null | undefined): string | undefined {
+  return value ? value.toISOString().slice(0, 10) : undefined;
+}
+
+async function buildInventoryExpiryLookup(rows: Array<{ id: string; code: string }>) {
+  const ids = rows.map((row) => row.id).filter(Boolean);
+  const codes = rows.map((row) => row.code).filter(Boolean);
+  const stockInItems = await prisma.inventoryStockInItem.findMany({
+    where: {
+      expiryDate: { not: null },
+      OR: [
+        { inventoryItemId: { in: ids } },
+        { itemCode: { in: codes } },
+      ],
+    },
+    select: { inventoryItemId: true, itemCode: true, expiryDate: true },
+    orderBy: { expiryDate: "asc" },
+  });
+
+  const byId = new Map<string, string>();
+  const byCode = new Map<string, string>();
+  for (const item of stockInItems) {
+    const expiry = formatInventoryDate(item.expiryDate);
+    if (!expiry) continue;
+    if (item.inventoryItemId && !byId.has(item.inventoryItemId)) byId.set(item.inventoryItemId, expiry);
+    if (item.itemCode && !byCode.has(item.itemCode)) byCode.set(item.itemCode, expiry);
+  }
+
+  return {
+    get(row: { id: string; code: string }) {
+      return byId.get(row.id) ?? byCode.get(row.code);
+    },
   };
 }
 
@@ -397,7 +432,8 @@ async function listResource(resource: InventoryResource) {
   switch (resource) {
     case "stock-items": {
       const rows = await prisma.inventoryItem.findMany({ orderBy: { updatedAt: "desc" } });
-      return rows.map(mapInventoryItem);
+      const expiryLookup = await buildInventoryExpiryLookup(rows);
+      return rows.map((row) => mapInventoryItem(row, expiryLookup.get(row)));
     }
     case "stock-ins": {
       const rows = await prisma.inventoryStockIn.findMany({ orderBy: { updatedAt: "desc" }, include: { items: true, po: { select: { payload: true } }, project: { select: { payload: true } } } });
@@ -422,7 +458,9 @@ async function getResource(resource: InventoryResource, id: string) {
   switch (resource) {
     case "stock-items": {
       const row = await prisma.inventoryItem.findUnique({ where: { id } });
-      return row ? mapInventoryItem(row) : null;
+      if (!row) return null;
+      const expiryLookup = await buildInventoryExpiryLookup([row]);
+      return mapInventoryItem(row, expiryLookup.get(row));
     }
     case "stock-ins": {
       const row = await prisma.inventoryStockIn.findUnique({ where: { id }, include: { items: true, po: { select: { payload: true } }, project: { select: { payload: true } } } });
