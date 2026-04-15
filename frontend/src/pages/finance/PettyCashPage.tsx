@@ -2,17 +2,43 @@ import React, { useState, useMemo } from 'react';
 import { Search, Download, Plus, Wallet, Calendar, ChevronRight, Receipt, ArrowUpRight, ArrowDownLeft, BookOpen, X, FileText, CreditCard, CheckCircle2, RefreshCw } from 'lucide-react'; import { motion, AnimatePresence } from 'motion/react'; import { toast } from 'sonner@2.0.3';  interface PettyCashEntry {   id: string;   date: string;   accountCode: string;   description: string;   debit: number;   credit: number;   balance: number; }  interface AccountSummary {   code: string;   name: string; }  import { useApp } from '../../contexts/AppContext';
 import api from '../../services/api';
 
+type LedgerView = 'bank-recon' | 'petty-cash' | 'petty-gudang';
+
+const ledgerViewLabels: Record<LedgerView, { title: string; subtitle: string; badge: string; openingLabel: string }> = {
+  'bank-recon': {
+    title: 'Rekon Bank',
+    subtitle: 'Mutasi bank dan saldo berjalan',
+    badge: 'Bank Ledger',
+    openingLabel: 'Saldo Awal Bank',
+  },
+  'petty-cash': {
+    title: 'Petty Cash',
+    subtitle: 'Kas kecil operasional kantor',
+    badge: 'Petty Cash',
+    openingLabel: 'Saldo Awal',
+  },
+  'petty-gudang': {
+    title: 'Petty Cash Gudang',
+    subtitle: 'Kas kecil gudang / warehouse',
+    badge: 'Warehouse Cash',
+    openingLabel: 'Saldo Awal Gudang',
+  },
+};
+
 export default function PettyCashPage() {
   const { archiveRegistry, addAuditLog, currentUser } = useApp();
   const [syncing, setSyncing] = useState(false);
   const [serverArchive, setServerArchive] = useState<any[]>([]);
+  const [serverBankRows, setServerBankRows] = useState<any[]>([]);
   const [serverSummary, setServerSummary] = useState<{
     totalDebit: number;
     totalCredit: number;
     endingBalance: number;
     transactionCount: number;
   } | null>(null);
+  const [selectedLedgerView, setSelectedLedgerView] = useState<LedgerView>('petty-cash');
   const [searchTerm, setSearchTerm] = useState('');
+  const [accountFilter, setAccountFilter] = useState('');
   const [showInputModal, setShowInputModal] = useState(false);
   const [showTopUpModal, setShowTopUpModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -88,6 +114,26 @@ export default function PettyCashPage() {
         api.get<any[]>('/finance/petty-cash-transactions'),
       ]);
       setServerArchive((res.data || []).map((row: any) => ({ id: row.id, ...row })));
+      try {
+        const [bankSummaryRes, bankReconRes] = await Promise.all([
+          api.get<{
+            transactions?: Array<{
+              id?: string;
+              date?: string;
+              note?: string;
+              ref?: string;
+              debit?: number;
+              credit?: number;
+            }>;
+          }>('/dashboard/finance-bank-recon-summary'),
+          api.get<any[]>('/finance/bank-reconciliations'),
+        ]);
+        const reconRows = Array.isArray(bankReconRes.data) ? bankReconRes.data : [];
+        const summaryRows = Array.isArray(bankSummaryRes.data?.transactions) ? bankSummaryRes.data.transactions : [];
+        setServerBankRows(reconRows.length > 0 ? reconRows : summaryRows);
+      } catch {
+        setServerBankRows([]);
+      }
       if (summaryRes.data?.summary) {
         setServerSummary({
           totalDebit: Number(summaryRes.data.summary.totalDebit || 0),
@@ -113,20 +159,34 @@ export default function PettyCashPage() {
 
   const liveArchiveRegistry = serverArchive.length > 0 ? serverArchive : archiveRegistry;
 
-  const entries = useMemo<PettyCashEntry[]>(() => {
-    const pettyRows = liveArchiveRegistry
-      .filter((row) => row.type === "PETTY")
-      .sort((a, b) => a.date.localeCompare(b.date));
+  const isGudangPettyRow = (row: any) => {
+    const haystack = [
+      row.adminName,
+      row.admin,
+      row.project,
+      row.source,
+      row.description,
+      row.sourceKind,
+      row.transactionType,
+    ].join(' ').toLowerCase();
+    return haystack.includes('gudang') || haystack.includes('warehouse') || haystack.includes('dewi');
+  };
 
-    let running = initialBalance;
+  const buildPettyEntries = (rows: any[], openingBalance: number): PettyCashEntry[] => {
+    const pettyRows = rows
+      .filter((row: any) => row.type === "PETTY" || row.transactionType === "PETTY")
+      .sort((a: any, b: any) => String(a.date || '').localeCompare(String(b.date || '')));
+
+    let running = openingBalance;
     return pettyRows.map((row) => {
       const meta = parsePettyMeta(row.source);
-      const debit = meta.direction === "debit" ? row.amount : 0;
-      const credit = meta.direction === "credit" ? row.amount : 0;
+      const amount = Number(row.amount || row.nominal || 0);
+      const debit = meta.direction === "debit" ? amount : 0;
+      const credit = meta.direction === "credit" ? amount : 0;
       running = running + debit - credit;
       return {
         id: row.id,
-        date: row.date,
+        date: row.date || row.tanggal || '',
         accountCode: meta.accountCode,
         description: row.description,
         debit,
@@ -134,7 +194,52 @@ export default function PettyCashPage() {
         balance: running,
       };
     });
+  };
+
+  const pettyCashEntries = useMemo<PettyCashEntry[]>(() => {
+    const rows = (liveArchiveRegistry as any[]).filter((row) => !isGudangPettyRow(row));
+    return buildPettyEntries(rows, initialBalance);
   }, [liveArchiveRegistry]);
+
+  const pettyGudangEntries = useMemo<PettyCashEntry[]>(() => {
+    const rows = (liveArchiveRegistry as any[]).filter((row) => isGudangPettyRow(row));
+    return buildPettyEntries(rows, 0);
+  }, [liveArchiveRegistry]);
+
+  const bankReconEntries = useMemo<PettyCashEntry[]>(() => {
+    let running = 0;
+    return (serverBankRows || [])
+      .map((row: any, idx: number) => {
+        const debit = Number(row.debit || 0);
+        const credit = Number(row.credit || 0);
+        const explicitBalance = Number(row.balance);
+        running = Number.isFinite(explicitBalance) && explicitBalance !== 0 ? explicitBalance : running + debit - credit;
+        return {
+          id: String(row.id || row.ref || `BANK-${idx + 1}`),
+          date: String(row.date || row.tanggal || ''),
+          accountCode: String(row.account || row.akun || 'BANK'),
+          description: String(row.description || row.note || row.keterangan || row.ref || 'Mutasi bank'),
+          debit,
+          credit,
+          balance: running,
+        };
+      })
+      .filter((row) => row.date || row.description)
+      .sort((a, b) => a.date.localeCompare(b.date));
+  }, [serverBankRows]);
+
+  const selectedOpeningBalance = useMemo(() => {
+    if (selectedLedgerView === 'petty-cash') return initialBalance;
+    if (selectedLedgerView === 'petty-gudang') return 0;
+    const first = bankReconEntries[0];
+    return first ? first.balance - first.debit + first.credit : 0;
+  }, [bankReconEntries, initialBalance, selectedLedgerView]);
+
+  const entries = useMemo<PettyCashEntry[]>(() => {
+    if (selectedLedgerView === 'bank-recon') return bankReconEntries;
+    if (selectedLedgerView === 'petty-gudang') return pettyGudangEntries;
+    return pettyCashEntries;
+  }, [bankReconEntries, pettyCashEntries, pettyGudangEntries, selectedLedgerView]);
 
   const handleSaveTopUp = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -150,12 +255,12 @@ export default function PettyCashPage() {
       id: txId,
       date,
       ref: `PC-TOPUP-${Date.now().toString().slice(-6)}`,
-      description: `Top-up kas kecil (${topUpRequest.priority}) - ${topUpRequest.notes}`,
+      description: `Top-up ${selectedLedgerView === 'petty-gudang' ? 'kas kecil gudang' : 'kas kecil'} (${topUpRequest.priority}) - ${topUpRequest.notes}`,
       amount: topUpRequest.amount,
-      project: "General/PettyCash",
+      project: selectedLedgerView === 'petty-gudang' ? "General/PettyCash Gudang" : "General/PettyCash",
       admin: currentUser?.fullName || currentUser?.username || "Finance Admin",
       type: "PETTY",
-      source: `petty|accountCode=00000|direction=debit|kind=topup`,
+      source: `petty|accountCode=00000|direction=debit|kind=${selectedLedgerView === 'petty-gudang' ? 'topup-gudang' : 'topup'}`,
     };
     try {
       const res = await api.post('/finance/petty-cash-transactions', payload);
@@ -182,14 +287,14 @@ export default function PettyCashPage() {
 
   const effectiveTotals = useMemo(
     () => ({
-      debit: Number(serverSummary?.totalDebit ?? 0),
-      credit: Number(serverSummary?.totalCredit ?? 0),
+      debit: entries.reduce((sum, row) => sum + Number(row.debit || 0), 0),
+      credit: entries.reduce((sum, row) => sum + Number(row.credit || 0), 0),
       lastBalance:
-        serverSummary && Number.isFinite(serverSummary.endingBalance)
-          ? initialBalance + Number(serverSummary.endingBalance)
-          : initialBalance,
+        entries.length > 0
+          ? Number(entries[entries.length - 1].balance || selectedOpeningBalance)
+          : selectedOpeningBalance,
     }),
-    [initialBalance, serverSummary]
+    [entries, selectedOpeningBalance]
   );
 
   const handleSaveTransaction = async (e: React.FormEvent) => {
@@ -207,10 +312,10 @@ export default function PettyCashPage() {
       ref: `PC-${newTransaction.accountCode}-${Date.now().toString().slice(-4)}`,
       description: newTransaction.description,
       amount: newTransaction.amount,
-      project: 'General/PettyCash',
+      project: selectedLedgerView === 'petty-gudang' ? 'General/PettyCash Gudang' : 'General/PettyCash',
       admin: currentUser?.fullName || currentUser?.username || 'Finance Admin',
       type: 'PETTY',
-      source: `petty|accountCode=${newTransaction.accountCode}|direction=${newTransaction.type === "Debit" ? "debit" : "credit"}|kind=transaction`,
+      source: `petty|accountCode=${newTransaction.accountCode}|direction=${newTransaction.type === "Debit" ? "debit" : "credit"}|kind=${selectedLedgerView === 'petty-gudang' ? 'transaction-gudang' : 'transaction'}`,
     };
     try {
       const res = await api.post('/finance/petty-cash-transactions', payload);
@@ -243,10 +348,14 @@ export default function PettyCashPage() {
     return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR' }).format(num);
   };
 
-  const filteredEntries = entries.filter(e => 
-    e.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    e.accountCode.includes(searchTerm)
-  );
+  const filteredEntries = entries.filter(e => {
+    const needle = searchTerm.toLowerCase();
+    const matchesSearch =
+      e.description.toLowerCase().includes(needle) ||
+      e.accountCode.toLowerCase().includes(needle);
+    const matchesAccount = !accountFilter || e.accountCode === accountFilter;
+    return matchesSearch && matchesAccount;
+  });
 
   const handlePrintReport = () => {
     addAuditLog({
@@ -259,24 +368,111 @@ export default function PettyCashPage() {
     toast.success("Mode cetak laporan petty cash dibuka.");
   };
 
+  const handleExportReport = async () => {
+    const rows = entries.map((row) => ({
+      id: row.id,
+      date: row.date,
+      accountCode: row.accountCode,
+      description: row.description,
+      debit: row.debit,
+      credit: row.credit,
+      balance: row.balance,
+    }));
+    if (rows.length === 0) {
+      toast.error("Tidak ada data petty cash untuk diexport.");
+      return;
+    }
+
+    const firstDate = rows[0]?.date;
+    const lastDate = rows[rows.length - 1]?.date;
+    const periodLabel = firstDate
+      ? `${new Date(firstDate).toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })}` +
+        (lastDate && lastDate !== firstDate
+          ? ` - ${new Date(lastDate).toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })}`
+          : '')
+      : 'Periode berjalan';
+
+    const payload = {
+      periodLabel,
+      generatedBy: currentUser?.fullName || currentUser?.username || 'Finance',
+      generatedAt: new Date().toISOString(),
+      openingBalance: selectedOpeningBalance,
+      summary: {
+        totalDebit: effectiveTotals.debit,
+        totalCredit: effectiveTotals.credit,
+        endingBalance: effectiveTotals.lastBalance,
+      },
+      rows,
+      accountList,
+    };
+
+    try {
+      const [excelRes, wordRes] = await Promise.all([
+        api.post('/exports/petty-cash-report/excel', payload, { responseType: 'blob' }),
+        api.post('/exports/petty-cash-report/word', payload, { responseType: 'blob' }),
+      ]);
+
+      const excelUrl = URL.createObjectURL(new Blob([excelRes.data], { type: 'application/vnd.ms-excel' }));
+      const excelLink = document.createElement('a');
+      excelLink.href = excelUrl;
+      excelLink.download = `petty-cash-${periodLabel.replace(/\s+/g, '-')}.xls`;
+      document.body.appendChild(excelLink);
+      excelLink.click();
+      document.body.removeChild(excelLink);
+      URL.revokeObjectURL(excelUrl);
+
+      const wordUrl = URL.createObjectURL(new Blob([wordRes.data], { type: 'application/msword' }));
+      const wordLink = document.createElement('a');
+      wordLink.href = wordUrl;
+      wordLink.download = `petty-cash-${periodLabel.replace(/\s+/g, '-')}.doc`;
+      document.body.appendChild(wordLink);
+      wordLink.click();
+      document.body.removeChild(wordLink);
+      URL.revokeObjectURL(wordUrl);
+
+      addAuditLog({
+        action: "PETTY_REPORT_EXPORTED",
+        module: "Finance",
+        details: `Export petty cash (${rows.length} baris)`,
+        status: "Success",
+      });
+      toast.success("Export petty cash Word + Excel berhasil.");
+    } catch {
+      toast.error("Export petty cash gagal.");
+    }
+  };
+
   return (
     <div className="space-y-6 pb-12 px-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
            <div className="flex items-center gap-3 mb-2">
               <span className="px-3 py-1 bg-blue-600 text-white text-[10px] font-black rounded-lg uppercase tracking-widest shadow-lg shadow-blue-200">Financial Ops</span>
-              <span className="text-slate-400 font-bold text-xs uppercase italic">PT GTP Petty Cash Ledger</span>
-           </div>
-          <h1 className="text-3xl font-black text-slate-900 tracking-tighter uppercase italic flex items-center gap-3">
-            <Wallet className="text-blue-600" size={32} />
-            Kas Kecil (Petty Cash)
-          </h1>
-          <p className="text-slate-500 font-bold text-sm uppercase italic tracking-wide mt-1">
-            Periode Januari 2026 - Laporan Pertanggungjawaban
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
-          <button
+              <span className="text-slate-400 font-bold text-xs uppercase italic">{ledgerViewLabels[selectedLedgerView].badge}</span>
+	           </div>
+	          <h1 className="text-3xl font-black text-slate-900 tracking-tighter uppercase italic flex items-center gap-3">
+	            <Wallet className="text-blue-600" size={32} />
+	            {ledgerViewLabels[selectedLedgerView].title}
+	          </h1>
+	          <p className="text-slate-500 font-bold text-sm uppercase italic tracking-wide mt-1">
+	            {ledgerViewLabels[selectedLedgerView].subtitle}
+	          </p>
+	        </div>
+	        <div className="flex items-center gap-3">
+          <select
+            value={selectedLedgerView}
+            onChange={(e) => {
+              setSelectedLedgerView(e.target.value as LedgerView);
+              setAccountFilter('');
+              setSearchTerm('');
+            }}
+            className="px-6 py-3 bg-white border-2 border-blue-100 rounded-2xl text-blue-700 shadow-sm transition-all text-[10px] font-black uppercase tracking-widest outline-none focus:ring-4 focus:ring-blue-500/10"
+          >
+            <option value="bank-recon">Rekon Bank</option>
+            <option value="petty-cash">Petty Cash</option>
+            <option value="petty-gudang">Petty Cash Gudang</option>
+          </select>
+	          <button
             onClick={() => fetchPettyCashData(false)}
             disabled={syncing}
             className="flex items-center gap-2 px-6 py-3 bg-white border-2 border-slate-200 rounded-2xl text-slate-600 hover:bg-slate-50 shadow-sm transition-all text-[10px] font-black uppercase tracking-widest disabled:opacity-60"
@@ -288,21 +484,27 @@ export default function PettyCashPage() {
             <Download size={18} />
             <span>Cetak Laporan</span>
           </button>
-          <button 
-            onClick={() => setShowInputModal(true)}
-            className="flex items-center gap-2 px-8 py-3 bg-blue-600 text-white rounded-2xl hover:bg-blue-700 shadow-xl shadow-blue-100 transition-all text-[10px] font-black uppercase tracking-widest"
-          >
-            <Plus size={18} />
-            <span>Input Transaksi</span>
+          <button onClick={handleExportReport} className="flex items-center gap-2 px-6 py-3 bg-white border-2 border-slate-200 rounded-2xl text-slate-600 hover:bg-slate-50 shadow-sm transition-all text-[10px] font-black uppercase tracking-widest">
+            <FileText size={18} />
+            <span>Export Word/Excel</span>
           </button>
-        </div>
-      </div>
+          {selectedLedgerView !== 'bank-recon' && (
+            <button
+              onClick={() => setShowInputModal(true)}
+              className="flex items-center gap-2 px-8 py-3 bg-blue-600 text-white rounded-2xl hover:bg-blue-700 shadow-xl shadow-blue-100 transition-all text-[10px] font-black uppercase tracking-widest"
+            >
+              <Plus size={18} />
+              <span>Input Transaksi</span>
+            </button>
+          )}
+	        </div>
+	      </div>
 
       {/* Overview Cards */}
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
-          <div className="text-slate-400 text-[10px] font-black uppercase tracking-widest mb-2">Saldo Awal</div>
-          <div className="text-2xl font-black text-slate-900 italic tracking-tight">{formatCurrency(initialBalance)}</div>
+	          <div className="text-slate-400 text-[10px] font-black uppercase tracking-widest mb-2">{ledgerViewLabels[selectedLedgerView].openingLabel}</div>
+	          <div className="text-2xl font-black text-slate-900 italic tracking-tight">{formatCurrency(selectedOpeningBalance)}</div>
         </motion.div>
         
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
@@ -348,10 +550,14 @@ export default function PettyCashPage() {
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
             </div>
-            <select className="px-8 py-4 bg-slate-50 border-none rounded-[1.5rem] text-[10px] font-black uppercase tracking-widest text-slate-700 outline-none focus:ring-2 focus:ring-blue-500">
-              <option>Semua Akun</option>
-              {accountList.map(acc => <option key={acc.code} value={acc.code}>{acc.code} - {acc.name}</option>)}
-            </select>
+	            <select
+                value={accountFilter}
+                onChange={(e) => setAccountFilter(e.target.value)}
+                className="px-8 py-4 bg-slate-50 border-none rounded-[1.5rem] text-[10px] font-black uppercase tracking-widest text-slate-700 outline-none focus:ring-2 focus:ring-blue-500"
+              >
+	              <option value="">Semua Akun</option>
+	              {accountList.map(acc => <option key={acc.code} value={acc.code}>{acc.code} - {acc.name}</option>)}
+	            </select>
           </div>
 
           <div className="bg-white rounded-[3rem] border border-slate-200 shadow-xl overflow-hidden">
@@ -384,9 +590,23 @@ export default function PettyCashPage() {
                       <td className="px-8 py-6 text-right text-sm font-black text-slate-900 bg-slate-50/30 italic">
                         {formatCurrency(entry.balance)}
                       </td>
-                    </tr>
-                  ))}
-                </tbody>
+	                    </tr>
+	                  ))}
+                    {filteredEntries.length === 0 && (
+                      <tr>
+                        <td colSpan={6} className="px-8 py-16 text-center">
+                          <div className="mx-auto max-w-md">
+                            <div className="text-sm font-black text-slate-700 uppercase italic tracking-tight">
+                              Belum ada data untuk {ledgerViewLabels[selectedLedgerView].title}
+                            </div>
+                            <p className="mt-2 text-xs font-bold text-slate-400 leading-relaxed">
+                              Coba pilih dropdown lain, refresh data, atau input transaksi baru kalau ledger ini memang belum pernah diisi.
+                            </p>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+	                </tbody>
               </table>
             </div>
           </div>
@@ -421,12 +641,14 @@ export default function PettyCashPage() {
                 <p className="text-[11px] font-bold opacity-80 leading-relaxed italic">
                    Pengisian kembali kas kecil dilakukan setiap saldo mencapai minimum Rp 5.000.000,- atau setiap akhir bulan berjalan.
                 </p>
-                <button 
-                  onClick={() => setShowTopUpModal(true)}
-                  className="mt-8 w-full py-4 bg-white text-blue-600 rounded-[1.25rem] font-black text-[10px] uppercase shadow-xl hover:bg-blue-50 transition-all hover:scale-[1.02] active:scale-95"
-                >
-                   Ajukan Pengisian (Top-Up)
-                </button>
+                {selectedLedgerView !== 'bank-recon' && (
+                  <button
+                    onClick={() => setShowTopUpModal(true)}
+                    className="mt-8 w-full py-4 bg-white text-blue-600 rounded-[1.25rem] font-black text-[10px] uppercase shadow-xl hover:bg-blue-50 transition-all hover:scale-[1.02] active:scale-95"
+                  >
+                     Ajukan Pengisian (Top-Up)
+                  </button>
+                )}
              </div>
           </div>
         </div>
