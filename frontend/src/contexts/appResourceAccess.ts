@@ -56,8 +56,15 @@ const OPERATION_READ_ROLES: UserRole[] = [
   "SUPPLY_CHAIN",
   "PURCHASING",
   "WAREHOUSE",
-  "FINANCE",
-  "SALES",
+];
+
+const PRODUCTION_EXECUTION_READ_ROLES: UserRole[] = [
+  "OWNER",
+  "SPV",
+  "ADMIN",
+  "MANAGER",
+  "PRODUKSI",
+  "OPERATIONS",
 ];
 
 const HR_READ_ROLES: UserRole[] = [
@@ -121,7 +128,7 @@ const GENERIC_DATA_READ_ROLES: Partial<Record<string, UserRole[]>> = {
   maintenances: ["OWNER", "ADMIN", "PRODUKSI", "WAREHOUSE"],
   payrolls: ["OWNER", "ADMIN", "FINANCE"],
   "archive-registry": ["OWNER", "ADMIN", "FINANCE", "SALES", "SUPPLY_CHAIN", "PRODUKSI"],
-  "audit-logs": ["OWNER", "ADMIN", "FINANCE", "SALES", "SUPPLY_CHAIN", "PRODUKSI"],
+  "audit-logs": PRIVILEGED_DATA_READ_ROLES,
   vendors: ["OWNER", "ADMIN", "FINANCE", "SUPPLY_CHAIN"],
   customers: ["OWNER", "ADMIN", "SALES", "FINANCE"],
 };
@@ -132,9 +139,9 @@ const SPECIAL_RESOURCE_READ_ROLES: Partial<Record<string, UserRole[]>> = {
   receivings: PROCUREMENT_READ_ROLES.receivings,
   "work-orders": OPERATION_READ_ROLES,
   "material-requests": OPERATION_READ_ROLES,
-  "production-reports": OPERATION_READ_ROLES,
+  "production-reports": PRODUCTION_EXECUTION_READ_ROLES,
   "production-trackers": OPERATION_READ_ROLES,
-  "qc-inspections": OPERATION_READ_ROLES,
+  "qc-inspections": PRODUCTION_EXECUTION_READ_ROLES,
   employees: HR_READ_ROLES,
   attendances: HR_READ_ROLES,
   "stock-items": INVENTORY_READ_ROLES["stock-items"],
