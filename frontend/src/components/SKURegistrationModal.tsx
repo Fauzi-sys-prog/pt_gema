@@ -9,13 +9,67 @@ interface SKURegistrationModalProps {
   initialName?: string;
 }
 
+const SKU_CATEGORY_OPTIONS = [
+  'Castable',
+  'Blanket',
+  'Brick',
+  'Steel',
+  'Anchor',
+  'Mortar',
+  'Equipment',
+  'Tooling',
+  'Spare Part',
+  'Consumable',
+  'Safety',
+  'General',
+];
+
+const CATEGORY_CODE: Record<string, string> = {
+  Castable: 'CAST',
+  Blanket: 'BLKT',
+  Brick: 'BRCK',
+  Steel: 'STL',
+  Anchor: 'ANCH',
+  Mortar: 'MORT',
+  Equipment: 'EQP',
+  Tooling: 'TOOL',
+  'Spare Part': 'SPAR',
+  Consumable: 'CONS',
+  Safety: 'SAFE',
+  General: 'GEN',
+};
+
+const inferSkuCategory = (name: string, fallback = 'General') => {
+  const text = name.toLowerCase();
+  if (text.includes('castable')) return 'Castable';
+  if (text.includes('blanket') || text.includes('fiber')) return 'Blanket';
+  if (text.includes('brick')) return 'Brick';
+  if (text.includes('anchor')) return 'Anchor';
+  if (text.includes('mortar')) return 'Mortar';
+  if (text.includes('steel') || text.includes('plat') || text.includes('round bar') || text.includes('sus')) return 'Steel';
+  if (text.includes('safety') || text.includes('helmet') || text.includes('sarung tangan')) return 'Safety';
+  if (text.includes('mesin') || text.includes('mixer') || text.includes('vibrator') || text.includes('blower')) return 'Equipment';
+  if (text.includes('gerinda') || text.includes('bor') || text.includes('jackhammer')) return 'Tooling';
+  return fallback;
+};
+
+const compactCode = (value: string, fallback: string) =>
+  value
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, ' ')
+    .trim()
+    .split(/\s+/)
+    .map((part) => part.slice(0, 3))
+    .join('')
+    .slice(0, 6) || fallback;
+
 export const SKURegistrationModal: React.FC<SKURegistrationModalProps> = ({ isOpen, onClose, initialName = '' }) => {
   const { setStockItemList, setStockMovementList, currentUser, projectList, stockItemList } = useApp();
   const [sku, setSku] = useState('');
   const [selectedBoqItem, setSelectedBoqItem] = useState('');
   const [formData, setFormData] = useState({
     nama: initialName || '',
-    kategori: 'Mechanical',
+    kategori: inferSkuCategory(initialName),
     satuan: 'Unit',
     stokAwal: 0,
     hargaSatuan: 0,
@@ -74,6 +128,7 @@ export const SKURegistrationModal: React.FC<SKURegistrationModalProps> = ({ isOp
       setFormData({
         ...formData,
         nama: data.materialName || data.nama || '',
+        kategori: inferSkuCategory(data.materialName || data.nama || '', formData.kategori),
         satuan: data.unit || 'Unit',
         hargaSatuan: data.unitPrice || 0
       });
@@ -153,7 +208,7 @@ export const SKURegistrationModal: React.FC<SKURegistrationModalProps> = ({ isOp
     setSku('');
     setFormData({
       nama: '',
-      kategori: 'Mechanical',
+      kategori: 'General',
       satuan: 'Unit',
       stokAwal: 0,
       hargaSatuan: 0,
@@ -171,8 +226,11 @@ export const SKURegistrationModal: React.FC<SKURegistrationModalProps> = ({ isOp
   ];
 
   const generateAutoSku = () => {
-    const catCode = formData.kategori.substring(0, 3).toUpperCase();
-    const subCode = formData.nama.substring(0, 3).toUpperCase() || 'XXX';
+    const normalizedCategory = SKU_CATEGORY_OPTIONS.includes(formData.kategori)
+      ? formData.kategori
+      : inferSkuCategory(formData.nama, 'General');
+    const catCode = CATEGORY_CODE[normalizedCategory] || compactCode(normalizedCategory, 'GEN');
+    const subCode = compactCode(formData.nama, 'ITEM');
     const randomSuffix = Math.floor(100 + Math.random() * 900);
     setSku(`GTP-MTR-${catCode}-${subCode}-${randomSuffix}`);
   };
@@ -283,13 +341,15 @@ export const SKURegistrationModal: React.FC<SKURegistrationModalProps> = ({ isOp
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1 italic">
                       Kategori
                     </label>
-                    <input 
-                      type="text" 
+                    <select 
                       value={formData.kategori}
                       onChange={(e) => setFormData({...formData, kategori: e.target.value})}
-                      placeholder="e.g. Mechanical, Electrical"
                       className="w-full px-6 py-5 bg-white border-2 border-slate-100 rounded-2xl focus:border-indigo-500 outline-none transition-all text-slate-900 font-black text-sm shadow-sm italic"
-                    />
+                    >
+                      {SKU_CATEGORY_OPTIONS.map((category) => (
+                        <option key={category} value={category}>{category}</option>
+                      ))}
+                    </select>
                   </div>
                   <div className="space-y-3">
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1 italic">

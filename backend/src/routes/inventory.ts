@@ -80,6 +80,21 @@ function inventoryDateString(value: string | Date | null | undefined): string {
   return Number.isNaN(parsed.getTime()) ? String(value) : parsed.toISOString().slice(0, 10);
 }
 
+function normalizeInventoryCategory(rawCategory: unknown, rawName?: unknown): string {
+  const category = asTrimmedString(rawCategory) || "";
+  const text = `${category} ${asTrimmedString(rawName) || ""}`.toLowerCase();
+  if (text.includes("castable")) return "Castable";
+  if (text.includes("blanket") || text.includes("fiber")) return "Blanket";
+  if (text.includes("brick")) return "Brick";
+  if (text.includes("anchor")) return "Anchor";
+  if (text.includes("mortar")) return "Mortar";
+  if (text.includes("steel") || text.includes("plat") || text.includes("round bar") || text.includes("sus")) return "Steel";
+  if (text.includes("safety") || text.includes("helmet") || text.includes("sarung tangan")) return "Safety";
+  if (text.includes("mesin") || text.includes("mixer") || text.includes("vibrator") || text.includes("blower")) return "Equipment";
+  if (text.includes("gerinda") || text.includes("bor") || text.includes("jackhammer")) return "Tooling";
+  return category || "General";
+}
+
 function inventoryProjectName(project: { payload: unknown } | null | undefined): string | undefined {
   const payload = asRecord(project?.payload);
   return asTrimmedString(payload.namaProject ?? payload.projectName ?? payload.name) ?? undefined;
@@ -143,6 +158,7 @@ async function findLinkedLegacyInventoryWorkOrder(
 async function resolveInventoryWorkOrderRef(ref: string | null | undefined) {
   const key = asTrimmedString(ref);
   if (!key) return null;
+  if (key === "GENERAL") return null;
 
   const legacyById = await prisma.workOrderRecord.findUnique({
     where: { id: key },
@@ -196,7 +212,7 @@ function mapInventoryItem(row: {
     nama: asTrimmedString(legacy.nama) ?? row.name,
     stok: toFiniteNumber(legacy.stok, row.onHandQty),
     satuan: asTrimmedString(legacy.satuan) ?? row.unit,
-    kategori: asTrimmedString(legacy.kategori) ?? row.category,
+    kategori: normalizeInventoryCategory(row.category, row.name),
     minStock: toFiniteNumber(legacy.minStock, row.minStock),
     hargaSatuan: toFiniteNumber(legacy.hargaSatuan, row.unitPrice ?? 0),
     supplier: asTrimmedString(legacy.supplier) ?? row.supplierName ?? "",
@@ -366,7 +382,7 @@ async function assertRefs(resource: InventoryResource, payload: Record<string, u
     if (!row) throw new Error(`${resource}: poId '${poId}' tidak ditemukan`);
     if (projectId && row.projectId && row.projectId !== projectId) throw new Error(`${resource}: projectId '${projectId}' tidak match dengan projectId PO '${row.projectId}'`);
   }
-  if (workOrderRef) {
+  if (workOrderRef && workOrderRef !== "GENERAL") {
     const row = await resolveInventoryWorkOrderRef(workOrderRef);
     if (!row) {
       throw new Error(
@@ -433,7 +449,7 @@ async function createResource(resource: InventoryResource, payload: Record<strin
     case "stock-items":
       await prisma.inventoryItem.create({ data: {
         id: entityId, code: asTrimmedString(payload.kode) || entityId, name: asTrimmedString(payload.nama) || entityId,
-        category: asTrimmedString(payload.kategori) || "General", unit: asTrimmedString(payload.satuan) || "pcs",
+        category: normalizeInventoryCategory(payload.kategori, payload.nama), unit: asTrimmedString(payload.satuan) || "pcs",
         location: asTrimmedString(payload.lokasi) || "Gudang Utama", minStock: toFiniteNumber(payload.minStock, 0),
         onHandQty: toFiniteNumber(payload.stok, 0), reservedQty: toFiniteNumber(payload.reserved, 0), onOrderQty: toFiniteNumber(payload.onOrderQty, 0),
         unitPrice: payload.hargaSatuan == null ? undefined : toFiniteNumber(payload.hargaSatuan, 0), supplierName: asTrimmedString(payload.supplier) || undefined,
@@ -610,7 +626,7 @@ async function updateResource(resource: InventoryResource, id: string, payload: 
   switch (resource) {
     case "stock-items":
       await prisma.inventoryItem.update({ where: { id }, data: {
-        code: asTrimmedString(payload.kode) || id, name: asTrimmedString(payload.nama) || id, category: asTrimmedString(payload.kategori) || "General", unit: asTrimmedString(payload.satuan) || "pcs", location: asTrimmedString(payload.lokasi) || "Gudang Utama",
+        code: asTrimmedString(payload.kode) || id, name: asTrimmedString(payload.nama) || id, category: normalizeInventoryCategory(payload.kategori, payload.nama), unit: asTrimmedString(payload.satuan) || "pcs", location: asTrimmedString(payload.lokasi) || "Gudang Utama",
         minStock: toFiniteNumber(payload.minStock, 0), onHandQty: toFiniteNumber(payload.stok, 0), reservedQty: toFiniteNumber(payload.reserved, 0), onOrderQty: toFiniteNumber(payload.onOrderQty, 0), unitPrice: payload.hargaSatuan == null ? null : toFiniteNumber(payload.hargaSatuan, 0), supplierName: asTrimmedString(payload.supplier) || null, status: asTrimmedString(payload.status) || null, lastStockUpdateAt: asTrimmedString(payload.lastUpdate) ? new Date(String(payload.lastUpdate)) : null, metadata: payload as Prisma.InputJsonValue,
       } });
       break;
