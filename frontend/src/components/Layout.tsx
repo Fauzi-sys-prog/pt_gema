@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { Toaster } from 'sonner@2.0.3';
 import { 
   LayoutDashboard, 
@@ -84,6 +84,7 @@ const PATH_ACCESS_MAP: Record<string, readonly string[]> = {
   '/inventory/stock-in': INVENTORY_ROLES,
   '/inventory/stock-out': INVENTORY_ROLES,
   '/inventory/center': INVENTORY_ROLES,
+  '/inventory/stock-card': INVENTORY_ROLES,
   '/inventory/aging': INVENTORY_ROLES,
   '/inventory/stock-report': INVENTORY_ROLES,
   '/sales/quotation': SALES_ROLES,
@@ -179,12 +180,20 @@ export default function Layout({ children }: LayoutProps) {
     return Array.isArray(allowedRoles) ? hasRoleAccess(role, allowedRoles) : false;
   };
 
+  const homePath = getAccountHomePath(username);
+  const canAccessCurrentPath =
+    !currentUser || location.pathname === '/login' || hasAccessToPath(location.pathname);
+
   useEffect(() => {
     if (!currentUser) return;
     if (location.pathname === '/login') return;
-    if (hasAccessToPath(location.pathname)) return;
-    navigate(getAccountHomePath(username), { replace: true });
-  }, [currentUser, location.pathname, navigate, username]);
+    if (canAccessCurrentPath) return;
+    navigate(homePath, { replace: true });
+  }, [canAccessCurrentPath, currentUser, homePath, location.pathname, navigate]);
+
+  if (currentUser && location.pathname !== '/login' && !canAccessCurrentPath) {
+    return <Navigate to={homePath} replace />;
+  }
 
   const getVisibleSubmenu = (submenu?: MenuItem['submenu']) =>
     (submenu || []).filter((subItem) => hasAccessToPath(subItem.path));

@@ -20,6 +20,7 @@ const ACCOUNT_OVERRIDES: Record<string, AccountOverrideConfig> = {
       "/inventory/stock-in",
       "/inventory/stock-out",
       "/inventory/center",
+      "/inventory/stock-card/",
       "/inventory/aging",
       "/logistics/hub",
       "/surat-menyurat/surat-jalan",
