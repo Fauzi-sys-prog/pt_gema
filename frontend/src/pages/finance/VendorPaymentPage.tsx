@@ -28,6 +28,64 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner@2.0.3';
 
+const MAX_KWITANSI_FILE_BYTES = 10 * 1024 * 1024;
+const MAX_KWITANSI_PAYLOAD_BYTES = 900 * 1024;
+const IMAGE_QUALITY_STEPS = [0.82, 0.72, 0.62, 0.52];
+const IMAGE_MAX_DIMENSION_STEPS = [1800, 1400, 1200, 1000, 800];
+
+const estimateDataUrlBytes = (dataUrl: string) => {
+  const base64 = dataUrl.split(',')[1] || '';
+  return Math.ceil((base64.length * 3) / 4);
+};
+
+const readFileAsDataUrl = (file: File): Promise<string> =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve((reader.result as string) || '');
+    reader.onerror = () => reject(new Error('Gagal membaca file gambar'));
+    reader.readAsDataURL(file);
+  });
+
+const loadImageFromDataUrl = (dataUrl: string): Promise<HTMLImageElement> =>
+  new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error('Gagal memuat gambar'));
+    image.src = dataUrl;
+  });
+
+const compressImageDataUrl = async (dataUrl: string) => {
+  const image = await loadImageFromDataUrl(dataUrl);
+  const canvas = document.createElement('canvas');
+  const context = canvas.getContext('2d');
+  if (!context) {
+    return dataUrl;
+  }
+
+  let best = dataUrl;
+  for (const maxDimension of IMAGE_MAX_DIMENSION_STEPS) {
+    const ratio = Math.min(1, maxDimension / Math.max(image.width, image.height));
+    const width = Math.max(1, Math.round(image.width * ratio));
+    const height = Math.max(1, Math.round(image.height * ratio));
+    canvas.width = width;
+    canvas.height = height;
+    context.clearRect(0, 0, width, height);
+    context.drawImage(image, 0, 0, width, height);
+
+    for (const quality of IMAGE_QUALITY_STEPS) {
+      const candidate = canvas.toDataURL('image/jpeg', quality);
+      if (estimateDataUrlBytes(candidate) < estimateDataUrlBytes(best)) {
+        best = candidate;
+      }
+      if (estimateDataUrlBytes(candidate) <= MAX_KWITANSI_PAYLOAD_BYTES) {
+        return candidate;
+      }
+    }
+  }
+
+  return best;
+};
+
 export default function VendorPaymentPage() {
   const { 
     expenseList, 
@@ -144,19 +202,30 @@ export default function VendorPaymentPage() {
   };
 
   // Handle file upload (kwitansi image)
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (file.size > 5 * 1024 * 1024) {
-        toast.error('File terlalu besar! Maksimal 5MB');
+      if (!file.type.startsWith('image/')) {
+        toast.error('Format file tidak didukung. Upload gambar (jpg/png/webp).');
         return;
       }
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setKwitansiPreview(reader.result as string);
-        toast.success('Kwitansi berhasil di-upload!');
-      };
-      reader.readAsDataURL(file);
+      if (file.size > MAX_KWITANSI_FILE_BYTES) {
+        toast.error('File terlalu besar! Maksimal 10MB.');
+        return;
+      }
+      try {
+        const dataUrl = await readFileAsDataUrl(file);
+        const optimized = await compressImageDataUrl(dataUrl);
+        const payloadBytes = estimateDataUrlBytes(optimized);
+        if (payloadBytes > MAX_KWITANSI_PAYLOAD_BYTES) {
+          toast.error('Ukuran gambar masih terlalu besar setelah kompres. Coba crop area kwitansi.');
+          return;
+        }
+        setKwitansiPreview(optimized);
+        toast.success('Kwitansi berhasil di-upload dan dioptimasi.');
+      } catch (error: any) {
+        toast.error(error?.message || 'Gagal memproses gambar kwitansi');
+      }
     }
   };
 
