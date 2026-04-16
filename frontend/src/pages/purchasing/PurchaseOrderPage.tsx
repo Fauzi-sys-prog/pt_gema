@@ -959,21 +959,22 @@ export default function PurchaseOrderPage() {
                     <button onClick={() => { setSelectedPO(po); setShowDetailModal(true); setTimeout(() => window.print(), 300); }} className="p-2 text-purple-600 hover:bg-purple-50 rounded-lg" title="Print PDF"><Printer size={18} /></button>
                     <button onClick={() => handleDownloadWord(po)} className="p-2 text-blue-700 hover:bg-blue-50 rounded-lg" title="Download Word + Excel"><FileDown size={18} /></button>
                     {po.status === 'Approved' || po.status === 'Sent' || po.status === 'Partial' ? (
-                      <button 
-                        onClick={() => navigate('/purchasing/receiving', { 
-                          state: { 
-                            fromPO: true, 
-                            poId: po.id, 
-                            poNo: po.noPO, 
-                            supplier: po.supplier, 
-                            projectId: po.projectId, 
-                            items: po.items 
-                          } 
-                        })} 
-                        className="p-2 text-orange-600 hover:bg-orange-50 rounded-lg" 
-                        title="Terima Barang"
+                      <button
+                        onClick={() => navigate('/purchasing/receiving', {
+                          state: {
+                            fromPO: true,
+                            poId: po.id,
+                            poNo: po.noPO,
+                            supplier: po.supplier,
+                            projectId: po.projectId,
+                            items: po.items
+                          }
+                        })}
+                        className="inline-flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-amber-700 transition-colors hover:bg-amber-100"
+                        title="Terima Barang (Receiving)"
                       >
-                        <Package size={18} />
+                        <TruckIcon size={16} />
+                        Receiving
                       </button>
                     ) : null}
                   </div>
@@ -1263,8 +1264,9 @@ export default function PurchaseOrderPage() {
                       } 
                     })} 
                     className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2 transition-all shadow-lg"
+                    title="Terima Barang (Receiving)"
                   >
-                    <Package size={18} /> Terima Barang
+                    <TruckIcon size={18} /> Terima Barang
                   </button>
                 )}
                 <button onClick={() => window.print()} className="bg-gray-800 hover:bg-black text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2 shadow-lg">
