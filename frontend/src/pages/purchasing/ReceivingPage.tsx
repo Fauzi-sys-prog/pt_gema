@@ -895,16 +895,17 @@ export default function ReceivingPage() {
       )}
 
       {showDetailModal && selectedReceiving && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-start justify-center overflow-y-auto z-50 p-4 sm:items-center">
-          <div className="relative my-4 w-full max-w-4xl max-h-[calc(100vh-2rem)] overflow-y-auto rounded-3xl bg-white shadow-2xl sm:my-8 sm:max-h-[90vh]">
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/60 p-4 backdrop-blur-sm sm:items-center">
+          <div className="relative my-4 w-full max-w-4xl rounded-3xl bg-white shadow-2xl sm:my-8">
             <button
               onClick={() => setShowDetailModal(false)}
-              className="sticky top-4 right-4 z-20 ml-auto mr-4 mt-4 flex h-12 w-12 items-center justify-center rounded-2xl border border-slate-200 bg-white/95 text-slate-400 shadow-lg shadow-slate-200 backdrop-blur hover:text-rose-600 transition-colors"
+              className="absolute right-4 top-4 z-30 flex h-12 w-12 items-center justify-center rounded-2xl border border-slate-200 bg-white/95 text-slate-400 shadow-lg shadow-slate-200 backdrop-blur transition-colors hover:text-rose-600"
               title="Tutup detail"
             >
               <X size={22} />
             </button>
-            <div className="p-5 sm:p-8 border-b flex items-center justify-between">
+            <div className="max-h-[calc(100vh-2rem)] overflow-y-auto sm:max-h-[90vh]">
+            <div className="sticky top-0 z-20 flex items-center justify-between border-b bg-white/95 p-5 pr-20 backdrop-blur sm:p-8 sm:pr-24">
               <div className="flex items-center gap-4">
                 <div className="w-12 h-12 bg-indigo-600 rounded-2xl flex items-center justify-center text-white">
                   <FileCheck size={24} />
@@ -914,7 +915,6 @@ export default function ReceivingPage() {
                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">{selectedReceiving.noReceiving} • {selectedReceiving.tanggal}</p>
                 </div>
               </div>
-              <button onClick={() => setShowDetailModal(false)} className="p-3 bg-slate-50 text-slate-400 rounded-2xl hover:text-rose-600 transition-colors"><X size={24} /></button>
             </div>
 
             <div className="p-5 sm:p-8 space-y-8">
@@ -1007,6 +1007,7 @@ export default function ReceivingPage() {
               >
                 <Printer size={16} /> Print GRN
               </button>
+            </div>
             </div>
           </div>
         </div>
