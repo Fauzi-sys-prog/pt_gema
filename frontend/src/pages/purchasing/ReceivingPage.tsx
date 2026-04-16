@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { Plus, Search, Eye, CheckCircle, XCircle, Package, Link as LinkIcon, TrendingUp, Printer, Camera, Upload, Trash2, FileCheck, ShieldCheck, X, AlertTriangle } from 'lucide-react'; import { useApp } from '../../contexts/AppContext';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { ImageWithFallback } from '../../components/figma/ImageWithFallback';
@@ -85,6 +85,9 @@ export default function ReceivingPage() {
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [selectedReceiving, setSelectedReceiving] = useState<Receiving | null>(null);
   const [previewImage, setPreviewImage] = useState<{ url: string; title: string } | null>(null);
+  const [isUploadingSjPhoto, setIsUploadingSjPhoto] = useState(false);
+  const [uploadingItemId, setUploadingItemId] = useState<string | null>(null);
+  const suratJalanPhotoInputRef = useRef<HTMLInputElement | null>(null);
 
   const [formData, setFormData] = useState({
     noPO: '',
@@ -99,6 +102,56 @@ export default function ReceivingPage() {
   });
 
   const [items, setItems] = useState<ReceivingItem[]>([]);
+
+  const readFileAsDataUrl = (file: File) =>
+    new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ''));
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+
+  const validateImageFile = (file: File) => {
+    if (!file.type.startsWith('image/')) {
+      toast.error('Format file tidak didukung. Upload gambar JPG, PNG, atau WEBP.');
+      return false;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('Ukuran gambar maksimal 5MB.');
+      return false;
+    }
+    return true;
+  };
+
+  const handleSuratJalanPhotoUpload = async (file: File | null) => {
+    if (!file || !validateImageFile(file)) return;
+    try {
+      setIsUploadingSjPhoto(true);
+      const dataUrl = await readFileAsDataUrl(file);
+      setFormData((prev) => ({ ...prev, fotoSuratJalan: dataUrl }));
+      toast.success('Foto surat jalan berhasil ditambahkan.');
+    } catch {
+      toast.error('Upload foto surat jalan gagal.');
+    } finally {
+      setIsUploadingSjPhoto(false);
+    }
+  };
+
+  const handleItemPhotoUpload = async (itemId: string, file: File | null) => {
+    if (!file || !validateImageFile(file)) return;
+    try {
+      setUploadingItemId(itemId);
+      const dataUrl = await readFileAsDataUrl(file);
+      setItems((prev) =>
+        prev.map((item) => (item.id === itemId ? { ...item, photoUrl: dataUrl } : item)),
+      );
+      toast.success('Foto barang berhasil ditambahkan.');
+    } catch {
+      toast.error('Upload foto barang gagal.');
+    } finally {
+      setUploadingItemId(null);
+    }
+  };
 
   const fetchReceivingSources = async () => {
     try {
@@ -123,6 +176,12 @@ export default function ReceivingPage() {
   useEffect(() => {
     void fetchReceivingSources();
   }, []);
+
+  useEffect(() => {
+    if (showModal) {
+      void fetchReceivingSources();
+    }
+  }, [showModal]);
 
   const handleAutoGenerateBatch = (index: number) => {
     const dateStr = formData.tanggal.replace(/-/g, '');
@@ -579,11 +638,39 @@ export default function ReceivingPage() {
                   <label className="block text-[10px] font-black italic text-gray-700 mb-2 uppercase tracking-widest">No. Surat Jalan Vendor <span className="text-red-500">*</span></label>
                   <div className="flex gap-2">
                     <input type="text" value={formData.noSuratJalan} onChange={(e) => setFormData({ ...formData, noSuratJalan: e.target.value })} placeholder="SJ-..." className="flex-1 px-4 py-3 border-2 border-slate-100 rounded-2xl font-black italic uppercase tracking-tighter focus:border-indigo-500 outline-none" required />
-                    <button onClick={() => setFormData({...formData, fotoSuratJalan: 'https://images.unsplash.com/photo-1655717665029-7b238a547624?w=800'})} className={`px-4 py-3 rounded-2xl border-2 transition-all flex items-center gap-2 ${formData.fotoSuratJalan ? 'bg-emerald-50 border-emerald-200 text-emerald-600' : 'bg-slate-50 border-slate-100 text-slate-400'}`}>
+                    <input
+                      ref={suratJalanPhotoInputRef}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => {
+                        void handleSuratJalanPhotoUpload(e.target.files?.[0] || null);
+                        e.target.value = '';
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => suratJalanPhotoInputRef.current?.click()}
+                      className={`px-4 py-3 rounded-2xl border-2 transition-all flex items-center gap-2 ${
+                        formData.fotoSuratJalan ? 'bg-emerald-50 border-emerald-200 text-emerald-600' : 'bg-slate-50 border-slate-100 text-slate-400'
+                      }`}
+                    >
                       {formData.fotoSuratJalan ? <CheckCircle size={18} /> : <Camera size={18} />}
-                      <span className="text-[10px] font-black uppercase">Foto SJ</span>
+                      <span className="text-[10px] font-black uppercase">
+                        {isUploadingSjPhoto ? 'Uploading...' : formData.fotoSuratJalan ? 'Foto SJ OK' : 'Upload Foto SJ'}
+                      </span>
                     </button>
                   </div>
+                  {formData.fotoSuratJalan ? (
+                    <button
+                      type="button"
+                      onClick={() => setPreviewImage({ url: formData.fotoSuratJalan, title: `Preview Surat Jalan ${formData.noSuratJalan || ''}`.trim() })}
+                      className="mt-3 inline-flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-emerald-700"
+                    >
+                      <Eye size={14} />
+                      Lihat Preview Foto SJ
+                    </button>
+                  ) : null}
                 </div>
 
                 <div>
@@ -617,6 +704,7 @@ export default function ReceivingPage() {
                           <th className="px-6 py-4 text-center text-[10px] font-black uppercase tracking-widest text-rose-600">Rusak</th>
                           <th className="px-6 py-4 text-left text-[10px] font-black uppercase tracking-widest">Batch/Lot</th>
                           <th className="px-6 py-4 text-left text-[10px] font-black uppercase tracking-widest">Expiry</th>
+                          <th className="px-6 py-4 text-left text-[10px] font-black uppercase tracking-widest">Foto Barang</th>
                         </tr>
                       </thead>
                       {items.map((item, index) => (
@@ -662,10 +750,41 @@ export default function ReceivingPage() {
                                 setItems(newItems);
                               }} className="px-3 py-2 border-2 border-slate-100 rounded-xl text-xs font-black italic focus:border-indigo-500 outline-none transition-all" />
                             </td>
+                            <td className="px-6 py-4">
+                              <div className="flex flex-col gap-2">
+                                <label className={`inline-flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-2 text-[10px] font-black uppercase tracking-widest transition-all ${
+                                  item.photoUrl ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-slate-100 bg-slate-50 text-slate-500'
+                                }`}>
+                                  <Upload size={14} />
+                                  {uploadingItemId === item.id ? 'Uploading...' : item.photoUrl ? 'Ganti Foto' : 'Upload Foto'}
+                                  <input
+                                    type="file"
+                                    accept="image/*"
+                                    className="hidden"
+                                    onChange={(e) => {
+                                      void handleItemPhotoUpload(item.id, e.target.files?.[0] || null);
+                                      e.target.value = '';
+                                    }}
+                                  />
+                                </label>
+                                {item.photoUrl ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => setPreviewImage({ url: item.photoUrl!, title: `Foto Barang: ${item.itemName}` })}
+                                    className="inline-flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-indigo-600"
+                                  >
+                                    <Eye size={12} />
+                                    Preview
+                                  </button>
+                                ) : (
+                                  <span className="text-[10px] font-bold uppercase tracking-widest text-slate-300">Belum ada foto</span>
+                                )}
+                              </div>
+                            </td>
                           </tr>
                           {item.qtyDamaged > 0 && (
                             <tr className="bg-rose-50/30">
-                              <td colSpan={6} className="px-6 py-3">
+                              <td colSpan={7} className="px-6 py-3">
                                 <div className="flex items-center gap-4">
                                   <div className="flex items-center gap-2 text-rose-600 text-[10px] font-black uppercase">
                                     <AlertTriangle size={14} /> Keterangan Kerusakan:
@@ -753,6 +872,16 @@ export default function ReceivingPage() {
                         </div>
                       </div>
                       <div className="flex items-center gap-8">
+                        {item.photoUrl ? (
+                          <button
+                            type="button"
+                            onClick={() => setPreviewImage({ url: item.photoUrl!, title: `Foto Barang: ${item.itemName}` })}
+                            className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-2xl border border-slate-200 bg-slate-50"
+                            title="Lihat foto barang"
+                          >
+                            <img src={item.photoUrl} alt={item.itemName} className="h-full w-full object-cover" />
+                          </button>
+                        ) : null}
                         <div className="text-right">
                           <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Kondisi</p>
                           <span className={`text-[10px] font-black uppercase italic ${item.qtyDamaged > 0 ? 'text-rose-500' : 'text-emerald-500'}`}>
