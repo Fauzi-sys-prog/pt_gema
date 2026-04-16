@@ -1,4 +1,4 @@
-import React, { Suspense, lazy, useEffect, useRef, useState } from "react";
+import React, { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import {
@@ -41,6 +41,16 @@ import { hasRoleAccess } from "../utils/roles";
 type ProjectTab = "overview" | "boq" | "milestones" | "work-order" | "mutation" | "field-records" | "procurement" | "financials";
 type ProjectFilter = "All" | "Planning" | "In Progress" | "Completed" | "Approved" | "Rejected";
 type BoqCategoryKey = "manpower" | "equipment" | "consumable" | "material" | "other";
+type ProjectApprovalLogEntry = {
+  id: string;
+  action: string;
+  reason?: string | null;
+  fromStatus?: string | null;
+  toStatus?: string | null;
+  actorName?: string | null;
+  actorRole?: string | null;
+  createdAt?: string | null;
+};
 
 const TimelineTracker = lazy(() =>
   import("../components/project/TimelineTracker").then((module) => ({
@@ -156,6 +166,8 @@ export default function ProjectManagementPage() {
   const [showProjectDetailModal, setShowProjectDetailModal] = useState(false);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [projectDetailLoading, setProjectDetailLoading] = useState(false);
+  const [projectApprovalLogs, setProjectApprovalLogs] = useState<ProjectApprovalLogEntry[]>([]);
+  const [projectApprovalLogsLoading, setProjectApprovalLogsLoading] = useState(false);
   const [projectTab, setProjectTab] = useState<ProjectTab>("overview");
   const [terminologyMode, setTerminologyMode] = useState<"RAB" | "SOW">("RAB");
   const [isEditMode, setIsEditMode] = useState(false);
@@ -212,18 +224,32 @@ export default function ProjectManagementPage() {
     materialRequestUsagePercent: number;
   }>>({});
 
-  const projectList = serverProjectList ?? ctxProjectList;
-  const quotationList = serverQuotationList ?? ctxQuotationList;
-  const poList = serverPoList ?? ctxPoList;
-  const attendanceList = serverAttendanceList ?? ctxAttendanceList;
-  const employeeList = serverEmployeeList ?? ctxEmployeeList;
-  const stockOutList = serverStockOutList ?? ctxStockOutList;
-  const workOrderList = serverWorkOrderList ?? ctxWorkOrderList;
-  const materialRequestList = serverMaterialRequestList ?? ctxMaterialRequestList;
-  const productionReportList = serverProductionReportList ?? ctxProductionReportList;
-  const fleetHealthList = serverFleetHealthList ?? [];
+  const mergeRowsById = <T extends { id?: string | number }>(serverRows: T[] | null, ctxRows: T[] = []) => {
+    const byId = new Map<string, T>();
+    for (const row of serverRows || []) {
+      const key = String(row?.id || "").trim();
+      if (key) byId.set(key, row);
+    }
+    for (const row of ctxRows || []) {
+      const key = String(row?.id || "").trim();
+      if (key) byId.set(key, row);
+    }
+    return Array.from(byId.values());
+  };
+
+  const projectList = useMemo(() => mergeRowsById<Project>(serverProjectList, ctxProjectList), [serverProjectList, ctxProjectList]);
+  const quotationList = useMemo(() => mergeRowsById<any>(serverQuotationList, ctxQuotationList as any[]), [serverQuotationList, ctxQuotationList]);
+  const poList = useMemo(() => mergeRowsById<any>(serverPoList, ctxPoList as any[]), [serverPoList, ctxPoList]);
+  const attendanceList = useMemo(() => mergeRowsById<any>(serverAttendanceList, ctxAttendanceList as any[]), [serverAttendanceList, ctxAttendanceList]);
+  const employeeList = useMemo(() => mergeRowsById<any>(serverEmployeeList, ctxEmployeeList as any[]), [serverEmployeeList, ctxEmployeeList]);
+  const stockOutList = useMemo(() => mergeRowsById<any>(serverStockOutList, ctxStockOutList as any[]), [serverStockOutList, ctxStockOutList]);
+  const workOrderList = useMemo(() => mergeRowsById<any>(serverWorkOrderList, ctxWorkOrderList as any[]), [serverWorkOrderList, ctxWorkOrderList]);
+  const materialRequestList = useMemo(() => mergeRowsById<any>(serverMaterialRequestList, ctxMaterialRequestList as any[]), [serverMaterialRequestList, ctxMaterialRequestList]);
+  const productionReportList = useMemo(() => mergeRowsById<any>(serverProductionReportList, ctxProductionReportList as any[]), [serverProductionReportList, ctxProductionReportList]);
+  const fleetHealthList = useMemo(() => mergeRowsById<any>(serverFleetHealthList, []), [serverFleetHealthList]);
   const currentRole = String(currentUser?.role || "").trim().toUpperCase();
   const canManageProjectApproval = hasRoleAccess(currentRole, ["OWNER"]);
+  const canManageProjectCrud = hasRoleAccess(currentRole, ["OWNER", "SPV", "ADMIN", "MANAGER", "SALES"]);
   const currentActorName =
     currentUser?.fullName ||
     currentUser?.name ||
@@ -726,15 +752,38 @@ export default function ProjectManagementPage() {
   const selectedPreviewExclusions: string[] = Array.isArray(selectedQuotationPreview?.exclusions)
     ? selectedQuotationPreview.exclusions
     : [];
+  const loadProjectApprovalLogs = async (projectId: string) => {
+    setProjectApprovalLogsLoading(true);
+    try {
+      const res = await api.get(`/projects/${projectId}/approval-logs`);
+      setProjectApprovalLogs(Array.isArray(res?.data) ? (res.data as ProjectApprovalLogEntry[]) : []);
+    } catch (error) {
+      if (!isAccessDeniedError(error)) {
+        toast.error("Gagal memuat riwayat approval project.");
+      }
+      setProjectApprovalLogs([]);
+    } finally {
+      setProjectApprovalLogsLoading(false);
+    }
+  };
+
+  const refreshSelectedProjectDetail = async (projectId: string) => {
+    const [detailRes] = await Promise.all([
+      api.get(`/projects/${projectId}`),
+      loadProjectApprovalLogs(projectId),
+    ]);
+    if (detailRes?.data) {
+      setSelectedProject(detailRes.data as Project);
+    }
+  };
+
   const handleViewProjectDetail = async (project: Project) => {
     setSelectedProject(project);
+    setProjectApprovalLogs([]);
     setShowProjectDetailModal(true);
     setProjectDetailLoading(true);
     try {
-      const res = await api.get(`/projects/${project.id}`);
-      if (res?.data) {
-        setSelectedProject(res.data as Project);
-      }
+      await refreshSelectedProjectDetail(project.id);
     } catch {
       toast.error("Gagal memuat detail project terbaru.");
     } finally {
@@ -749,6 +798,7 @@ export default function ProjectManagementPage() {
     }
     try {
       await approveProject(selectedProject.id, currentActorName);
+      await refreshSelectedProjectDetail(selectedProject.id);
       toast.success("Project berhasil di-approve.");
     } catch {
       // Error toast already handled in AppContext.
@@ -765,6 +815,7 @@ export default function ProjectManagementPage() {
     }
     try {
       await rejectProject(selectedProject.id, currentActorName, reason.trim());
+      await refreshSelectedProjectDetail(selectedProject.id);
       toast.success("Project berhasil di-reject.");
     } catch {
       // Error toast already handled in AppContext.
@@ -789,6 +840,7 @@ export default function ProjectManagementPage() {
     }
     try {
       await unlockProject(selectedProject.id, reason.trim());
+      await refreshSelectedProjectDetail(selectedProject.id);
       toast.success("Project berhasil di-unlock ke Pending.");
     } catch {
       // Error toast already handled in AppContext.
@@ -847,6 +899,17 @@ export default function ProjectManagementPage() {
   const handleDeleteProject = (projectId: string) => {
     if (window.confirm("Are you sure you want to delete this project?")) {
       deleteProject(projectId);
+    }
+  };
+
+  const handleDeleteProjectWithSync = async (project: Project) => {
+    if (!window.confirm(`Hapus project ${project.kodeProject || project.namaProject}?`)) return;
+    const ok = await deleteProject(project.id);
+    if (!ok) return;
+    setServerProjectList((prev) => (prev ? prev.filter((item) => item.id !== project.id) : prev));
+    if (selectedProject?.id === project.id) {
+      setShowProjectDetailModal(false);
+      setSelectedProject(null);
     }
   };
 
@@ -1228,7 +1291,23 @@ export default function ProjectManagementPage() {
           </div>
         </div>
 
-        <div className="relative z-10">
+        <div className="relative z-10 flex flex-wrap justify-end gap-2">
+          {canManageProjectCrud && (
+            <>
+              <button
+                onClick={() => setShowQuotationListModal(true)}
+                className="px-4 py-2 rounded-xl border border-emerald-200 bg-emerald-50 text-[10px] font-black uppercase tracking-widest text-emerald-700 hover:bg-emerald-600 hover:text-white transition-all"
+              >
+                Dari Quotation
+              </button>
+              <button
+                onClick={handleCreateProject}
+                className="px-4 py-2 rounded-xl border border-blue-200 bg-blue-50 text-[10px] font-black uppercase tracking-widest text-blue-700 hover:bg-blue-600 hover:text-white transition-all"
+              >
+                Project Manual
+              </button>
+            </>
+          )}
           <button
             onClick={() => void fetchProjectSources()}
             disabled={isRefreshing}
@@ -1464,6 +1543,18 @@ export default function ProjectManagementPage() {
                    >
                      <Edit size={16} />
                    </button>
+                   {canManageProjectCrud && !isProjectApproved(project) && (
+                     <button
+                       onClick={(e) => {
+                         e.stopPropagation();
+                         void handleDeleteProjectWithSync(project);
+                       }}
+                       className="p-3 rounded-xl transition-all shadow-sm border bg-white text-rose-600 hover:bg-rose-600 hover:text-white border-rose-200"
+                       title="Hapus project"
+                     >
+                       <Trash2 size={16} />
+                     </button>
+                   )}
                 </div>
               </div>
             </div>
@@ -1837,12 +1928,23 @@ export default function ProjectManagementPage() {
                   >
                     <FileSpreadsheet size={20} className="group-hover:scale-110 transition-transform" />
                   </button>
-                  <button 
+                  <button
                     onClick={() => setShowProjectDetailModal(false)}
                     className="p-4 bg-slate-100 hover:bg-red-500 hover:text-white rounded-2xl transition-all"
                   >
                     <X size={20} />
                   </button>
+                  {canManageProjectCrud && !isProjectApproved(selectedProject) && (
+                    <button
+                      onClick={() => {
+                        void handleDeleteProjectWithSync(selectedProject);
+                      }}
+                      className="px-4 py-3 rounded-2xl transition-all font-black text-[10px] uppercase tracking-widest bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-600 hover:text-white"
+                      title="Hapus project draft/pending"
+                    >
+                      Hapus Project
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
@@ -1998,6 +2100,57 @@ export default function ProjectManagementPage() {
                     )}
                   </div>
                   <div className="space-y-8">
+                    <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
+                      <div className="flex items-center justify-between gap-3 mb-6 border-b pb-4">
+                        <h3 className="text-sm font-black uppercase tracking-widest italic">Approval Timeline</h3>
+                        {projectApprovalLogsLoading && (
+                          <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Loading...</span>
+                        )}
+                      </div>
+                      <div className="space-y-4">
+                        {projectApprovalLogs.length === 0 && !projectApprovalLogsLoading ? (
+                          <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-5 text-[10px] font-bold text-slate-500">
+                            Belum ada riwayat approval untuk project ini.
+                          </div>
+                        ) : (
+                          projectApprovalLogs.map((log) => {
+                            const actionLabel = String(log.action || "-").replaceAll("_", " ");
+                            const actorLabel = [String(log.actorName || "").trim(), String(log.actorRole || "").trim() ? `(${String(log.actorRole || "").trim()})` : ""]
+                              .filter(Boolean)
+                              .join(" ");
+                            return (
+                              <div key={log.id} className="rounded-[1.5rem] border border-slate-100 bg-slate-50 p-4">
+                                <div className="flex items-start justify-between gap-3">
+                                  <div className="space-y-2">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                      <span className="rounded-full bg-indigo-50 px-3 py-1 text-[9px] font-black uppercase tracking-widest text-indigo-700 border border-indigo-100">
+                                        {actionLabel}
+                                      </span>
+                                      {log.fromStatus && log.toStatus && (
+                                        <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">
+                                          {log.fromStatus} → {log.toStatus}
+                                        </span>
+                                      )}
+                                    </div>
+                                    <p className="text-[10px] font-bold uppercase text-slate-700">
+                                      {actorLabel || "System"}
+                                    </p>
+                                    {log.reason && (
+                                      <p className="text-[10px] text-slate-600">
+                                        Alasan: <span className="font-semibold">{log.reason}</span>
+                                      </p>
+                                    )}
+                                  </div>
+                                  <span className="shrink-0 text-[9px] font-black uppercase tracking-widest text-slate-400">
+                                    {formatDateTime(log.createdAt)}
+                                  </span>
+                                </div>
+                              </div>
+                            );
+                          })
+                        )}
+                      </div>
+                    </div>
                     <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
                       <h3 className="text-sm font-black uppercase tracking-widest mb-6 border-b pb-4 italic">Budget Health (Real-time)</h3>
                       <div className="space-y-4">

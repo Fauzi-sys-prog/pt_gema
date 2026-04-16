@@ -1956,8 +1956,8 @@ projectsRouter.post(
 );
 
 projectsRouter.get("/projects/:id/approval-logs", authenticate, async (req: AuthRequest, res: Response) => {
-  if (!hasRoleAccess(req.user?.role, ["OWNER", "SPV", "ADMIN"])) {
-    return sendError(res, 403, { code: "FORBIDDEN", message: "Only OWNER/SPV/ADMIN can view project approval logs", legacyError: "Only OWNER/SPV/ADMIN can view project approval logs" });
+  if (!canReadProject(req.user?.role)) {
+    return sendError(res, 403, { code: "FORBIDDEN", message: "Forbidden", legacyError: "Forbidden" });
   }
 
   const { id } = req.params;

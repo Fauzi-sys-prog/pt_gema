@@ -74,6 +74,9 @@ const safeRemoveLocalStorageItem = (key: string) => {
   }
 };
 
+const canManageUserDirectory = (role?: UserRole | null): boolean =>
+  hasRoleAccess(role, ["OWNER", "ADMIN", "SPV", "MANAGER"]);
+
 /**
  * =========================
  *  TYPES (DEDUPED + CLEAN)
@@ -1619,16 +1622,20 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           bootstrapTasks.some((task) => task.key === key && task.critical)
         );
 
-        try {
-          const userRes = await api.get("/users");
-          if (!cancelled) {
-            const users = Array.isArray(userRes.data) ? userRes.data : userRes.data ? [userRes.data] : [];
-            setUserList(users);
+        if (canManageUserDirectory(currentUser?.role)) {
+          try {
+            const userRes = await api.get("/users");
+            if (!cancelled) {
+              const users = Array.isArray(userRes.data) ? userRes.data : userRes.data ? [userRes.data] : [];
+              setUserList(users);
+            }
+          } catch {
+            if (!cancelled) {
+              setUserList([]);
+            }
           }
-        } catch {
-          if (!cancelled) {
-            setUserList([]);
-          }
+        } else if (!cancelled) {
+          setUserList([]);
         }
 
         if (failedKeys.length > 0) {
@@ -2359,6 +2366,23 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       const res = await api.patch(`/projects/${id}/approval`, { action: "APPROVE" });
       if (res?.data) {
         setProjectList((prev) => prev.map((p) => (p.id === id ? (res.data as Project) : p)));
+        const savedProject = res.data as Project;
+        addAuditLog({
+          action: "PROJECT_APPROVED",
+          module: "Project",
+          details: `Project ${savedProject.kodeProject || savedProject.namaProject || id} di-approve oleh ${ownerName}`,
+          status: "Success",
+          domain: "project",
+          resource: "projects",
+          entityId: id,
+          operation: "approve",
+          actorUserId: currentUser?.id,
+          actorRole: currentUser?.role,
+          metadata: {
+            approvalStatus: savedProject.approvalStatus,
+            approvedBy: ownerName,
+          },
+        });
       }
     } catch (err) {
       if (previous) {
@@ -2398,6 +2422,24 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       const res = await api.patch(`/projects/${id}/approval`, { action: "REJECT", reason: String(reason).trim() });
       if (res?.data) {
         setProjectList((prev) => prev.map((p) => (p.id === id ? (res.data as Project) : p)));
+        const savedProject = res.data as Project;
+        addAuditLog({
+          action: "PROJECT_REJECTED",
+          module: "Project",
+          details: `Project ${savedProject.kodeProject || savedProject.namaProject || id} di-reject. Alasan: ${String(reason).trim()}`,
+          status: "Success",
+          domain: "project",
+          resource: "projects",
+          entityId: id,
+          operation: "reject",
+          actorUserId: currentUser?.id,
+          actorRole: currentUser?.role,
+          metadata: {
+            approvalStatus: savedProject.approvalStatus,
+            rejectedBy: ownerName,
+            reason: String(reason).trim(),
+          },
+        });
       }
     } catch (err) {
       if (previous) {
@@ -2436,6 +2478,23 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       const res = await api.post(`/projects/${id}/unlock`, { reason: String(reason).trim() });
       if (res?.data) {
         setProjectList((prev) => prev.map((p) => (p.id === id ? (res.data as Project) : p)));
+        const savedProject = res.data as Project;
+        addAuditLog({
+          action: "PROJECT_UNLOCKED",
+          module: "Project",
+          details: `Project ${savedProject.kodeProject || savedProject.namaProject || id} di-unlock ke Pending. Alasan: ${String(reason).trim()}`,
+          status: "Success",
+          domain: "project",
+          resource: "projects",
+          entityId: id,
+          operation: "unlock",
+          actorUserId: currentUser?.id,
+          actorRole: currentUser?.role,
+          metadata: {
+            approvalStatus: savedProject.approvalStatus,
+            reason: String(reason).trim(),
+          },
+        });
       }
     } catch (err) {
       if (previous) {
@@ -2474,6 +2533,23 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       const res = await api.post(`/projects/${id}/relock`);
       if (res?.data) {
         setProjectList((prev) => prev.map((p) => (p.id === id ? (res.data as Project) : p)));
+        const savedProject = res.data as Project;
+        addAuditLog({
+          action: "PROJECT_RELOCKED",
+          module: "Project",
+          details: `Project ${savedProject.kodeProject || savedProject.namaProject || id} dikunci ulang ke status ${savedProject.approvalStatus || "Approved"}`,
+          status: "Success",
+          domain: "project",
+          resource: "projects",
+          entityId: id,
+          operation: "relock",
+          actorUserId: currentUser?.id,
+          actorRole: currentUser?.role,
+          metadata: {
+            approvalStatus: savedProject.approvalStatus,
+            approvedBy: savedProject.approvedBy,
+          },
+        });
       }
     } catch (err) {
       if (previous) {
@@ -4523,11 +4599,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         loadResource<CustomerInvoice>("customer-invoices", setCustomerInvoiceList),
       ]);
 
-      try {
-        const userRes = await api.get("/users");
-        const users = Array.isArray(userRes.data) ? userRes.data : userRes.data ? [userRes.data] : [];
-        setUserList(users);
-      } catch {
+      if (canManageUserDirectory(currentUser?.role)) {
+        try {
+          const userRes = await api.get("/users");
+          const users = Array.isArray(userRes.data) ? userRes.data : userRes.data ? [userRes.data] : [];
+          setUserList(users);
+        } catch {
+          setUserList([]);
+        }
+      } else {
         setUserList([]);
       }
 
