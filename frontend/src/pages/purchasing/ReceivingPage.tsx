@@ -7,6 +7,11 @@ import { generateDocNumber } from '../../utils/docEngine';
 import { motion, AnimatePresence } from 'motion/react';
 import api from '../../services/api';
 
+const MAX_RECEIVING_FILE_BYTES = 5 * 1024 * 1024;
+const MAX_RECEIVING_PAYLOAD_BYTES = 3.5 * 1024 * 1024;
+const RECEIVING_IMAGE_QUALITY_STEPS = [0.82, 0.72, 0.62, 0.52];
+const RECEIVING_IMAGE_MAX_DIMENSION_STEPS = [1800, 1600, 1400, 1200, 1000];
+
 interface ReceivingItem {
   id: string;
   itemKode?: string; 
@@ -111,18 +116,64 @@ export default function ReceivingPage() {
       reader.readAsDataURL(file);
     });
 
+  const estimateDataUrlBytes = (dataUrl: string) => {
+    const base64 = dataUrl.split(',')[1] || '';
+    return Math.ceil((base64.length * 3) / 4);
+  };
+
+  const loadImageFromDataUrl = (dataUrl: string): Promise<HTMLImageElement> =>
+    new Promise((resolve, reject) => {
+      const image = new Image();
+      image.onload = () => resolve(image);
+      image.onerror = () => reject(new Error('Gagal memuat gambar'));
+      image.src = dataUrl;
+    });
+
+  const optimizeReceivingImageDataUrl = async (dataUrl: string) => {
+    const image = await loadImageFromDataUrl(dataUrl);
+    const canvas = document.createElement('canvas');
+    const context = canvas.getContext('2d');
+    if (!context) {
+      return dataUrl;
+    }
+
+    let best = dataUrl;
+    for (const maxDimension of RECEIVING_IMAGE_MAX_DIMENSION_STEPS) {
+      const ratio = Math.min(1, maxDimension / Math.max(image.width, image.height));
+      const width = Math.max(1, Math.round(image.width * ratio));
+      const height = Math.max(1, Math.round(image.height * ratio));
+      canvas.width = width;
+      canvas.height = height;
+      context.clearRect(0, 0, width, height);
+      context.drawImage(image, 0, 0, width, height);
+
+      for (const quality of RECEIVING_IMAGE_QUALITY_STEPS) {
+        const candidate = canvas.toDataURL('image/jpeg', quality);
+        if (estimateDataUrlBytes(candidate) < estimateDataUrlBytes(best)) {
+          best = candidate;
+        }
+        if (estimateDataUrlBytes(candidate) <= MAX_RECEIVING_PAYLOAD_BYTES) {
+          return candidate;
+        }
+      }
+    }
+
+    return best;
+  };
+
   const uploadReceivingPhoto = async (params: {
     file: File;
     kind: 'surat-jalan' | 'item';
     itemId?: string;
   }) => {
     const dataUrl = await readFileAsDataUrl(params.file);
+    const optimizedDataUrl = await optimizeReceivingImageDataUrl(dataUrl);
     const response = await api.post('/media/receiving-photos', {
       poId: formData.poId || undefined,
       itemId: params.itemId || undefined,
       kind: params.kind,
       fileName: params.file.name,
-      dataUrl,
+      dataUrl: optimizedDataUrl,
     });
     const publicUrl = String(response?.data?.publicUrl || '').trim();
     if (!publicUrl) throw new Error('UPLOAD_EMPTY');
@@ -134,7 +185,7 @@ export default function ReceivingPage() {
       toast.error('Format file tidak didukung. Upload gambar JPG, PNG, atau WEBP.');
       return false;
     }
-    if (file.size > 5 * 1024 * 1024) {
+    if (file.size > MAX_RECEIVING_FILE_BYTES) {
       toast.error('Ukuran gambar maksimal 5MB.');
       return false;
     }
@@ -148,8 +199,9 @@ export default function ReceivingPage() {
       const publicUrl = await uploadReceivingPhoto({ file, kind: 'surat-jalan' });
       setFormData((prev) => ({ ...prev, fotoSuratJalan: publicUrl }));
       toast.success('Foto surat jalan berhasil ditambahkan.');
-    } catch {
-      toast.error('Upload foto surat jalan gagal.');
+    } catch (error: any) {
+      const status = Number(error?.response?.status || 0);
+      toast.error(status === 413 ? 'Ukuran foto surat jalan terlalu besar. Maksimal 5MB.' : 'Upload foto surat jalan gagal.');
     } finally {
       setIsUploadingSjPhoto(false);
     }
@@ -164,8 +216,9 @@ export default function ReceivingPage() {
         prev.map((item) => (item.id === itemId ? { ...item, photoUrl: publicUrl } : item)),
       );
       toast.success('Foto barang berhasil ditambahkan.');
-    } catch {
-      toast.error('Upload foto barang gagal.');
+    } catch (error: any) {
+      const status = Number(error?.response?.status || 0);
+      toast.error(status === 413 ? 'Ukuran foto barang terlalu besar. Maksimal 5MB.' : 'Upload foto barang gagal.');
     } finally {
       setUploadingItemId(null);
     }
