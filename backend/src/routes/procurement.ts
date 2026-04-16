@@ -24,7 +24,7 @@ const PROCUREMENT_READ_ROLES: Record<ProcurementResource, Role[]> = {
 };
 
 const PROCUREMENT_WRITE_ROLES: Record<ProcurementResource, Role[]> = {
-  "purchase-orders": ["OWNER", "SPV", "ADMIN", "MANAGER", "PURCHASING"],
+  "purchase-orders": ["OWNER", "SPV", "ADMIN", "MANAGER", "PURCHASING", "FINANCE"],
   receivings: ["OWNER", "SPV", "ADMIN", "MANAGER", "WAREHOUSE", "PRODUKSI"],
 };
 

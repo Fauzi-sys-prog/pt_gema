@@ -119,7 +119,7 @@ const toFiniteNonNegative = (value: unknown, fallback = 0) => {
 };
 
 const normalizeKey = (value: unknown) => String(value || '').trim().toLowerCase();
-const PO_WRITE_ROLES = new Set(['OWNER', 'SPV', 'ADMIN', 'MANAGER', 'PURCHASING']);
+const PO_WRITE_ROLES = new Set(['OWNER', 'SPV', 'ADMIN', 'MANAGER', 'PURCHASING', 'FINANCE']);
 
 export default function PurchaseOrderPage() {
   const { poList, setPoList, addPO, updatePO, projectList, updateProject, stockItemList, setStockItemList, currentUser } = useApp();
