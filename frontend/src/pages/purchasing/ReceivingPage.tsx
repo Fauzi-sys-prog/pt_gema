@@ -377,7 +377,9 @@ export default function ReceivingPage() {
         description: `Receiving ${newReceiving.noReceiving} created for ${newReceiving.noPO}`,
       });
 
-      toast.success(`✅ Receiving ${newNo} berhasil disimpan! Stok gudang dan status PO diperbarui otomatis.`);
+      toast.success(`Receiving ${newNo} berhasil disimpan`, {
+        description: 'Stock In terbentuk • Stok gudang diperbarui • Status PO disinkronkan',
+      });
       setShowModal(false);
       resetForm();
     } catch {
