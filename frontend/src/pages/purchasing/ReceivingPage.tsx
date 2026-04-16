@@ -894,7 +894,14 @@ export default function ReceivingPage() {
 
       {showDetailModal && selectedReceiving && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-start justify-center overflow-y-auto z-50 p-4 sm:items-center">
-          <div className="my-4 w-full max-w-4xl max-h-[calc(100vh-2rem)] overflow-y-auto rounded-3xl bg-white shadow-2xl sm:my-8 sm:max-h-[90vh]">
+          <div className="relative my-4 w-full max-w-4xl max-h-[calc(100vh-2rem)] overflow-y-auto rounded-3xl bg-white shadow-2xl sm:my-8 sm:max-h-[90vh]">
+            <button
+              onClick={() => setShowDetailModal(false)}
+              className="sticky top-4 right-4 z-20 ml-auto mr-4 mt-4 flex h-12 w-12 items-center justify-center rounded-2xl border border-slate-200 bg-white/95 text-slate-400 shadow-lg shadow-slate-200 backdrop-blur hover:text-rose-600 transition-colors"
+              title="Tutup detail"
+            >
+              <X size={22} />
+            </button>
             <div className="p-5 sm:p-8 border-b flex items-center justify-between">
               <div className="flex items-center gap-4">
                 <div className="w-12 h-12 bg-indigo-600 rounded-2xl flex items-center justify-center text-white">
