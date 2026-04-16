@@ -13,7 +13,7 @@ const MANUAL_ISSUE_HELP =
   'Mode ini untuk bahan baku atau material yang dipakai dari gudang untuk kebutuhan produksi.';
 const FINISHED_GOODS_LABEL = 'Hasil Produksi Masuk Gudang';
 const FINISHED_GOODS_HELP =
-  'Mode ini untuk hasil produksi berupa barang jadi yang siap masuk ke gudang. Stok item akan bertambah saat LHP disimpan.';
+  'Mode ini untuk hasil produksi berupa barang jadi. Setelah LHP disimpan, item masuk antrian QC dulu sebelum dirilis ke stok gudang.';
 const DEFAULT_MANUAL_MODE = 'material-issue';
 
 export default function ProductionReportPage() {
@@ -377,7 +377,7 @@ export default function ProductionReportPage() {
     toast.success(
       isManualMode
         ? manualModeType === 'finished-goods'
-          ? 'Finished goods berhasil disimpan. Stok gudang bertambah sesuai item yang dipilih.'
+          ? 'Hasil produksi berhasil disimpan. Lanjutkan verifikasi di QC sebelum stok bertambah ke gudang.'
           : 'Material issue manual berhasil disimpan. Stok gudang berkurang sesuai item yang dipilih.'
         : 'LHP berhasil disimpan. Stok bahan baku telah dipotong otomatis dan progress diperbarui!'
     );

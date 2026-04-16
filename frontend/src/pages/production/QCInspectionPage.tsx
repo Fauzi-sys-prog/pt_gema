@@ -1,16 +1,17 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { ShieldCheck, Search, Filter, ClipboardCheck, AlertTriangle, CheckCircle2, XCircle, Camera, FileText, User, Clock, ArrowRight, Info, Maximize2, Printer, Plus, Trash2, Eye } from 'lucide-react'; import { useApp } from '../../contexts/AppContext';
-import type { QCInspection, WorkOrder, DimensionMeasurement } from '../../contexts/AppContext';
+import type { QCInspection, WorkOrder, DimensionMeasurement, ProductionReport } from '../../contexts/AppContext';
 import { toast } from 'sonner@2.0.3';
 import { ImageWithFallback } from '../../components/figma/ImageWithFallback';
 import { InspectionReportPrint } from '../../components/InspectionReportPrint';
 import api from '../../services/api';
 
 export default function QCInspectionPage() {
-  const { workOrderList, qcInspectionList, addQCInspection } = useApp();
+  const { workOrderList, qcInspectionList, productionReportList, addQCInspection } = useApp();
   const [searchTerm, setSearchTerm] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [selectedWO, setSelectedWO] = useState<WorkOrder | null>(null);
+  const [selectedReport, setSelectedReport] = useState<ProductionReport | null>(null);
   const [showPrintPreview, setShowPrintPreview] = useState(false);
   const [selectedInspection, setSelectedInspection] = useState<QCInspection | null>(null);
   const [syncing, setSyncing] = useState(false);
@@ -69,6 +70,7 @@ export default function QCInspectionPage() {
     },
     [serverInspections, qcInspectionList]
   );
+  const effectiveReports = useMemo(() => productionReportList || [], [productionReportList]);
 
   const asNumber = (value: unknown, fallback = 0) => {
     const n = Number(value);
@@ -85,6 +87,13 @@ export default function QCInspectionPage() {
     }
     return bucket;
   }, [effectiveInspections]);
+
+  const pendingFinishedGoodsReports = useMemo(() => {
+    return effectiveReports
+      .filter((report) => report.manualMode && report.manualModeType === 'finished-goods')
+      .filter((report) => (report.stockPostingStatus || '').toUpperCase() === 'PENDING_QC')
+      .sort((a, b) => String(b.tanggal || '').localeCompare(String(a.tanggal || '')));
+  }, [effectiveReports]);
 
   // QC queue is derived from actual production output (WO completedQty from LHP), not only WO status='QC'.
   const waitingForQC = useMemo(() => {
@@ -113,6 +122,7 @@ export default function QCInspectionPage() {
     const remainingQty = Math.max(1, producedQty > 0 ? producedQty - inspectedQty : asNumber(wo.targetQty, 1));
 
     setSelectedWO(wo);
+    setSelectedReport(null);
     setNewInspection({
       projectId: wo.projectId,
       workOrderId: wo.id,
@@ -139,6 +149,38 @@ export default function QCInspectionPage() {
         { parameter: 'W2', specification: '', sample1: '', sample2: '', sample3: '', sample4: '', result: 'OK' },
         { parameter: 'R', specification: '', sample1: '', sample2: '', sample3: '', sample4: '', result: 'OK' },
         { parameter: 'D', specification: '', sample1: '', sample2: '', sample3: '', sample4: '', result: 'OK' },
+      ]
+    });
+    setShowModal(true);
+  };
+
+  const handleOpenFinishedGoodsInspection = (report: ProductionReport) => {
+    const qtyProduced = Math.max(0, asNumber(report.outputQty, 0));
+    const qtyRejectedFromLhp = Math.max(0, asNumber(report.rejectQty, 0));
+    const qtyReadyForQc = Math.max(1, qtyProduced - qtyRejectedFromLhp);
+    setSelectedWO(null);
+    setSelectedReport(report);
+    setNewInspection({
+      projectId: report.projectId,
+      productionReportId: report.id,
+      workOrderId: report.woId,
+      woId: report.woId,
+      tanggal: new Date().toISOString().split('T')[0],
+      visualCheck: true,
+      dimensionCheck: true,
+      materialCheck: true,
+      status: 'Passed',
+      notes: '',
+      itemNama: report.selectedItemName || report.selectedItem || report.activity || 'Barang Jadi',
+      qtyInspected: qtyReadyForQc,
+      qtyPassed: qtyReadyForQc,
+      qtyRejected: 0,
+      woNumber: report.woNumber,
+      batchNo: `FG-${String(report.id || '').replace(/^lhp-/i, '').slice(-8) || Date.now().toString().slice(-8)}`,
+      customerName: report.projectName || report.workshop || '',
+      remark: '',
+      dimensions: [
+        { parameter: 'Visual', specification: 'Sesuai standar', sample1: '', sample2: '', sample3: '', sample4: '', result: 'OK' },
       ]
     });
     setShowModal(true);
@@ -193,6 +235,7 @@ export default function QCInspectionPage() {
       projectId: newInspection.projectId,
       workOrderId: newInspection.workOrderId || newInspection.woId,
       woId: newInspection.woId || newInspection.workOrderId,
+      productionReportId: newInspection.productionReportId,
       tanggal: newInspection.tanggal!,
       batchNo: newInspection.batchNo!,
       itemNama: newInspection.itemNama!,
@@ -215,7 +258,11 @@ export default function QCInspectionPage() {
 
     addQCInspection(inspection);
     setShowModal(false);
-    toast.success(`QC ${inspection.status} untuk ${inspection.batchNo} berhasil disimpan!`);
+    toast.success(
+      inspection.productionReportId && inspection.qtyPassed > 0 && inspection.status !== 'Rejected'
+        ? `QC ${inspection.status} untuk ${inspection.batchNo} berhasil. Barang jadi dirilis ke stok gudang.`
+        : `QC ${inspection.status} untuk ${inspection.batchNo} berhasil disimpan!`
+    );
   };
 
   const handlePrintInspection = (inspection: QCInspection) => {
@@ -256,11 +303,44 @@ export default function QCInspectionPage() {
               <Clock size={18} className="text-orange-500" /> Antrian Inspeksi
             </h3>
             <span className="bg-orange-100 text-orange-600 px-2 py-0.5 rounded-full text-[10px] font-black uppercase">
-              {waitingForQC.length} Pending
+              {pendingFinishedGoodsReports.length + waitingForQC.length} Pending
             </span>
           </div>
           
           <div className="space-y-3 max-h-[70vh] overflow-y-auto pr-1">
+            {pendingFinishedGoodsReports.length > 0 && (
+              pendingFinishedGoodsReports.map((report) => (
+                <div key={report.id} className="bg-white p-5 rounded-2xl border border-emerald-200 shadow-sm hover:border-emerald-400 transition-all group">
+                  <div className="flex justify-between items-start mb-3 gap-3">
+                    <div>
+                      <span className="text-[10px] font-black text-emerald-500 uppercase tracking-widest">Hasil Produksi</span>
+                      <h4 className="text-sm font-black text-slate-900 leading-tight mt-0.5">
+                        {report.selectedItemName || report.selectedItem || report.activity || 'Barang Jadi'}
+                      </h4>
+                    </div>
+                    <span className="text-[9px] font-black px-2 py-0.5 rounded-full uppercase bg-emerald-100 text-emerald-600">
+                      Menunggu QC
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3 mb-4">
+                    <div className="flex flex-col">
+                      <span className="text-[10px] text-slate-400 font-bold uppercase">Ref LHP</span>
+                      <span className="text-sm font-black text-slate-700">{report.id}</span>
+                    </div>
+                    <div className="flex flex-col text-right">
+                      <span className="text-[10px] text-slate-400 font-bold uppercase">Qty Produksi</span>
+                      <span className="text-sm font-black text-slate-700">{report.outputQty} {report.unit || 'Unit'}</span>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => handleOpenFinishedGoodsInspection(report)}
+                    className="w-full py-2.5 bg-emerald-600 text-white rounded-xl text-[10px] font-black uppercase shadow-md shadow-emerald-100 hover:bg-emerald-700 transition-all flex items-center justify-center gap-2 group-hover:scale-[1.02]"
+                  >
+                    Verifikasi Barang Jadi <ArrowRight size={14} />
+                  </button>
+                </div>
+              ))
+            )}
             {waitingForQC.length > 0 ? (
               waitingForQC.map((wo) => (
                 <div key={wo.id} className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm hover:border-indigo-400 transition-all group">
@@ -293,14 +373,14 @@ export default function QCInspectionPage() {
                   </button>
                 </div>
               ))
-            ) : (
+            ) : pendingFinishedGoodsReports.length === 0 ? (
               <div className="bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl p-8 text-center">
                 <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center mx-auto mb-3 shadow-sm text-slate-300">
                   <ClipboardCheck size={24} />
                 </div>
                 <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Tidak ada antrian inspeksi</p>
               </div>
-            )}
+            ) : null}
           </div>
         </div>
 
@@ -406,14 +486,16 @@ export default function QCInspectionPage() {
       </div>
 
       {/* INSPECTION MODAL */}
-      {showModal && selectedWO && (
+      {showModal && (selectedWO || selectedReport) && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setShowModal(false)}></div>
           <div className="bg-white rounded-[2.5rem] w-full max-w-6xl relative z-10 overflow-hidden shadow-2xl flex flex-col max-h-[90vh] border border-slate-200">
             <div className="p-8 border-b border-slate-100 flex items-center justify-between sticky top-0 bg-white z-10">
               <div>
                 <h3 className="text-xl font-black text-slate-900 uppercase italic tracking-tight">Formulir Inspeksi QC</h3>
-                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1 italic">Produksi Release Verification</p>
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1 italic">
+                  {selectedReport ? 'Release hasil produksi ke gudang' : 'Produksi Release Verification'}
+                </p>
               </div>
               <button onClick={() => setShowModal(false)} className="w-10 h-10 bg-slate-50 text-slate-400 rounded-xl flex items-center justify-center hover:bg-indigo-50 hover:text-indigo-600 transition-all">
                 <XCircle size={24} />
@@ -425,19 +507,33 @@ export default function QCInspectionPage() {
               <div className="bg-slate-50 rounded-2xl p-5 border border-slate-100 grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div>
                   <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Item Name</p>
-                  <p className="text-xs font-black text-slate-900 truncate">{selectedWO.itemToProduce}</p>
+                  <p className="text-xs font-black text-slate-900 truncate">
+                    {selectedReport
+                      ? (selectedReport.selectedItemName || selectedReport.selectedItem || selectedReport.activity || 'Barang Jadi')
+                      : selectedWO?.itemToProduce}
+                  </p>
                 </div>
                 <div>
-                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">WO Number</p>
-                  <p className="text-xs font-black text-indigo-600">{selectedWO.woNumber}</p>
+                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">
+                    {selectedReport ? 'Ref LHP' : 'WO Number'}
+                  </p>
+                  <p className="text-xs font-black text-indigo-600">{selectedReport ? selectedReport.id : selectedWO?.woNumber}</p>
                 </div>
                 <div>
-                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Target Qty</p>
-                  <p className="text-xs font-black text-slate-900">{selectedWO.targetQty} Pcs</p>
+                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">
+                    {selectedReport ? 'Qty Produksi' : 'Target Qty'}
+                  </p>
+                  <p className="text-xs font-black text-slate-900">
+                    {selectedReport ? `${selectedReport.outputQty} ${selectedReport.unit || 'Unit'}` : `${selectedWO?.targetQty} Pcs`}
+                  </p>
                 </div>
                 <div>
-                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Teknisi</p>
-                  <p className="text-xs font-black text-slate-900">{selectedWO.leadTechnician}</p>
+                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">
+                    {selectedReport ? 'Workshop / Project' : 'Teknisi'}
+                  </p>
+                  <p className="text-xs font-black text-slate-900">
+                    {selectedReport ? (selectedReport.projectName || selectedReport.workshop || '-') : selectedWO?.leadTechnician}
+                  </p>
                 </div>
               </div>
 

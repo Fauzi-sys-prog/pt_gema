@@ -60,6 +60,26 @@ const submitLhpSchema = z.object({
     .passthrough(),
 });
 
+const submitQcInspectionSchema = z.object({
+  inspection: z
+    .object({
+      id: z.string().min(1),
+      projectId: z.string().optional(),
+      workOrderId: z.string().optional(),
+      woId: z.string().optional(),
+      productionReportId: z.string().optional(),
+      tanggal: z.string().min(1),
+      batchNo: z.string().min(1),
+      itemNama: z.string().min(1),
+      qtyInspected: z.coerce.number().nonnegative(),
+      qtyPassed: z.coerce.number().nonnegative(),
+      qtyRejected: z.coerce.number().nonnegative(),
+      inspectorName: z.string().min(1),
+      status: z.string().min(1),
+    })
+    .passthrough(),
+});
+
 type CrudDelegate = {
   findMany: (args: Record<string, unknown>) => Promise<Array<{ id: string; payload: unknown }>>;
   findUnique: (args: Record<string, unknown>) => Promise<{ payload: unknown } | null>;
@@ -413,6 +433,291 @@ async function writeAuditLog(
       metadata: metadata ? JSON.stringify(metadata) : null,
     },
   });
+}
+
+type FinishedGoodsStockInItem = {
+  kode: string;
+  nama: string;
+  qty: number;
+  satuan: string;
+  batchNo?: string | null;
+  expiryDate?: string | null;
+};
+
+async function postFinishedGoodsStockIn(
+  tx: Prisma.TransactionClient,
+  params: {
+    reportId: string;
+    projectId: string;
+    projectName?: string | null;
+    tanggal: string;
+    notes: string;
+    items: FinishedGoodsStockInItem[];
+  }
+) {
+  const stockInId = `SI-${randomUUID().slice(0, 12).toUpperCase()}`;
+  const movementPrefix = `MOV-${randomUUID().slice(0, 8).toUpperCase()}`;
+  const nowIso = new Date().toISOString();
+  const stockRows = await tx.stockItemRecord.findMany({
+    select: { id: true, payload: true },
+  });
+  const inventoryRows = await tx.inventoryItem.findMany({
+    select: {
+      id: true,
+      code: true,
+      name: true,
+      unit: true,
+      location: true,
+      onHandQty: true,
+      metadata: true,
+    },
+  });
+  const legacyByCode = new Map<string, { id: string; payload: Record<string, unknown> }>();
+  for (const row of stockRows) {
+    const payload = asObject(row.payload);
+    const kode = asString(payload.kode);
+    if (kode) legacyByCode.set(kode, { id: row.id, payload });
+  }
+  const inventoryByCode = new Map(inventoryRows.map((row) => [row.code, row] as const));
+
+  const payloadItems = params.items.map((item) => ({
+    kode: item.kode,
+    nama: item.nama,
+    qty: item.qty,
+    satuan: item.satuan,
+    batchNo: item.batchNo || undefined,
+    expiryDate: item.expiryDate || undefined,
+  }));
+  const createdStockInPayload: Record<string, unknown> = {
+    id: stockInId,
+    noStockIn: stockInId,
+    noSuratJalan: params.reportId,
+    projectId: params.projectId,
+    projectName: params.projectName || undefined,
+    tanggal: params.tanggal,
+    type: "Finished Goods",
+    status: "Posted",
+    createdBy: "QC Release System",
+    notes: params.notes,
+    items: payloadItems,
+  };
+
+  await tx.stockInRecord.create({
+    data: {
+      id: stockInId,
+      projectId: params.projectId,
+      payload: createdStockInPayload as Prisma.InputJsonValue,
+    },
+  });
+
+  const stockInItemCreates: Array<Record<string, unknown>> = [];
+  const createdStockMovementPayloads: Array<Record<string, unknown>> = [];
+  const updatedStockItemPayloads: Array<Record<string, unknown>> = [];
+
+  for (const receipt of params.items) {
+    const inventory = inventoryByCode.get(receipt.kode) || null;
+    const legacy = legacyByCode.get(receipt.kode) || null;
+    const before = inventory?.onHandQty ?? (legacy ? asNumber(legacy.payload.stok, 0) : 0);
+    const after = before + receipt.qty;
+    const location =
+      (inventory ? asString(asObject(inventory.metadata).lokasi) : null) ||
+      inventory?.location ||
+      asString(legacy?.payload?.lokasi) ||
+      "Gudang Utama";
+
+    let inventoryItemId = inventory?.id || undefined;
+    let legacyRecordId = legacy?.id || null;
+
+    if (legacy) {
+      const nextStockPayload: Record<string, unknown> = {
+        ...legacy.payload,
+        stok: after,
+        lastUpdate: nowIso,
+        lokasi: asString(legacy.payload.lokasi) || location,
+        satuan: asString(legacy.payload.satuan) || receipt.satuan,
+      };
+      await tx.stockItemRecord.update({
+        where: { id: legacy.id },
+        data: { payload: nextStockPayload as Prisma.InputJsonValue },
+      });
+    } else {
+      legacyRecordId = `STK-${randomUUID().slice(0, 12).toUpperCase()}`;
+      const nextStockPayload: Record<string, unknown> = {
+        id: legacyRecordId,
+        kode: receipt.kode,
+        nama: receipt.nama,
+        stok: after,
+        satuan: receipt.satuan,
+        lokasi: location,
+        kategori: "Finished Goods",
+        lastUpdate: nowIso,
+      };
+      await tx.stockItemRecord.create({
+        data: {
+          id: legacyRecordId,
+          payload: nextStockPayload as Prisma.InputJsonValue,
+        },
+      });
+    }
+
+    if (inventory) {
+      const metadata = asObject(inventory.metadata);
+      await tx.inventoryItem.update({
+        where: { id: inventory.id },
+        data: {
+          onHandQty: after,
+          lastStockUpdateAt: new Date(nowIso),
+          metadata: {
+            ...metadata,
+            id: asString(metadata.id) || inventory.id,
+            kode: asString(metadata.kode) || inventory.code,
+            nama: asString(metadata.nama) || inventory.name,
+            satuan: asString(metadata.satuan) || inventory.unit,
+            lokasi: asString(metadata.lokasi) || inventory.location,
+            stok: after,
+            lastUpdate: nowIso,
+          } as Prisma.InputJsonValue,
+        },
+      });
+    } else {
+      inventoryItemId = `INV-${randomUUID().slice(0, 12).toUpperCase()}`;
+      await tx.inventoryItem.create({
+        data: {
+          id: inventoryItemId,
+          code: receipt.kode,
+          name: receipt.nama,
+          category: "Finished Goods",
+          unit: receipt.satuan,
+          location,
+          minStock: 0,
+          onHandQty: after,
+          reservedQty: 0,
+          onOrderQty: 0,
+          lastStockUpdateAt: new Date(nowIso),
+          metadata: {
+            id: legacyRecordId || inventoryItemId,
+            kode: receipt.kode,
+            nama: receipt.nama,
+            satuan: receipt.satuan,
+            lokasi: location,
+            kategori: "Finished Goods",
+            stok: after,
+            lastUpdate: nowIso,
+          } as Prisma.InputJsonValue,
+        },
+      });
+    }
+
+    stockInItemCreates.push({
+      id: `${stockInId}-ITEM-${String(stockInItemCreates.length + 1).padStart(3, "0")}`,
+      inventoryItemId,
+      itemCode: receipt.kode,
+      itemName: receipt.nama,
+      qty: receipt.qty,
+      unit: receipt.satuan,
+      batchNo: receipt.batchNo || undefined,
+      expiryDate: receipt.expiryDate ? new Date(receipt.expiryDate) : undefined,
+    });
+
+    updatedStockItemPayloads.push({
+      id: inventoryItemId || legacyRecordId || receipt.kode,
+      kode: receipt.kode,
+      nama: receipt.nama,
+      satuan: receipt.satuan,
+      lokasi: location,
+      kategori: "Finished Goods",
+      stok: after,
+      lastUpdate: nowIso,
+      batchNo: receipt.batchNo || undefined,
+      expiryDate: receipt.expiryDate || undefined,
+    });
+
+    const movementId = `${movementPrefix}-${createdStockMovementPayloads.length + 1}`;
+    const movementPayload: Record<string, unknown> = {
+      id: movementId,
+      tanggal: params.tanggal,
+      type: "IN",
+      refNo: stockInId,
+      refType: "Stock In",
+      itemKode: receipt.kode,
+      itemNama: receipt.nama,
+      qty: receipt.qty,
+      unit: receipt.satuan,
+      lokasi: location,
+      stockBefore: before,
+      stockAfter: after,
+      createdBy: "QC Release System",
+      productionReportId: params.reportId,
+      projectId: params.projectId,
+      projectName: params.projectName || undefined,
+      batchNo: receipt.batchNo || undefined,
+      expiryDate: receipt.expiryDate || undefined,
+    };
+    await tx.stockMovementRecord.create({
+      data: {
+        id: movementId,
+        projectId: params.projectId,
+        payload: movementPayload as Prisma.InputJsonValue,
+      },
+    });
+    await tx.inventoryStockMovement.create({
+      data: {
+        id: movementId,
+        tanggal: new Date(params.tanggal),
+        direction: "IN",
+        referenceNo: stockInId,
+        referenceType: "Stock In",
+        inventoryItemId,
+        itemCode: receipt.kode,
+        itemName: receipt.nama,
+        qty: receipt.qty,
+        unit: receipt.satuan,
+        location,
+        stockBefore: before,
+        stockAfter: after,
+        batchNo: receipt.batchNo || undefined,
+        expiryDate: receipt.expiryDate ? new Date(receipt.expiryDate) : undefined,
+        createdByName: "QC Release System",
+        projectId: params.projectId,
+        stockInId,
+        legacyPayload: movementPayload as Prisma.InputJsonValue,
+      },
+    });
+    createdStockMovementPayloads.push(movementPayload);
+  }
+
+  await tx.inventoryStockIn.create({
+    data: {
+      id: stockInId,
+      number: stockInId,
+      tanggal: new Date(params.tanggal),
+      type: "Finished Goods",
+      status: "Posted",
+      notes: params.notes,
+      createdByName: "QC Release System",
+      projectId: params.projectId,
+      legacyPayload: createdStockInPayload as Prisma.InputJsonValue,
+      items: {
+        create: stockInItemCreates.map((item) => ({
+          id: String(item.id),
+          inventoryItemId: (item.inventoryItemId as string | undefined) || undefined,
+          itemCode: String(item.itemCode),
+          itemName: String(item.itemName),
+          qty: Number(item.qty),
+          unit: String(item.unit),
+          batchNo: (item.batchNo as string | undefined) || undefined,
+          expiryDate: (item.expiryDate as Date | undefined) || undefined,
+        })),
+      },
+    },
+  });
+
+  return {
+    stockIn: createdStockInPayload,
+    stockMovements: createdStockMovementPayloads,
+    stockItems: updatedStockItemPayloads,
+    stockInId,
+  };
 }
 
 operationsRouter.post("/production/submit-lhp", authenticate, async (req: AuthRequest, res: Response) => {
@@ -943,7 +1248,7 @@ operationsRouter.post("/production/submit-lhp", authenticate, async (req: AuthRe
         }
       }
 
-      if (stockInItems.length > 0) {
+      if (stockInItems.length > 0 && manualModeType !== "finished-goods") {
         const { stockRows, inventoryRows } = await loadStockSources();
         const legacyByCode = new Map<string, { id: string; payload: Record<string, unknown> }>();
         for (const row of stockRows) {
@@ -1290,8 +1595,15 @@ operationsRouter.post("/production/submit-lhp", authenticate, async (req: AuthRe
         woNumber: woNumber || undefined,
         manualMode: isManualReport || undefined,
         manualModeType: manualModeType || undefined,
+        selectedItem: selectedItem || undefined,
         selectedItemCode: selectedItemCode || undefined,
         selectedItemName: selectedItemName || undefined,
+        stockPostingStatus:
+          manualModeType === "finished-goods"
+            ? "PENDING_QC"
+            : manualModeType === "material-issue"
+              ? "MATERIAL_ISSUED"
+              : undefined,
         notes: asString(reportInput.notes) || asString(reportInput.remarks) || undefined,
         remarks: asString(reportInput.remarks) || asString(reportInput.notes) || undefined,
       };
@@ -1334,7 +1646,18 @@ operationsRouter.post("/production/submit-lhp", authenticate, async (req: AuthRe
           endTime: asString(reportInput.endTime) || undefined,
           unit: asString(reportInput.unit) || undefined,
           photoUrl: asString(reportInput.photoUrl) || undefined,
-          workflowStatus: "SUBMITTED",
+          manualMode: isManualReport,
+          manualModeType: manualModeType || undefined,
+          selectedItem: selectedItem || undefined,
+          selectedItemCode: selectedItemCode || undefined,
+          selectedItemName: selectedItemName || undefined,
+          stockPostingStatus:
+            manualModeType === "finished-goods"
+              ? "PENDING_QC"
+              : manualModeType === "material-issue"
+                ? "MATERIAL_ISSUED"
+                : undefined,
+          workflowStatus: manualModeType === "finished-goods" ? "PENDING_QC" : "SUBMITTED",
         },
       });
 
@@ -1353,7 +1676,7 @@ operationsRouter.post("/production/submit-lhp", authenticate, async (req: AuthRe
       mode: asString(reportInput.woId) || asString(reportInput.woNumber)
         ? "atomic-submit-lhp"
         : auditManualModeType === "finished-goods"
-          ? "manual-finished-goods-stock-in"
+          ? "manual-finished-goods-pending-qc"
           : "manual-material-issue",
       workOrderId: reportInput.woId ?? null,
       woNumber: reportInput.woNumber ?? null,
@@ -1371,6 +1694,343 @@ operationsRouter.post("/production/submit-lhp", authenticate, async (req: AuthRe
     if (err instanceof Error) {
       return sendError(res, 400, {
         code: "LHP_SUBMIT_FAILED",
+        message: err.message,
+        legacyError: err.message,
+      });
+    }
+    return sendError(res, 500, { code: "INTERNAL_ERROR", message: "Internal server error", legacyError: "Internal server error" });
+  }
+});
+
+operationsRouter.post("/production/qc-inspections", authenticate, async (req: AuthRequest, res: Response) => {
+  if (!canWrite(req.user?.role)) {
+    return sendError(res, 403, { code: "FORBIDDEN", message: "Forbidden", legacyError: "Forbidden" });
+  }
+
+  const parsed = submitQcInspectionSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return sendError(res, 400, {
+      code: "VALIDATION_ERROR",
+      message: "Validation failed",
+      details: parsed.error.flatten(),
+      legacyError: parsed.error.flatten(),
+    });
+  }
+
+  const inspectionInput = parsed.data.inspection as Record<string, unknown>;
+
+  try {
+    const result = await prisma.$transaction(async (tx) => {
+      const inspectionId = asString(inspectionInput.id) || `qc-${Date.now()}`;
+      const productionReportId = asString(inspectionInput.productionReportId);
+      const qtyInspected = asNumber(inspectionInput.qtyInspected, 0);
+      const qtyPassed = asNumber(inspectionInput.qtyPassed, 0);
+      const qtyRejected = asNumber(inspectionInput.qtyRejected, 0);
+
+      if (qtyInspected <= 0) {
+        throw new Error("qtyInspected harus lebih dari 0");
+      }
+      if (qtyPassed + qtyRejected > qtyInspected) {
+        throw new Error("qtyPassed + qtyRejected tidak boleh melebihi qtyInspected");
+      }
+
+      const existingInspection = await tx.productionQcInspection.findUnique({
+        where: { id: inspectionId },
+        select: { id: true },
+      });
+      if (existingInspection) {
+        throw new Error(`QC inspection '${inspectionId}' sudah ada`);
+      }
+
+      let linkedReport:
+        | {
+            id: string;
+            projectId: string;
+            workOrderId: string | null;
+            tanggal: Date;
+            unit: string | null;
+            manualModeType: string | null;
+            selectedItemCode: string | null;
+            selectedItemName: string | null;
+            selectedItem: string | null;
+            stockPostingStatus: string | null;
+            releasedStockInId: string | null;
+            project: { payload: unknown } | null;
+          }
+        | null = null;
+
+      if (productionReportId) {
+        linkedReport = await tx.productionExecutionReport.findUnique({
+          where: { id: productionReportId },
+          select: {
+            id: true,
+            projectId: true,
+            workOrderId: true,
+            tanggal: true,
+            unit: true,
+            manualModeType: true,
+            selectedItemCode: true,
+            selectedItemName: true,
+            selectedItem: true,
+            stockPostingStatus: true,
+            releasedStockInId: true,
+            project: { select: { payload: true } },
+          },
+        });
+        if (!linkedReport) {
+          throw new Error(`LHP '${productionReportId}' tidak ditemukan`);
+        }
+        if (linkedReport.manualModeType !== "finished-goods") {
+          throw new Error("Hanya LHP hasil produksi yang bisa dirilis lewat QC");
+        }
+        if (linkedReport.stockPostingStatus === "POSTED_TO_STOCK" || linkedReport.releasedStockInId) {
+          throw new Error("LHP ini sudah pernah masuk ke gudang");
+        }
+      }
+
+      const dimensions = (Array.isArray(inspectionInput.dimensions) ? inspectionInput.dimensions : [])
+        .map((raw, index) => {
+          const item = asObject(raw);
+          return {
+            id: `${inspectionId}-DIM-${String(index + 1).padStart(3, "0")}`,
+            sortOrder: index,
+            parameter: asString(item.parameter) || "",
+            specification: asString(item.specification) || "",
+            sample1: asString(item.sample1) || "",
+            sample2: asString(item.sample2) || "",
+            sample3: asString(item.sample3) || "",
+            sample4: asString(item.sample4) || "",
+            result: asString(item.result) || "OK",
+          };
+        })
+        .filter((item) => item.parameter);
+
+      const inspectionStatus = asString(inspectionInput.status) || "Pending";
+      const qcPayload: Record<string, unknown> = {
+        ...inspectionInput,
+        id: inspectionId,
+        productionReportId: productionReportId || undefined,
+        workOrderId:
+          asString(inspectionInput.workOrderId || inspectionInput.woId) ||
+          linkedReport?.workOrderId ||
+          undefined,
+        warehouseReceiptStatus:
+          productionReportId && qtyPassed > 0 && inspectionStatus !== "Rejected"
+            ? "POSTED_TO_STOCK"
+            : productionReportId
+              ? "QC_REJECTED"
+              : undefined,
+      };
+
+      await tx.qcInspectionRecord.create({
+        data: {
+          id: inspectionId,
+          projectId: asString(inspectionInput.projectId) || linkedReport?.projectId || null,
+          workOrderId:
+            asString(inspectionInput.workOrderId || inspectionInput.woId) ||
+            linkedReport?.workOrderId ||
+            null,
+          payload: qcPayload as Prisma.InputJsonValue,
+        },
+      });
+
+      const createdInspection = await tx.productionQcInspection.create({
+        data: {
+          id: inspectionId,
+          projectId: asString(inspectionInput.projectId) || linkedReport?.projectId || "",
+          workOrderId:
+            asString(inspectionInput.workOrderId || inspectionInput.woId) ||
+            linkedReport?.workOrderId ||
+            undefined,
+          productionReportId: productionReportId || undefined,
+          drawingAssetId: asString(inspectionInput.drawingAssetId) || undefined,
+          tanggal: new Date(toDateOnly(inspectionInput.tanggal)),
+          batchNo: asString(inspectionInput.batchNo) || undefined,
+          itemName: asString(inspectionInput.itemNama) || "",
+          qtyInspected,
+          qtyPassed,
+          qtyRejected,
+          inspectorName: asString(inspectionInput.inspectorName) || "",
+          status: inspectionStatus,
+          notes: asString(inspectionInput.notes) || undefined,
+          visualCheck: Boolean(inspectionInput.visualCheck),
+          dimensionCheck: Boolean(inspectionInput.dimensionCheck),
+          materialCheck: Boolean(inspectionInput.materialCheck),
+          photoUrl: asString(inspectionInput.photoUrl) || undefined,
+          customerName: asString(inspectionInput.customerName) || undefined,
+          drawingUrl: asString(inspectionInput.drawingUrl) || undefined,
+          remark: asString(inspectionInput.remark) || undefined,
+          workflowStatus: productionReportId ? "QC_RECORDED" : undefined,
+          warehouseReceiptStatus:
+            productionReportId && qtyPassed > 0 && inspectionStatus !== "Rejected"
+              ? "POSTED_TO_STOCK"
+              : productionReportId
+                ? "QC_REJECTED"
+                : undefined,
+          dimensions: {
+            create: dimensions,
+          },
+        },
+        include: {
+          workOrder: { select: { number: true } },
+          dimensions: { orderBy: { sortOrder: "asc" } },
+        },
+      });
+
+      let stockIn: Record<string, unknown> | null = null;
+      let stockMovements: Array<Record<string, unknown>> = [];
+      let stockItems: Array<Record<string, unknown>> = [];
+      let reportPayload: Record<string, unknown> | null = null;
+
+      if (linkedReport) {
+        const projectName =
+          asString(asObject(linkedReport.project?.payload).namaProject) ||
+          asString(asObject(linkedReport.project?.payload).projectName) ||
+          undefined;
+        const itemCode = linkedReport.selectedItemCode || linkedReport.selectedItem || null;
+        const itemName = linkedReport.selectedItemName || linkedReport.selectedItem || null;
+        if (!itemCode || !itemName) {
+          throw new Error("LHP hasil produksi belum memiliki item gudang yang valid");
+        }
+
+        if (inspectionStatus !== "Rejected" && qtyPassed > 0) {
+          const stockResult = await postFinishedGoodsStockIn(tx, {
+            reportId: linkedReport.id,
+            projectId: linkedReport.projectId,
+            projectName,
+            tanggal: toDateOnly(inspectionInput.tanggal),
+            notes: `QC release dari LHP ${linkedReport.id}`,
+            items: [
+              {
+                kode: itemCode,
+                nama: itemName,
+                qty: qtyPassed,
+                satuan: linkedReport.unit || "Unit",
+                batchNo: asString(inspectionInput.batchNo) || undefined,
+              },
+            ],
+          });
+          stockIn = stockResult.stockIn;
+          stockMovements = stockResult.stockMovements;
+          stockItems = stockResult.stockItems;
+
+          await tx.productionExecutionReport.update({
+            where: { id: linkedReport.id },
+            data: {
+              stockPostingStatus: "POSTED_TO_STOCK",
+              releasedStockInId: stockResult.stockInId,
+              releasedToStockAt: new Date(),
+              workflowStatus: "QC_PASSED",
+            },
+          });
+          await tx.productionReportRecord.update({
+            where: { id: linkedReport.id },
+            data: {
+              payload: {
+                ...asObject((await tx.productionReportRecord.findUnique({
+                  where: { id: linkedReport.id },
+                  select: { payload: true },
+                }))?.payload),
+                stockPostingStatus: "POSTED_TO_STOCK",
+                releasedStockInId: stockResult.stockInId,
+                releasedToStockAt: new Date().toISOString(),
+                workflowStatus: "QC_PASSED",
+              } as Prisma.InputJsonValue,
+            },
+          });
+          await tx.productionQcInspection.update({
+            where: { id: inspectionId },
+            data: {
+              warehouseReceiptStatus: "POSTED_TO_STOCK",
+              releasedStockInId: stockResult.stockInId,
+              releasedToWarehouseAt: new Date(),
+              workflowStatus: "POSTED_TO_STOCK",
+            },
+          });
+          await tx.qcInspectionRecord.update({
+            where: { id: inspectionId },
+            data: {
+              payload: {
+                ...qcPayload,
+                warehouseReceiptStatus: "POSTED_TO_STOCK",
+                releasedStockInId: stockResult.stockInId,
+                releasedToWarehouseAt: new Date().toISOString(),
+                workflowStatus: "POSTED_TO_STOCK",
+              } as Prisma.InputJsonValue,
+            },
+          });
+        } else {
+          await tx.productionExecutionReport.update({
+            where: { id: linkedReport.id },
+            data: {
+              stockPostingStatus: "QC_REJECTED",
+              workflowStatus: "QC_REJECTED",
+            },
+          });
+          await tx.productionReportRecord.update({
+            where: { id: linkedReport.id },
+            data: {
+              payload: {
+                ...asObject((await tx.productionReportRecord.findUnique({
+                  where: { id: linkedReport.id },
+                  select: { payload: true },
+                }))?.payload),
+                stockPostingStatus: "QC_REJECTED",
+                workflowStatus: "QC_REJECTED",
+              } as Prisma.InputJsonValue,
+            },
+          });
+        }
+
+        reportPayload = {
+          ...(await tx.productionReportRecord.findUnique({
+            where: { id: linkedReport.id },
+            select: { payload: true },
+          }).then((row) => asObject(row?.payload))),
+          id: linkedReport.id,
+          projectId: linkedReport.projectId,
+          projectName,
+          workOrderId: linkedReport.workOrderId || undefined,
+          woId: linkedReport.workOrderId || undefined,
+          manualMode: true,
+          manualModeType: "finished-goods",
+        };
+      }
+
+      return {
+        inspection: {
+          ...qcPayload,
+          id: createdInspection.id,
+          workOrderId: createdInspection.workOrderId || undefined,
+          woId: createdInspection.workOrderId || undefined,
+          warehouseReceiptStatus:
+            linkedReport && qtyPassed > 0 && inspectionStatus !== "Rejected"
+              ? "POSTED_TO_STOCK"
+              : linkedReport
+                ? "QC_REJECTED"
+                : undefined,
+          releasedStockInId: stockIn ? String(stockIn.id || "") : undefined,
+          releasedToWarehouseAt: stockIn ? new Date().toISOString() : undefined,
+        },
+        report: reportPayload,
+        stockIn,
+        stockMovements,
+        stockItems,
+      };
+    });
+
+    await writeAuditLog(req, "create", "qc-inspections", asString(inspectionInput.id) || null, {
+      productionReportId: asString(inspectionInput.productionReportId),
+      qtyPassed: asNumber(inspectionInput.qtyPassed, 0),
+      qtyRejected: asNumber(inspectionInput.qtyRejected, 0),
+      stockReleased: asNumber(inspectionInput.qtyPassed, 0) > 0,
+    });
+
+    return res.status(201).json(result);
+  } catch (err) {
+    if (err instanceof Error) {
+      return sendError(res, 400, {
+        code: "QC_SUBMIT_FAILED",
         message: err.message,
         legacyError: err.message,
       });

@@ -160,6 +160,7 @@ export interface QCInspection {
   projectId?: string;
   workOrderId?: string;
   woId?: string;
+  productionReportId?: string;
   drawingAssetId?: string;
   tanggal: string;
   batchNo: string;
@@ -181,6 +182,9 @@ export interface QCInspection {
   drawingUrl?: string;
   remark?: string;
   dimensions?: DimensionMeasurement[];
+  warehouseReceiptStatus?: string;
+  releasedStockInId?: string;
+  releasedToWarehouseAt?: string;
 }
 
 export interface FieldAttendanceRecord {
@@ -527,8 +531,12 @@ export interface ProductionReport {
   selectedItemName?: string;
   projectId?: string;
   projectName?: string;
+  rejectQty?: number;
   manualMode?: boolean;
   manualModeType?: "material-issue" | "finished-goods" | string;
+  stockPostingStatus?: string;
+  releasedStockInId?: string;
+  releasedToStockAt?: string;
 }
 
 /**
@@ -2059,14 +2067,43 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const addQCInspection: AppContextType["addQCInspection"] = (inspection) => {
     setQcInspectionList((prev) => [...prev, inspection]);
     api
-      .post("/qc-inspections", inspection)
+      .post("/production/qc-inspections", { inspection })
       .then((res) => {
-        const saved = (res?.data || inspection) as QCInspection;
+        const saved = (res?.data?.inspection || inspection) as QCInspection;
+        const serverReport = (res?.data?.report || null) as ProductionReport | null;
+        const serverStockIn = (res?.data?.stockIn || null) as StockIn | null;
+        const serverStockMovements = Array.isArray(res?.data?.stockMovements)
+          ? (res.data.stockMovements as StockMovement[])
+          : [];
+        const serverStockItems = Array.isArray(res?.data?.stockItems)
+          ? (res.data.stockItems as StockItem[])
+          : [];
         setQcInspectionList((prev) => {
           const exists = prev.some((item) => item.id === saved.id);
           if (exists) return prev.map((item) => (item.id === saved.id ? saved : item));
           return [...prev, saved];
         });
+        if (serverReport?.id) {
+          setProductionReportList((prev) => prev.map((item) => (item.id === serverReport.id ? serverReport : item)));
+        }
+        if (serverStockIn?.id) {
+          setStockInList((prev) => {
+            const filtered = prev.filter((item) => item.id !== serverStockIn.id);
+            return [serverStockIn, ...filtered];
+          });
+        }
+        if (serverStockMovements.length) {
+          setStockMovementList((prev) => [...serverStockMovements, ...prev]);
+        }
+        if (serverStockItems.length) {
+          setStockItemList((prev) => {
+            const byId = new Map(prev.map((item) => [item.id, item]));
+            for (const item of serverStockItems) {
+              if (item?.id) byId.set(item.id, item);
+            }
+            return Array.from(byId.values());
+          });
+        }
       })
       .catch((err) => {
         console.error("Failed to sync create qc inspection:", err);

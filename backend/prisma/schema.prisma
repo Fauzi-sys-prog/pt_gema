@@ -848,34 +848,45 @@ model ProductionWorkOrderBom {
 }
 
 model ProductionExecutionReport {
-  id            String              @id
-  projectId     String
-  workOrderId   String?
-  photoAssetId  String?
-  tanggal       DateTime
-  shift         String?
-  outputQty     Float               @default(0)
-  rejectQty     Float               @default(0)
-  efficiency    Float?
-  notes         String?
-  workerName    String?
-  activity      String?
-  machineNo     String?
-  startTime     String?
-  endTime       String?
-  unit          String?
-  photoUrl      String?
-  workflowStatus String?
-  project       ProjectRecord       @relation(fields: [projectId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  workOrder     ProductionWorkOrder? @relation(fields: [workOrderId], references: [id], onDelete: SetNull, onUpdate: Cascade)
-  photoAsset    ProductionExecutionReportPhotoAsset? @relation(fields: [photoAssetId], references: [id], onDelete: SetNull, onUpdate: Cascade)
-  createdAt     DateTime            @default(now())
-  updatedAt     DateTime            @updatedAt
+  id                 String                        @id
+  projectId          String
+  workOrderId        String?
+  photoAssetId       String?
+  tanggal            DateTime
+  shift              String?
+  outputQty          Float                         @default(0)
+  rejectQty          Float                         @default(0)
+  efficiency         Float?
+  notes              String?
+  workerName         String?
+  activity           String?
+  machineNo          String?
+  startTime          String?
+  endTime            String?
+  unit               String?
+  photoUrl           String?
+  workflowStatus     String?
+  manualMode         Boolean                       @default(false)
+  manualModeType     String?
+  selectedItem       String?
+  selectedItemCode   String?
+  selectedItemName   String?
+  stockPostingStatus String?
+  releasedStockInId  String?
+  releasedToStockAt  DateTime?
+  project            ProjectRecord                 @relation(fields: [projectId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  workOrder          ProductionWorkOrder?          @relation(fields: [workOrderId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  photoAsset         ProductionExecutionReportPhotoAsset? @relation(fields: [photoAssetId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  qcInspections      ProductionQcInspection[]
+  createdAt          DateTime                      @default(now())
+  updatedAt          DateTime                      @updatedAt
 
   @@index([projectId])
   @@index([workOrderId])
   @@index([photoAssetId])
   @@index([tanggal])
+  @@index([manualModeType])
+  @@index([stockPostingStatus])
 }
 
 model ProductionExecutionReportPhotoAsset {
@@ -923,39 +934,46 @@ model ProductionTrackerEntry {
 }
 
 model ProductionQcInspection {
-  id               String               @id
-  projectId        String
-  workOrderId      String?
-  drawingAssetId   String?
-  tanggal          DateTime
-  batchNo          String?
-  itemName         String
-  qtyInspected     Float                @default(0)
-  qtyPassed        Float                @default(0)
-  qtyRejected      Float                @default(0)
-  inspectorName    String
-  status           String
-  notes            String?
-  visualCheck      Boolean              @default(false)
-  dimensionCheck   Boolean              @default(false)
-  materialCheck    Boolean              @default(false)
-  photoUrl         String?
-  customerName     String?
-  drawingUrl       String?
-  remark           String?
-  workflowStatus   String?
-  project          ProjectRecord        @relation(fields: [projectId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  workOrder        ProductionWorkOrder? @relation(fields: [workOrderId], references: [id], onDelete: SetNull, onUpdate: Cascade)
-  drawingAsset     ProductionQcDrawingAsset? @relation(fields: [drawingAssetId], references: [id], onDelete: SetNull, onUpdate: Cascade)
-  dimensions       ProductionQcInspectionDimension[]
-  createdAt        DateTime             @default(now())
-  updatedAt        DateTime             @updatedAt
+  id                   String                    @id
+  projectId            String
+  workOrderId          String?
+  productionReportId   String?
+  drawingAssetId       String?
+  tanggal              DateTime
+  batchNo              String?
+  itemName             String
+  qtyInspected         Float                     @default(0)
+  qtyPassed            Float                     @default(0)
+  qtyRejected          Float                     @default(0)
+  inspectorName        String
+  status               String
+  notes                String?
+  visualCheck          Boolean                   @default(false)
+  dimensionCheck       Boolean                   @default(false)
+  materialCheck        Boolean                   @default(false)
+  photoUrl             String?
+  customerName         String?
+  drawingUrl           String?
+  remark               String?
+  workflowStatus       String?
+  warehouseReceiptStatus String?
+  releasedStockInId    String?
+  releasedToWarehouseAt DateTime?
+  project              ProjectRecord             @relation(fields: [projectId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  workOrder            ProductionWorkOrder?      @relation(fields: [workOrderId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  productionReport     ProductionExecutionReport? @relation(fields: [productionReportId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  drawingAsset         ProductionQcDrawingAsset? @relation(fields: [drawingAssetId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  dimensions           ProductionQcInspectionDimension[]
+  createdAt            DateTime                  @default(now())
+  updatedAt            DateTime                  @updatedAt
 
   @@index([projectId])
   @@index([workOrderId])
+  @@index([productionReportId])
   @@index([drawingAssetId])
   @@index([tanggal])
   @@index([status])
+  @@index([warehouseReceiptStatus])
 }
 
 model ProductionQcDrawingAsset {

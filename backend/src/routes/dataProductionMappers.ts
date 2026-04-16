@@ -72,6 +72,14 @@ export function mapProductionExecutionReportToLegacyPayload(row: {
   endTime: string | null;
   unit: string | null;
   photoUrl: string | null;
+  manualMode?: boolean | null;
+  manualModeType?: string | null;
+  selectedItem?: string | null;
+  selectedItemCode?: string | null;
+  selectedItemName?: string | null;
+  stockPostingStatus?: string | null;
+  releasedStockInId?: string | null;
+  releasedToStockAt?: Date | null;
   photoAsset?: { id: string; publicUrl: string; originalName: string | null } | null;
   project: { payload: unknown } | null;
   workOrder: { number: string } | null;
@@ -98,6 +106,14 @@ export function mapProductionExecutionReportToLegacyPayload(row: {
     notes: row.notes ?? undefined,
     photoUrl: row.photoAsset?.publicUrl ?? row.photoUrl ?? undefined,
     photoAssetId: row.photoAssetId ?? row.photoAsset?.id ?? undefined,
+    manualMode: row.manualMode || undefined,
+    manualModeType: row.manualModeType ?? undefined,
+    selectedItem: row.selectedItem ?? undefined,
+    selectedItemCode: row.selectedItemCode ?? undefined,
+    selectedItemName: row.selectedItemName ?? undefined,
+    stockPostingStatus: row.stockPostingStatus ?? undefined,
+    releasedStockInId: row.releasedStockInId ?? undefined,
+    releasedToStockAt: row.releasedToStockAt ? row.releasedToStockAt.toISOString() : undefined,
   };
 }
 
@@ -131,6 +147,7 @@ export function mapProductionQcInspectionToLegacyPayload(row: {
   id: string;
   projectId: string;
   workOrderId?: string | null;
+  productionReportId?: string | null;
   drawingAssetId?: string | null;
   tanggal: Date;
   batchNo?: string | null;
@@ -148,6 +165,9 @@ export function mapProductionQcInspectionToLegacyPayload(row: {
   customerName?: string | null;
   drawingUrl?: string | null;
   remark?: string | null;
+  warehouseReceiptStatus?: string | null;
+  releasedStockInId?: string | null;
+  releasedToWarehouseAt?: Date | null;
   drawingAsset?: { id: string; publicUrl: string; originalName: string | null } | null;
   dimensions?: Array<{
     parameter: string;
@@ -165,6 +185,7 @@ export function mapProductionQcInspectionToLegacyPayload(row: {
     projectId: row.projectId,
     workOrderId: row.workOrderId ?? undefined,
     woId: row.workOrderId ?? undefined,
+    productionReportId: row.productionReportId ?? undefined,
     woNumber: row.workOrder?.number ?? undefined,
     tanggal: row.tanggal.toISOString().slice(0, 10),
     batchNo: row.batchNo ?? "",
@@ -183,6 +204,9 @@ export function mapProductionQcInspectionToLegacyPayload(row: {
     drawingUrl: row.drawingAsset?.publicUrl ?? row.drawingUrl ?? undefined,
     drawingAssetId: row.drawingAssetId ?? row.drawingAsset?.id ?? undefined,
     remark: row.remark ?? undefined,
+    warehouseReceiptStatus: row.warehouseReceiptStatus ?? undefined,
+    releasedStockInId: row.releasedStockInId ?? undefined,
+    releasedToWarehouseAt: row.releasedToWarehouseAt ? row.releasedToWarehouseAt.toISOString() : undefined,
     dimensions: (row.dimensions || []).map((item) => ({
       parameter: item.parameter,
       specification: item.specification,
