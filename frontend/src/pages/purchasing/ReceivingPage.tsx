@@ -111,6 +111,24 @@ export default function ReceivingPage() {
       reader.readAsDataURL(file);
     });
 
+  const uploadReceivingPhoto = async (params: {
+    file: File;
+    kind: 'surat-jalan' | 'item';
+    itemId?: string;
+  }) => {
+    const dataUrl = await readFileAsDataUrl(params.file);
+    const response = await api.post('/media/receiving-photos', {
+      poId: formData.poId || undefined,
+      itemId: params.itemId || undefined,
+      kind: params.kind,
+      fileName: params.file.name,
+      dataUrl,
+    });
+    const publicUrl = String(response?.data?.publicUrl || '').trim();
+    if (!publicUrl) throw new Error('UPLOAD_EMPTY');
+    return publicUrl;
+  };
+
   const validateImageFile = (file: File) => {
     if (!file.type.startsWith('image/')) {
       toast.error('Format file tidak didukung. Upload gambar JPG, PNG, atau WEBP.');
@@ -127,8 +145,8 @@ export default function ReceivingPage() {
     if (!file || !validateImageFile(file)) return;
     try {
       setIsUploadingSjPhoto(true);
-      const dataUrl = await readFileAsDataUrl(file);
-      setFormData((prev) => ({ ...prev, fotoSuratJalan: dataUrl }));
+      const publicUrl = await uploadReceivingPhoto({ file, kind: 'surat-jalan' });
+      setFormData((prev) => ({ ...prev, fotoSuratJalan: publicUrl }));
       toast.success('Foto surat jalan berhasil ditambahkan.');
     } catch {
       toast.error('Upload foto surat jalan gagal.');
@@ -141,9 +159,9 @@ export default function ReceivingPage() {
     if (!file || !validateImageFile(file)) return;
     try {
       setUploadingItemId(itemId);
-      const dataUrl = await readFileAsDataUrl(file);
+      const publicUrl = await uploadReceivingPhoto({ file, kind: 'item', itemId });
       setItems((prev) =>
-        prev.map((item) => (item.id === itemId ? { ...item, photoUrl: dataUrl } : item)),
+        prev.map((item) => (item.id === itemId ? { ...item, photoUrl: publicUrl } : item)),
       );
       toast.success('Foto barang berhasil ditambahkan.');
     } catch {

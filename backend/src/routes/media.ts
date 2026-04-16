@@ -23,6 +23,7 @@ const MEDIA_UPLOAD_ROLES: Role[] = [
   "SALES",
   "PRODUKSI",
   "OPERATIONS",
+  "WAREHOUSE",
 ];
 
 const qcDrawingUploadSchema = z.object({
@@ -49,6 +50,14 @@ const invoiceTransferProofUploadSchema = z.object({
 const podAssetUploadSchema = z.object({
   suratJalanId: z.string().min(1),
   kind: z.enum(["photo", "signature"]),
+  fileName: z.string().trim().optional(),
+  dataUrl: z.string().min(1),
+});
+
+const receivingPhotoUploadSchema = z.object({
+  poId: z.string().trim().optional(),
+  itemId: z.string().trim().optional(),
+  kind: z.enum(["surat-jalan", "item"]),
   fileName: z.string().trim().optional(),
   dataUrl: z.string().min(1),
 });
@@ -406,6 +415,51 @@ mediaRouter.post("/media/pod-assets", authenticate, async (req: AuthRequest, res
     projectId: suratJalan.projectId,
     assetId: suratJalan.assetId,
     noSurat: suratJalan.noSurat,
+    kind,
+    originalName: fileName || null,
+    publicUrl: stored.url,
+    metadata: stored.metadata,
+  });
+});
+
+mediaRouter.post("/media/receiving-photos", authenticate, async (req: AuthRequest, res: Response) => {
+  if (!canUploadMedia(req.user?.role)) {
+    return sendError(res, 403, {
+      code: "FORBIDDEN",
+      message: "Forbidden",
+      legacyError: "Forbidden",
+    });
+  }
+
+  const parsed = receivingPhotoUploadSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return sendError(res, 400, {
+      code: "INVALID_BODY",
+      message: "Body request upload foto receiving tidak valid",
+      legacyError: "Body request upload foto receiving tidak valid",
+      details: parsed.error.flatten(),
+    });
+  }
+
+  const { poId, itemId, kind, fileName, dataUrl } = parsed.data;
+  const stored = await storeImageDataUrl({
+    dataUrl,
+    resource: "receiving-photos",
+    entityIdHint: itemId || poId || kind,
+    filePrefix: kind === "surat-jalan" ? "receiving-sj" : "receiving-item",
+  });
+
+  if (!stored) {
+    return sendError(res, 400, {
+      code: "UNSUPPORTED_IMAGE",
+      message: "Format gambar tidak didukung",
+      legacyError: "Format gambar tidak didukung",
+    });
+  }
+
+  return res.status(201).json({
+    poId: poId || null,
+    itemId: itemId || null,
     kind,
     originalName: fileName || null,
     publicUrl: stored.url,
