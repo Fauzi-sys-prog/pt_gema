@@ -197,10 +197,10 @@ export default function StockInPage() {
             <ArrowUpRight size={32} />
           </div>
           <div>
-            <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight italic uppercase">Stok Masuk (Inbound)</h1>
+            <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight italic uppercase">Stok Masuk</h1>
             <div className="flex items-center gap-2 mt-1">
               <span className="w-2 h-2 bg-indigo-500 rounded-full animate-pulse" />
-              <p className="text-sm text-slate-500 font-bold uppercase tracking-widest">Receiving & material entry</p>
+              <p className="text-sm text-slate-500 font-bold uppercase tracking-widest">Material entry non-PO</p>
             </div>
           </div>
         </div>

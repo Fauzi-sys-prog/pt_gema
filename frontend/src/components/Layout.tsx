@@ -236,7 +236,8 @@ export default function Layout({ children }: LayoutProps) {
       icon: <Package size={20} />,
       submenu: [
         { title: 'Purchase Order', path: '/purchasing/purchase-order' },
-        { title: 'Stok Masuk (Receiving)', path: '/inventory/stock-in' },
+        { title: 'Receiving', path: '/purchasing/receiving' },
+        { title: 'Stok Masuk', path: '/inventory/stock-in' },
         { title: 'Stok Keluar (Issue)', path: '/inventory/stock-out' },
         { title: 'Monitoring Gudang', path: '/inventory/center' },
         { title: 'Stock Aging (FEFO)', path: '/inventory/aging' }
