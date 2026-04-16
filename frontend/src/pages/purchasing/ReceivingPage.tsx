@@ -918,22 +918,28 @@ export default function ReceivingPage() {
             </div>
 
             <div className="p-5 sm:p-8 space-y-8">
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6">
-                <div className="space-y-1">
-                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Supplier</p>
-                  <p className="text-sm font-black italic uppercase text-slate-900">{selectedReceiving.supplier}</p>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+                  <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Supplier</p>
+                  <p className="mt-2 text-sm font-black italic uppercase leading-relaxed text-slate-900">{selectedReceiving.supplier}</p>
                 </div>
-                <div className="space-y-1">
-                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Project</p>
-                  <p className="text-sm font-black italic uppercase text-slate-900">{selectedReceiving.project}</p>
+                <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+                  <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Project</p>
+                  <p className="mt-2 text-sm font-black italic uppercase leading-relaxed text-slate-900">{selectedReceiving.project}</p>
                 </div>
-                <div className="space-y-1">
-                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">No. PO Ref</p>
-                  <p className="text-sm font-black italic uppercase text-indigo-600 underline cursor-pointer" onClick={() => navigate('/purchasing/purchase-order', { state: { highlightPO: selectedReceiving.poId } })}>{selectedReceiving.noPO}</p>
+                <div className="rounded-2xl border border-indigo-100 bg-indigo-50 p-4">
+                  <p className="text-[9px] font-black uppercase tracking-widest text-indigo-400">No. PO Ref</p>
+                  <button
+                    type="button"
+                    onClick={() => navigate('/purchasing/purchase-order', { state: { highlightPO: selectedReceiving.poId } })}
+                    className="mt-2 text-left text-sm font-black italic uppercase leading-relaxed text-indigo-700 underline underline-offset-2"
+                  >
+                    {selectedReceiving.noPO}
+                  </button>
                 </div>
-                <div className="space-y-1">
-                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">No. Surat Jalan</p>
-                  <p className="text-sm font-black italic uppercase text-slate-900">{selectedReceiving.noSuratJalan}</p>
+                <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-4">
+                  <p className="text-[9px] font-black uppercase tracking-widest text-emerald-500">No. Surat Jalan</p>
+                  <p className="mt-2 text-sm font-black italic uppercase leading-relaxed text-slate-900">{selectedReceiving.noSuratJalan}</p>
                 </div>
               </div>
 
@@ -941,36 +947,55 @@ export default function ReceivingPage() {
                 <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-4 italic">Material Received Content</h3>
                 <div className="space-y-3">
                   {selectedReceiving.items.map((item, idx) => (
-                    <div key={idx} className="bg-white p-4 rounded-2xl border border-slate-100 flex items-center justify-between group">
-                      <div className="flex items-center gap-4">
-                        <div className="w-10 h-10 bg-slate-50 rounded-xl flex items-center justify-center text-slate-400 font-black italic text-xs border border-slate-100">
+                    <div key={idx} className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm shadow-slate-100/60">
+                      <div className="flex items-start gap-4">
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-100 bg-slate-50 text-xs font-black italic text-slate-400">
                           {idx + 1}
                         </div>
-                        <div>
-                          <p className="text-xs font-black uppercase italic text-slate-900">{item.itemName}</p>
-                          <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{item.itemKode} • Batch: {item.batchNo}</p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-8">
-                        {item.photoUrl ? (
-                          <button
-                            type="button"
-                            onClick={() => setPreviewImage({ url: item.photoUrl!, title: `Foto Barang: ${item.itemName}` })}
-                            className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-2xl border border-slate-200 bg-slate-50"
-                            title="Lihat foto barang"
-                          >
-                            <img src={item.photoUrl} alt={item.itemName} className="h-full w-full object-cover" />
-                          </button>
-                        ) : null}
-                        <div className="text-right">
-                          <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Kondisi</p>
-                          <span className={`text-[10px] font-black uppercase italic ${item.qtyDamaged > 0 ? 'text-rose-500' : 'text-emerald-500'}`}>
-                            {item.qtyDamaged > 0 ? `${item.qtyGood} Good / ${item.qtyDamaged} Damaged` : 'All Good'}
-                          </span>
-                        </div>
-                        <div className="text-right min-w-[80px]">
-                          <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Total Qty</p>
-                          <p className="text-sm font-black italic text-slate-900">{item.qtyReceived} {item.unit}</p>
+                        <div className="min-w-0 flex-1 space-y-4">
+                          <div className="space-y-2">
+                            <p className="text-sm font-black uppercase italic leading-relaxed text-slate-900">{item.itemName}</p>
+                            <div className="flex flex-wrap gap-2 text-[9px] font-bold uppercase tracking-widest text-slate-400">
+                              {item.itemKode ? <span>{item.itemKode}</span> : null}
+                              <span>Batch: {item.batchNo || '-'}</span>
+                              <span>Expiry: {item.expiryDate || '-'}</span>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                            <div className="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3">
+                              <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Kondisi</p>
+                              <p className={`mt-2 text-[11px] font-black uppercase italic ${item.qtyDamaged > 0 ? 'text-rose-500' : 'text-emerald-500'}`}>
+                                {item.qtyDamaged > 0 ? `${item.qtyGood} Good / ${item.qtyDamaged} Damaged` : 'All Good'}
+                              </p>
+                            </div>
+                            <div className="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3">
+                              <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Total Qty</p>
+                              <p className="mt-2 text-sm font-black italic text-slate-900">{item.qtyReceived} {item.unit}</p>
+                            </div>
+                            <div className="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3">
+                              <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Foto Barang</p>
+                              {item.photoUrl ? (
+                                <button
+                                  type="button"
+                                  onClick={() => setPreviewImage({ url: item.photoUrl!, title: `Foto Barang: ${item.itemName}` })}
+                                  className="mt-2 inline-flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-indigo-600"
+                                >
+                                  <Eye size={12} />
+                                  Preview Foto
+                                </button>
+                              ) : (
+                                <p className="mt-2 text-[10px] font-black uppercase tracking-widest text-slate-300">Tidak ada foto</p>
+                              )}
+                            </div>
+                          </div>
+
+                          {item.notes ? (
+                            <div className="rounded-2xl border border-rose-100 bg-rose-50 px-4 py-3">
+                              <p className="text-[9px] font-black uppercase tracking-widest text-rose-400">Catatan Kerusakan</p>
+                              <p className="mt-2 text-xs font-bold text-rose-700">{item.notes}</p>
+                            </div>
+                          ) : null}
                         </div>
                       </div>
                     </div>
@@ -981,14 +1006,17 @@ export default function ReceivingPage() {
               {selectedReceiving.fotoSuratJalan && (
                 <div>
                   <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-4 italic">Evidence Documents</h3>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                     <div 
                       onClick={() => setPreviewImage({ url: selectedReceiving.fotoSuratJalan!, title: `Surat Jalan: ${selectedReceiving.noSuratJalan}` })}
-                      className="aspect-video bg-slate-100 rounded-2xl overflow-hidden border-2 border-slate-200 cursor-zoom-in relative group"
+                      className="group relative aspect-video cursor-zoom-in overflow-hidden rounded-2xl border-2 border-slate-200 bg-slate-100"
                     >
                       <img src={selectedReceiving.fotoSuratJalan} alt="Surat Jalan" className="w-full h-full object-cover transition-transform group-hover:scale-110" />
                       <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                         <Eye className="text-white" />
+                      </div>
+                      <div className="absolute bottom-3 left-3 rounded-lg bg-black/55 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-white">
+                        Foto Surat Jalan
                       </div>
                     </div>
                   </div>
