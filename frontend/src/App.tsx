@@ -370,16 +370,6 @@ export default function App() {
               }
             />
             <Route
-              path="/produksi/hasil-produksi"
-              element={
-                <ProtectedRoute>
-                  <Layout>
-                    <ProductionReportPage />
-                  </Layout>
-                </ProtectedRoute>
-              }
-            />
-            <Route
               path="/produksi/timeline"
               element={
                 <ProtectedRoute>
