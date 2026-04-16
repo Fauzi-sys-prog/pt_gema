@@ -8,12 +8,12 @@ import { normalizeEntityRows } from '../../utils/normalizeEntityRows';
 
 const MANUAL_LHP_PROJECT_ID = 'PRJ-STOCK-UMUM';
 const MANUAL_LHP_PROJECT_NAME = 'STOK UMUM INTERNAL';
-const MANUAL_ISSUE_LABEL = 'Material Issue Manual';
+const MANUAL_ISSUE_LABEL = 'Pemakaian Material dari Gudang';
 const MANUAL_ISSUE_HELP =
-  'Mode ini untuk stok keluar dari gudang. Kalau hasil produksi berupa barang jadi masuk gudang, gunakan menu Stock In.';
-const FINISHED_GOODS_LABEL = 'Finished Goods Stock In';
+  'Mode ini untuk bahan baku atau material yang dipakai dari gudang untuk kebutuhan produksi.';
+const FINISHED_GOODS_LABEL = 'Hasil Produksi Masuk Gudang';
 const FINISHED_GOODS_HELP =
-  'Mode ini untuk hasil produksi berupa barang jadi yang masuk ke gudang. Stok item akan bertambah saat LHP disimpan.';
+  'Mode ini untuk hasil produksi berupa barang jadi yang siap masuk ke gudang. Stok item akan bertambah saat LHP disimpan.';
 const DEFAULT_MANUAL_MODE = 'material-issue';
 
 export default function ProductionReportPage() {
@@ -738,8 +738,8 @@ export default function ProductionReportPage() {
                   {newReport.woId
                     ? 'Input Progress Pekerjaan Workshop'
                     : currentManualModeType === 'finished-goods'
-                      ? 'Mode finished goods stock in / stok masuk gudang'
-                      : 'Mode material issue manual / stok keluar gudang'}
+                      ? 'Mode hasil produksi masuk gudang'
+                      : 'Mode pemakaian material dari gudang'}
                 </p>
               </div>
               <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -785,7 +785,7 @@ export default function ProductionReportPage() {
                 </div>
                 {!newReport.woId && (
                   <div className="space-y-1.5">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Flow Manual</label>
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Jenis Pencatatan</label>
                     <select
                       className="w-full px-4 py-3 bg-white border-2 border-slate-100 rounded-2xl text-sm font-bold focus:border-rose-500 transition-colors outline-none"
                       value={currentManualModeType}
@@ -867,8 +867,8 @@ export default function ProductionReportPage() {
                       {newReport.woId
                         ? '-- Pilih Item Gudang --'
                         : currentManualModeType === 'finished-goods'
-                          ? '-- Pilih Item Finished Goods --'
-                          : '-- Pilih Item untuk Material Issue --'}
+                          ? '-- Pilih Barang Jadi yang Masuk Gudang --'
+                          : '-- Pilih Material yang Dipakai --'}
                     </option>
                     {newReport.woId && <option value="auto">-- Auto-Deduct All BOM (opsional) --</option>}
                     {selectableWarehouseItems.map((item) => (
@@ -891,8 +891,8 @@ export default function ProductionReportPage() {
                         }`}
                       >
                         {currentManualModeType === 'finished-goods'
-                          ? `${FINISHED_GOODS_LABEL}: qty output akan dicatat sebagai stok masuk / barang jadi.`
-                          : `${MANUAL_ISSUE_LABEL}: qty output akan dipakai sebagai stok keluar / material issue.`}
+                          ? `${FINISHED_GOODS_LABEL}: qty output akan dicatat sebagai stok masuk barang jadi.`
+                          : `${MANUAL_ISSUE_LABEL}: qty output akan dicatat sebagai stok keluar material.`}
                       </p>
                       <p
                         className={`text-[11px] font-medium leading-relaxed ${
@@ -912,7 +912,7 @@ export default function ProductionReportPage() {
                           to="/inventory/stock-in"
                           className="inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-white px-3 py-2 text-[10px] font-black uppercase text-emerald-700 transition-colors hover:bg-emerald-100"
                         >
-                          Barang Jadi? Pakai Stock In
+                          Cek Stock In Gudang
                         </Link>
                       </div>
                     </div>
@@ -984,7 +984,9 @@ export default function ProductionReportPage() {
 
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div className="space-y-1.5">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Hasil Output (Qty)</label>
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
+                    {currentManualModeType === 'finished-goods' ? 'Qty Hasil Produksi' : 'Qty Material Terpakai'}
+                  </label>
                   <div className="relative">
                     <Target className="absolute left-4 top-1/2 -translate-y-1/2 text-rose-500" size={16} />
                     <input 
@@ -1049,8 +1051,8 @@ export default function ProductionReportPage() {
                 {newReport.woId
                   ? 'SIMPAN & UPDATE PROGRESS'
                   : currentManualModeType === 'finished-goods'
-                    ? 'SIMPAN FINISHED GOODS'
-                    : 'SIMPAN MATERIAL ISSUE'}
+                    ? 'SIMPAN HASIL PRODUKSI KE GUDANG'
+                    : 'SIMPAN PEMAKAIAN MATERIAL'}
               </button>
             </div>
           </div>
