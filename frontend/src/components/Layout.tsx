@@ -81,6 +81,7 @@ const PATH_ACCESS_MAP: Record<string, readonly string[]> = {
   '/produksi/timeline': PRODUCTION_ROLES,
   '/produksi/qc': PRODUCTION_ROLES,
   '/purchasing/purchase-order': PROCUREMENT_ROLES,
+  '/purchasing/receiving': PROCUREMENT_ROLES,
   '/inventory/stock-in': INVENTORY_ROLES,
   '/inventory/stock-out': INVENTORY_ROLES,
   '/inventory/center': INVENTORY_ROLES,

@@ -13,28 +13,28 @@ export const inventoryRouter = Router();
 const CONFIG = {
   "stock-items": {
     basePath: "/inventory/items",
-    readRoles: ["OWNER", "ADMIN", "SUPPLY_CHAIN", "PRODUKSI", "FINANCE"] as Role[],
+    readRoles: ["OWNER", "ADMIN", "SUPPLY_CHAIN", "PRODUKSI", "FINANCE", "WAREHOUSE"] as Role[],
     writeRoles: ["OWNER", "ADMIN", "SUPPLY_CHAIN", "PRODUKSI", "FINANCE"] as Role[],
   },
   "stock-ins": {
     basePath: "/inventory/stock-ins",
-    readRoles: ["OWNER", "ADMIN", "SUPPLY_CHAIN", "PRODUKSI"] as Role[],
-    writeRoles: ["OWNER", "ADMIN", "SUPPLY_CHAIN", "PRODUKSI"] as Role[],
+    readRoles: ["OWNER", "ADMIN", "SUPPLY_CHAIN", "PRODUKSI", "WAREHOUSE"] as Role[],
+    writeRoles: ["OWNER", "ADMIN", "SUPPLY_CHAIN", "PRODUKSI", "WAREHOUSE"] as Role[],
   },
   "stock-outs": {
     basePath: "/inventory/stock-outs",
-    readRoles: ["OWNER", "ADMIN", "SUPPLY_CHAIN", "PRODUKSI"] as Role[],
-    writeRoles: ["OWNER", "ADMIN", "SUPPLY_CHAIN", "PRODUKSI"] as Role[],
+    readRoles: ["OWNER", "ADMIN", "SUPPLY_CHAIN", "PRODUKSI", "WAREHOUSE"] as Role[],
+    writeRoles: ["OWNER", "ADMIN", "SUPPLY_CHAIN", "PRODUKSI", "WAREHOUSE"] as Role[],
   },
   "stock-movements": {
     basePath: "/inventory/movements",
-    readRoles: ["OWNER", "ADMIN", "SUPPLY_CHAIN", "PRODUKSI", "FINANCE"] as Role[],
+    readRoles: ["OWNER", "ADMIN", "SUPPLY_CHAIN", "PRODUKSI", "FINANCE", "WAREHOUSE"] as Role[],
     writeRoles: ["OWNER", "ADMIN", "SUPPLY_CHAIN", "PRODUKSI", "FINANCE"] as Role[],
   },
   "stock-opnames": {
     basePath: "/inventory/stock-opnames",
-    readRoles: ["OWNER", "ADMIN", "SUPPLY_CHAIN", "PRODUKSI", "FINANCE"] as Role[],
-    writeRoles: ["OWNER", "ADMIN", "SUPPLY_CHAIN", "PRODUKSI", "FINANCE"] as Role[],
+    readRoles: ["OWNER", "ADMIN", "SUPPLY_CHAIN", "PRODUKSI", "FINANCE", "WAREHOUSE"] as Role[],
+    writeRoles: ["OWNER", "ADMIN", "SUPPLY_CHAIN", "PRODUKSI", "FINANCE", "WAREHOUSE"] as Role[],
   },
 } as const;
 

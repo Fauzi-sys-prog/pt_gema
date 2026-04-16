@@ -153,6 +153,14 @@ const ROLE_ALIASES: Partial<Record<Role, Role[]>> = {
   OPERATIONS: ["PRODUKSI"],
 };
 
+const DATA_READ_ROLE_OVERRIDES: Partial<Record<string, Role[]>> = {
+  "stock-items": ["OWNER", "ADMIN", "SUPPLY_CHAIN", "PRODUKSI", "FINANCE", "WAREHOUSE"],
+  "stock-ins": ["OWNER", "ADMIN", "SUPPLY_CHAIN", "PRODUKSI", "WAREHOUSE"],
+  "stock-outs": ["OWNER", "ADMIN", "SUPPLY_CHAIN", "PRODUKSI", "WAREHOUSE"],
+  "stock-movements": ["OWNER", "ADMIN", "SUPPLY_CHAIN", "PRODUKSI", "FINANCE", "WAREHOUSE"],
+  "stock-opnames": ["OWNER", "ADMIN", "SUPPLY_CHAIN", "PRODUKSI", "FINANCE", "WAREHOUSE"],
+};
+
 const DEDICATED_RESOURCE_DELEGATES: Record<string, string> = {
   employees: "employeeRecord",
   attendances: "attendanceRecord",
@@ -340,7 +348,7 @@ export function canWriteDataResource(resource: string, role?: Role): boolean {
 export function canReadDataResource(resource: string, role?: Role): boolean {
   if (!role) return false;
   if (canViewAuditLogs(role)) return true;
-  const allowedRoles = DATA_WRITE_ROLES_BY_RESOURCE[resource];
+  const allowedRoles = DATA_READ_ROLE_OVERRIDES[resource] || DATA_WRITE_ROLES_BY_RESOURCE[resource];
   if (!allowedRoles) return false;
   return roleMatchesAllowedRoles(role, allowedRoles);
 }

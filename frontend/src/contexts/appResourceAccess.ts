@@ -101,11 +101,11 @@ const INVENTORY_READ_ROLES: Record<
   "stock-items" | "stock-ins" | "stock-outs" | "stock-movements" | "stock-opnames",
   UserRole[]
 > = {
-  "stock-items": ["OWNER", "ADMIN", "SUPPLY_CHAIN", "PRODUKSI", "FINANCE"],
-  "stock-ins": ["OWNER", "ADMIN", "SUPPLY_CHAIN", "PRODUKSI"],
-  "stock-outs": ["OWNER", "ADMIN", "SUPPLY_CHAIN", "PRODUKSI"],
-  "stock-movements": ["OWNER", "ADMIN", "SUPPLY_CHAIN", "PRODUKSI", "FINANCE"],
-  "stock-opnames": ["OWNER", "ADMIN", "SUPPLY_CHAIN", "PRODUKSI", "FINANCE"],
+  "stock-items": ["OWNER", "ADMIN", "SUPPLY_CHAIN", "PRODUKSI", "FINANCE", "WAREHOUSE"],
+  "stock-ins": ["OWNER", "ADMIN", "SUPPLY_CHAIN", "PRODUKSI", "WAREHOUSE"],
+  "stock-outs": ["OWNER", "ADMIN", "SUPPLY_CHAIN", "PRODUKSI", "WAREHOUSE"],
+  "stock-movements": ["OWNER", "ADMIN", "SUPPLY_CHAIN", "PRODUKSI", "FINANCE", "WAREHOUSE"],
+  "stock-opnames": ["OWNER", "ADMIN", "SUPPLY_CHAIN", "PRODUKSI", "FINANCE", "WAREHOUSE"],
 };
 
 const FINANCE_OPS_READ_ROLES: Record<
