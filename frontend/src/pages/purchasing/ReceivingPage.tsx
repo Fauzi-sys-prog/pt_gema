@@ -896,14 +896,14 @@ export default function ReceivingPage() {
 
       {showDetailModal && selectedReceiving && (
         <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/60 p-4 backdrop-blur-sm sm:items-center">
+          <button
+            onClick={() => setShowDetailModal(false)}
+            className="fixed right-6 top-6 z-[60] flex h-12 w-12 items-center justify-center rounded-2xl border border-slate-200 bg-white/95 text-slate-500 shadow-lg shadow-slate-900/20 backdrop-blur transition-colors hover:text-rose-600"
+            title="Tutup detail"
+          >
+            <X size={22} />
+          </button>
           <div className="relative my-4 w-full max-w-4xl rounded-3xl bg-white shadow-2xl sm:my-8">
-            <button
-              onClick={() => setShowDetailModal(false)}
-              className="absolute right-4 top-4 z-30 flex h-12 w-12 items-center justify-center rounded-2xl border border-slate-200 bg-white/95 text-slate-400 shadow-lg shadow-slate-200 backdrop-blur transition-colors hover:text-rose-600"
-              title="Tutup detail"
-            >
-              <X size={22} />
-            </button>
             <div className="max-h-[calc(100vh-2rem)] overflow-y-auto sm:max-h-[90vh]">
             <div className="sticky top-0 z-20 flex items-center justify-between border-b bg-white/95 p-5 pr-20 backdrop-blur sm:p-8 sm:pr-24">
               <div className="flex items-center gap-4">
@@ -1029,12 +1029,20 @@ export default function ReceivingPage() {
                 <ShieldCheck className="text-emerald-500" size={18} />
                 <span className="text-[10px] font-black uppercase italic text-slate-400">Inventory Sync Completed • Ledger ID: {selectedReceiving.id}</span>
               </div>
-              <button
-                onClick={handlePrintGrn}
-                className="px-8 py-3 bg-slate-900 text-white rounded-xl font-black uppercase text-[10px] shadow-xl shadow-slate-200 hover:bg-black transition-all flex items-center justify-center gap-2 w-full sm:w-auto"
-              >
-                <Printer size={16} /> Print GRN
-              </button>
+              <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row">
+                <button
+                  onClick={() => setShowDetailModal(false)}
+                  className="px-8 py-3 rounded-xl border border-slate-200 bg-white text-slate-500 font-black uppercase text-[10px] transition-all hover:text-slate-700 w-full sm:w-auto"
+                >
+                  Tutup
+                </button>
+                <button
+                  onClick={handlePrintGrn}
+                  className="px-8 py-3 bg-slate-900 text-white rounded-xl font-black uppercase text-[10px] shadow-xl shadow-slate-200 hover:bg-black transition-all flex items-center justify-center gap-2 w-full sm:w-auto"
+                >
+                  <Printer size={16} /> Print GRN
+                </button>
+              </div>
             </div>
             </div>
           </div>
