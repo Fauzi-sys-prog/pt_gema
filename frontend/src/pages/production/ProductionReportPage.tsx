@@ -1,5 +1,5 @@
 import React, { useState, useRef, useMemo, useEffect } from 'react';
-import { Link } from 'react-router-dom'; import { ClipboardList, Plus, Search, Filter, Download, Calendar, User, Clock, Settings as Machine, ChevronRight, Printer, ArrowRight, Camera, Image as ImageIcon, X, Target, Briefcase, BookOpen, FileDown } from 'lucide-react'; import { useApp } from '../../contexts/AppContext';
+import { Link, useLocation } from 'react-router-dom'; import { ClipboardList, Plus, Search, Filter, Download, Calendar, User, Clock, Settings as Machine, ChevronRight, Printer, ArrowRight, Camera, Image as ImageIcon, X, Target, Briefcase, BookOpen, FileDown } from 'lucide-react'; import { useApp } from '../../contexts/AppContext';
 import type { ProductionReport, WorkOrder } from '../../contexts/AppContext';
 import { toast } from 'sonner@2.0.3';
 import api from '../../services/api';
@@ -17,6 +17,7 @@ const FINISHED_GOODS_HELP =
 const DEFAULT_MANUAL_MODE = 'material-issue';
 
 export default function ProductionReportPage() {
+  const location = useLocation();
   const { 
     productionReportList, 
     addProductionReport, 
@@ -34,6 +35,7 @@ export default function ProductionReportPage() {
   const [serverWorkOrders, setServerWorkOrders] = useState<WorkOrder[]>([]);
   const [serverStockItems, setServerStockItems] = useState<any[]>([]);
   const [serverAssets, setServerAssets] = useState<any[]>([]);
+  const isFinishedGoodsFlow = location.pathname === '/produksi/hasil-produksi';
 
   const normalizeAssets = (rows: unknown): any[] => {
     if (!Array.isArray(rows)) return [];
@@ -86,6 +88,21 @@ export default function ProductionReportPage() {
   useEffect(() => {
     fetchServerData(true);
   }, []);
+
+  useEffect(() => {
+    if (!isFinishedGoodsFlow) return;
+    setShowAddModal(true);
+    setNewReport((prev) => ({
+      ...prev,
+      woId: '',
+      selectedItem: '',
+      selectedItemCode: '',
+      selectedItemName: '',
+      activity: '',
+      manualModeType: 'finished-goods',
+      unit: prev.unit || 'Pcs',
+    }));
+  }, [isFinishedGoodsFlow]);
 
   const effectiveReports = useMemo(
     () => (serverReports.length > 0 ? serverReports : productionReportList),
@@ -457,7 +474,9 @@ export default function ProductionReportPage() {
           </div>
           <div>
             <h1 className="text-2xl font-black text-slate-900 uppercase tracking-tight">Laporan Harian Produksi (LHP)</h1>
-            <p className="text-xs text-slate-500 font-bold uppercase tracking-widest">Workshop Progress & Productivity Logs</p>
+            <p className="text-xs text-slate-500 font-bold uppercase tracking-widest">
+              {isFinishedGoodsFlow ? 'Flow Barang Jadi Siap Masuk Monitoring Gudang' : 'Workshop Progress & Productivity Logs'}
+            </p>
           </div>
         </div>
         <div className="flex w-full flex-col gap-3 print:hidden sm:flex-row sm:flex-wrap lg:w-auto">
@@ -555,11 +574,21 @@ export default function ProductionReportPage() {
             Excel
           </button>
           <button 
-            onClick={() => { resetForm(); setShowAddModal(true); }}
+            onClick={() => {
+              resetForm();
+              if (isFinishedGoodsFlow) {
+                setNewReport((prev) => ({
+                  ...prev,
+                  manualModeType: 'finished-goods',
+                  woId: '',
+                }));
+              }
+              setShowAddModal(true);
+            }}
             className="flex w-full items-center justify-center gap-2 rounded-xl bg-rose-600 px-5 py-2.5 text-sm font-black text-white shadow-lg shadow-rose-200 transition-all active:scale-95 hover:bg-rose-700 sm:w-auto"
           >
             <Plus size={18} />
-            Input LHP Baru
+            {isFinishedGoodsFlow ? 'Input Hasil Produksi' : 'Input LHP Baru'}
           </button>
         </div>
       </div>

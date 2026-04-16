@@ -227,6 +227,7 @@ export default function Layout({ children }: LayoutProps) {
       submenu: [
         { title: 'Control Center', path: '/produksi/dashboard' },
         { title: 'Laporan Harian (LHP)', path: '/produksi/report' },
+        { title: 'Hasil Produksi', path: '/produksi/hasil-produksi' },
         { title: 'Timeline & Tracker', path: '/produksi/timeline' },
         { title: 'Quality Control (QC)', path: '/produksi/qc' }
       ]
