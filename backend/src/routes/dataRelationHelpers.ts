@@ -311,6 +311,21 @@ export async function syncProductionTrackerForWorkOrder(
 ) {
   const trackerId = productionTrackerIdFromWorkOrderId(entityId);
   const trackerPayload = buildTrackerPayloadFromWorkOrder(entityId, payload);
+  const workOrderContext = await findWorkOrderRelationContext(entityId);
+  const resolvedProjectId =
+    asTrimmedString(trackerPayload.projectId) ||
+    workOrderContext?.projectId ||
+    null;
+  const resolvedProjectName =
+    asTrimmedString(trackerPayload.customer) ||
+    workOrderContext?.projectName ||
+    "Unknown Project";
+
+  // Internal WO boleh tanpa project dan tidak perlu memaksa tracker relation yang bikin update BOM jebol.
+  if (!resolvedProjectId) {
+    return;
+  }
+
   const resolvedMachineId = await resolveMachineAssetIdOrThrow(
     "production-trackers",
     asTrimmedString(trackerPayload.machineId),
@@ -320,9 +335,9 @@ export async function syncProductionTrackerForWorkOrder(
     where: { id: trackerId },
     create: {
       id: trackerId,
-      projectId: trackerPayload.projectId,
+      projectId: resolvedProjectId,
       workOrderId: entityId,
-      customer: trackerPayload.customer,
+      customer: resolvedProjectName,
       itemType: trackerPayload.itemType,
       qty: toFiniteNumber(trackerPayload.qty, 0),
       startDate: trackerPayload.startDate
@@ -336,9 +351,9 @@ export async function syncProductionTrackerForWorkOrder(
       workflowStatus: asTrimmedString(trackerPayload.workflowStatus) || undefined,
     },
     update: {
-      projectId: trackerPayload.projectId,
+      projectId: resolvedProjectId,
       workOrderId: entityId,
-      customer: trackerPayload.customer,
+      customer: resolvedProjectName,
       itemType: trackerPayload.itemType,
       qty: toFiniteNumber(trackerPayload.qty, 0),
       startDate: trackerPayload.startDate

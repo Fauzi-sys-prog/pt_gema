@@ -34,6 +34,7 @@ export default function ProductionDashboard() {
   const [showBOM, setShowBOM] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showAddItemModal, setShowAddItemModal] = useState(false);
+  const [materialQtyDrafts, setMaterialQtyDrafts] = useState<Record<string, string>>({});
   const [isCreatingWO, setIsCreatingWO] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [expandedWO, setExpandedWO] = useState<string | null>(null);
@@ -418,38 +419,64 @@ export default function ProductionDashboard() {
     });
   };
 
-  const handleAddMaterialToBOM = (item: StockItem) => {
+  const closeAddItemModal = () => {
+    setShowAddItemModal(false);
+    setSearchTerm('');
+    setMaterialQtyDrafts({});
+  };
+
+  const getRequestedMaterialQty = (item: StockItem) => {
+    const draft = materialQtyDrafts[item.id];
+    const parsed = parseFloat(String(draft ?? '').replace(',', '.'));
+    if (Number.isFinite(parsed) && parsed > 0) return parsed;
+    return 1;
+  };
+
+  const getQtyInputStep = (unit?: string) => {
+    const normalized = String(unit || '').trim().toLowerCase();
+    return ['pcs', 'pc', 'unit', 'roll', 'lembar', 'sheet', 'batang', 'set'].includes(normalized)
+      ? '1'
+      : '0.01';
+  };
+
+  const handleAddMaterialToBOM = (item: StockItem, requestedQty = 1) => {
+    const safeQty = Number.isFinite(requestedQty) && requestedQty > 0 ? requestedQty : 1;
     const existing = formData.bom.find(b => b.kode === item.kode);
     if (existing) {
       setFormData({
         ...formData,
-        bom: formData.bom.map(b => b.kode === item.kode ? { ...b, qty: b.qty + 1 } : b)
+        bom: formData.bom.map(b => b.kode === item.kode ? { ...b, qty: b.qty + safeQty } : b)
       });
     } else {
       setFormData({
         ...formData,
-        bom: [...formData.bom, { kode: item.kode, nama: item.nama, qty: 1, unit: item.satuan }]
+        bom: [...formData.bom, { kode: item.kode, nama: item.nama, qty: safeQty, unit: item.satuan }]
       });
     }
-    setShowAddItemModal(false);
-    toast.success(`${item.nama} ditambahkan ke BOM`);
+    closeAddItemModal();
+    toast.success(`${item.nama} ditambahkan ke BOM (${safeQty} ${item.satuan || 'pcs'})`);
   };
 
-  const handleAddMaterialToSelectedWO = (item: StockItem) => {
+  const handleAddMaterialToSelectedWO = async (item: StockItem, requestedQty = 1) => {
     if (!selectedWO) return;
+    const safeQty = Number.isFinite(requestedQty) && requestedQty > 0 ? requestedQty : 1;
     const currentBOM = selectedWO.bom || [];
     const existing = currentBOM.find(b => b.kode === item.kode);
     let newBOM;
     if (existing) {
-      newBOM = currentBOM.map(b => b.kode === item.kode ? { ...b, qty: b.qty + 1 } : b);
+      newBOM = currentBOM.map(b => b.kode === item.kode ? { ...b, qty: b.qty + safeQty } : b);
     } else {
-      newBOM = [...currentBOM, { kode: item.kode, nama: item.nama, qty: 1, unit: item.satuan }];
+      newBOM = [...currentBOM, { kode: item.kode, nama: item.nama, qty: safeQty, unit: item.satuan }];
     }
-    
-    updateWorkOrder(selectedWO.id, { bom: newBOM });
-    setSelectedWO({ ...selectedWO, bom: newBOM });
-    setShowAddItemModal(false);
-    toast.success(`${item.nama} ditambahkan ke BOM`);
+
+    try {
+      await updateWorkOrder(selectedWO.id, { bom: newBOM });
+      setSelectedWO({ ...selectedWO, bom: newBOM });
+      closeAddItemModal();
+      toast.success(`${item.nama} ditambahkan ke BOM (${safeQty} ${item.satuan || 'pcs'})`);
+    } catch {
+      // toast handled in context
+    }
   };
 
   const filteredMaterials = effectiveStockItems.filter(item => {
@@ -669,22 +696,49 @@ export default function ProductionDashboard() {
                 </div>
               </div>
               <div className="flex-1 overflow-auto p-4 space-y-2">
-                {filteredMaterials.map(item => (
-                  <button 
-                    key={item.id}
-                    onClick={() => {
-                      if (selectedWO) handleAddMaterialToSelectedWO(item);
-                      else handleAddMaterialToBOM(item);
-                    }}
-                    className="w-full p-4 flex items-center justify-between bg-white border border-slate-100 rounded-2xl hover:border-blue-500 hover:bg-blue-50/30 transition-all group text-left"
-                  >
-                    <div className="flex flex-col">
-                      <span className="text-xs font-black text-slate-900 group-hover:text-blue-600">{item.nama}</span>
-                      <span className="text-[10px] text-slate-400 font-bold uppercase">{item.kode} • Stok: {item.stok} {item.satuan}</span>
+                {filteredMaterials.map(item => {
+                  const draftQty = materialQtyDrafts[item.id] ?? '';
+                  return (
+                    <div
+                      key={item.id}
+                      className="w-full p-4 bg-white border border-slate-100 rounded-2xl hover:border-blue-500 hover:bg-blue-50/30 transition-all group"
+                    >
+                      <div className="flex flex-col gap-3">
+                        <div className="flex flex-col">
+                          <span className="text-xs font-black text-slate-900 group-hover:text-blue-600">{item.nama}</span>
+                          <span className="text-[10px] text-slate-400 font-bold uppercase">{item.kode} • Stok: {item.stok} {item.satuan}</span>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <input
+                            type="number"
+                            min="0"
+                            step={getQtyInputStep(item.satuan)}
+                            value={draftQty}
+                            onChange={(e) => setMaterialQtyDrafts((prev) => ({ ...prev, [item.id]: e.target.value }))}
+                            className="flex-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold outline-none focus:border-blue-500 transition-colors"
+                            placeholder={`Butuh berapa ${item.satuan || 'pcs'}?`}
+                          />
+                          <span className="text-[10px] text-slate-400 font-black uppercase whitespace-nowrap">{item.satuan || 'pcs'}</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const requestedQty = getRequestedMaterialQty(item);
+                              if (selectedWO) {
+                                void handleAddMaterialToSelectedWO(item, requestedQty);
+                              } else {
+                                handleAddMaterialToBOM(item, requestedQty);
+                              }
+                            }}
+                            className="shrink-0 px-3 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors flex items-center gap-2 text-[10px] font-black uppercase"
+                          >
+                            <Plus size={14} />
+                            Tambah
+                          </button>
+                        </div>
+                      </div>
                     </div>
-                    <Plus size={18} className="text-slate-300 group-hover:text-blue-600" />
-                  </button>
-                ))}
+                  );
+                })}
               </div>
             </div>
           </div>
@@ -1071,24 +1125,47 @@ export default function ProductionDashboard() {
           <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-lg max-h-[80vh] overflow-hidden flex flex-col border border-slate-200">
             <div className="px-8 py-6 border-b border-slate-100 flex justify-between items-center">
               <h3 className="text-lg font-black uppercase italic tracking-tighter">Select Material</h3>
-              <button onClick={() => setShowAddItemModal(false)} className="w-8 h-8 bg-slate-50 text-slate-400 rounded-lg flex items-center justify-center">
+              <button onClick={closeAddItemModal} className="w-8 h-8 bg-slate-50 text-slate-400 rounded-lg flex items-center justify-center">
                 <X size={16} />
               </button>
             </div>
             <div className="flex-1 overflow-auto p-4 space-y-2">
-              {filteredMaterials.map(item => (
-                <button 
-                  key={item.id}
-                  onClick={() => handleAddMaterialToBOM(item)}
-                  className="w-full p-4 flex items-center justify-between bg-white border border-slate-100 rounded-2xl text-left"
-                >
-                  <div className="flex flex-col">
-                    <span className="text-xs font-black text-slate-900">{item.nama}</span>
-                    <span className="text-[10px] text-slate-400 font-bold uppercase">{item.kode} • Stok: {item.stok}</span>
+              {filteredMaterials.map(item => {
+                const draftQty = materialQtyDrafts[item.id] ?? '';
+                return (
+                  <div
+                    key={item.id}
+                    className="w-full p-4 bg-white border border-slate-100 rounded-2xl text-left"
+                  >
+                    <div className="flex flex-col gap-3">
+                      <div className="flex flex-col">
+                        <span className="text-xs font-black text-slate-900">{item.nama}</span>
+                        <span className="text-[10px] text-slate-400 font-bold uppercase">{item.kode} • Stok: {item.stok} {item.satuan}</span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="number"
+                          min="0"
+                          step={getQtyInputStep(item.satuan)}
+                          value={draftQty}
+                          onChange={(e) => setMaterialQtyDrafts((prev) => ({ ...prev, [item.id]: e.target.value }))}
+                          className="flex-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold outline-none focus:border-blue-500 transition-colors"
+                          placeholder={`Butuh berapa ${item.satuan || 'pcs'}?`}
+                        />
+                        <span className="text-[10px] text-slate-400 font-black uppercase whitespace-nowrap">{item.satuan || 'pcs'}</span>
+                        <button
+                          type="button"
+                          onClick={() => handleAddMaterialToBOM(item, getRequestedMaterialQty(item))}
+                          className="shrink-0 px-3 py-2 bg-blue-600 text-white rounded-xl flex items-center gap-2 text-[10px] font-black uppercase hover:bg-blue-700 transition-colors"
+                        >
+                          <Plus size={14} />
+                          Tambah
+                        </button>
+                      </div>
+                    </div>
                   </div>
-                  <Plus size={18} className="text-blue-600" />
-                </button>
-              ))}
+                );
+              })}
             </div>
           </div>
         </div>
