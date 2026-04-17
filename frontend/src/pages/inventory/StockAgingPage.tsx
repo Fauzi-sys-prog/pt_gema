@@ -19,6 +19,12 @@ import { motion } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner@2.0.3';
 
+const normalizeInventoryCategory = (value: unknown): string => {
+  const raw = String(value || '').trim();
+  if (!raw) return 'GENERAL';
+  return raw.toLowerCase() === 'finished goods' ? 'Barang Jadi' : raw;
+};
+
 export default function StockAgingPage() {
   const { stockItemList, stockMovementList, addAuditLog, currentUser } = useApp();
   const [serverStockItemList, setServerStockItemList] = useState<StockItem[] | null>(null);
@@ -147,7 +153,7 @@ export default function StockAgingPage() {
       ...filteredAging.map((item) => [
         (item as any).displayKode || item.kode,
         item.nama,
-        item.kategori,
+        normalizeInventoryCategory(item.kategori),
         String(item.ageDays),
         item.expiryDate || '',
         String(item.daysToExpiry ?? ''),
@@ -318,7 +324,7 @@ export default function StockAgingPage() {
                   <td className="px-10 py-8">
                     <div className="flex flex-col">
                       <span className="text-sm font-black text-slate-900 uppercase italic tracking-tight">{item.nama}</span>
-                      <span className="text-[10px] text-slate-400 font-bold uppercase mt-1 tracking-widest">{(item as any).displayKode || item.kode} • {item.kategori}</span>
+                      <span className="text-[10px] text-slate-400 font-bold uppercase mt-1 tracking-widest">{(item as any).displayKode || item.kode} • {normalizeInventoryCategory(item.kategori)}</span>
                     </div>
                   </td>
                   <td className="px-10 py-8">

@@ -41,6 +41,7 @@ const ROLE_ALIASES: Partial<Record<Role, Role[]>> = {
   WAREHOUSE: ["SUPPLY_CHAIN"],
   OPERATIONS: ["PRODUKSI"],
 };
+const FINISHED_GOODS_CATEGORY = "Barang Jadi";
 
 const recordSchema = z.object({
   id: z.string().min(1),
@@ -549,7 +550,7 @@ async function postFinishedGoodsStockIn(
         stok: after,
         satuan: receipt.satuan,
         lokasi: location,
-        kategori: "Finished Goods",
+        kategori: FINISHED_GOODS_CATEGORY,
         lastUpdate: nowIso,
       };
       await tx.stockItemRecord.create({
@@ -586,7 +587,7 @@ async function postFinishedGoodsStockIn(
           id: inventoryItemId,
           code: receipt.kode,
           name: receipt.nama,
-          category: "Finished Goods",
+          category: FINISHED_GOODS_CATEGORY,
           unit: receipt.satuan,
           location,
           minStock: 0,
@@ -600,7 +601,7 @@ async function postFinishedGoodsStockIn(
             nama: receipt.nama,
             satuan: receipt.satuan,
             lokasi: location,
-            kategori: "Finished Goods",
+            kategori: FINISHED_GOODS_CATEGORY,
             stok: after,
             lastUpdate: nowIso,
           } as Prisma.InputJsonValue,
@@ -625,7 +626,7 @@ async function postFinishedGoodsStockIn(
       nama: receipt.nama,
       satuan: receipt.satuan,
       lokasi: location,
-      kategori: "Finished Goods",
+      kategori: FINISHED_GOODS_CATEGORY,
       stok: after,
       lastUpdate: nowIso,
       batchNo: receipt.batchNo || undefined,
@@ -1319,7 +1320,7 @@ operationsRouter.post("/production/submit-lhp", authenticate, async (req: AuthRe
               stok: after,
               satuan: receipt.satuan,
               lokasi: location,
-              kategori: "Finished Goods",
+              kategori: FINISHED_GOODS_CATEGORY,
               lastUpdate: nowIso,
             };
             await tx.stockItemRecord.create({
@@ -1356,7 +1357,7 @@ operationsRouter.post("/production/submit-lhp", authenticate, async (req: AuthRe
                 id: inventoryItemId,
                 code: receipt.kode,
                 name: receipt.nama,
-                category: "Finished Goods",
+                category: FINISHED_GOODS_CATEGORY,
                 unit: receipt.satuan,
                 location,
                 minStock: 0,
@@ -1370,7 +1371,7 @@ operationsRouter.post("/production/submit-lhp", authenticate, async (req: AuthRe
                   nama: receipt.nama,
                   satuan: receipt.satuan,
                   lokasi: location,
-                  kategori: "Finished Goods",
+                  kategori: FINISHED_GOODS_CATEGORY,
                   stok: after,
                   lastUpdate: nowIso,
                 } as Prisma.InputJsonValue,
@@ -1393,7 +1394,7 @@ operationsRouter.post("/production/submit-lhp", authenticate, async (req: AuthRe
             nama: receipt.nama,
             satuan: receipt.satuan,
             lokasi: location,
-            kategori: "Finished Goods",
+            kategori: FINISHED_GOODS_CATEGORY,
             stok: after,
             lastUpdate: nowIso,
           });

@@ -6,6 +6,12 @@ import { toast } from 'sonner@2.0.3';
 import api from '../../services/api';
 import { normalizeEntityRows } from '../../utils/normalizeEntityRows';
 
+const normalizeInventoryCategory = (value: unknown): string => {
+  const raw = String(value || '').trim();
+  if (!raw) return 'GENERAL';
+  return raw.toLowerCase() === 'finished goods' ? 'Barang Jadi' : raw;
+};
+
 export default function WarehouseLedgerPage() {
   const navigate = useNavigate();
   const { stockItemList: ctxStockItemList = [], stockMovementList: ctxStockMovementList = [], receivingList: ctxReceivingList = [], projectList: ctxProjectList = [], poList: ctxPoList = [], addAuditLog, currentUser } = useApp();
@@ -85,7 +91,7 @@ export default function WarehouseLedgerPage() {
   }, [safeStockItemList, safeReceivingList]);
 
   const categories = useMemo(() => {
-    const cats = ['All', ...new Set(safeStockItemList.map(i => String(i?.kategori || '').trim()).filter(Boolean))];
+    const cats = ['All', ...new Set(safeStockItemList.map(i => normalizeInventoryCategory(i?.kategori)).filter(Boolean))];
     return cats;
   }, [safeStockItemList]);
 
@@ -99,7 +105,7 @@ export default function WarehouseLedgerPage() {
     return safeStockItemList.filter(item => {
       const matchSearch = String(item?.nama || '').toLowerCase().includes(keyword) || 
                           String(item?.kode || '').toLowerCase().includes(keyword);
-      const matchCat = selectedCategory === 'All' || String(item?.kategori || '') === selectedCategory;
+      const matchCat = selectedCategory === 'All' || normalizeInventoryCategory(item?.kategori) === selectedCategory;
       const matchLoc = selectedLocation === 'All' || String(item?.lokasi || '') === selectedLocation;
       return matchSearch && matchCat && matchLoc;
     });
@@ -108,7 +114,7 @@ export default function WarehouseLedgerPage() {
   const itemsByCategory = useMemo(() => {
     const groups: { [key: string]: typeof stockItemList } = {};
     filteredItems.forEach(item => {
-      const key = String(item?.kategori || 'GENERAL');
+      const key = normalizeInventoryCategory(item?.kategori);
       if (!groups[key]) groups[key] = [];
       groups[key].push(item);
     });
@@ -162,7 +168,7 @@ export default function WarehouseLedgerPage() {
       ...filteredItems.map((item) => [
         item.kode,
         item.nama,
-        item.kategori,
+        normalizeInventoryCategory(item.kategori),
         resolveItemSupplier(item),
         String(item.stok),
         String(item.minStock),
