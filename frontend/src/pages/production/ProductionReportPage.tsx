@@ -869,171 +869,194 @@ export default function ProductionReportPage() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
-                    {entryMode === 'wo' ? 'Work Order' : 'Jenis Pencatatan Manual'}
-                  </label>
-                  {entryMode === 'wo' ? (
-                    <select 
-                      className="w-full px-4 py-3 bg-white border-2 border-slate-100 rounded-2xl text-sm font-bold focus:border-rose-500 transition-colors outline-none"
-                      value={newReport.woId || ''}
-                      onChange={(e) => handleWOSelect(e.target.value)}
-                    >
-                      <option value="">-- Pilih Work Order --</option>
-                      {activeWorkOrders.map(wo => (
-                        <option key={wo.id} value={wo.id}>{wo.woNumber}</option>
-                      ))}
-                    </select>
-                  ) : (
-                    <select
-                      className="w-full px-4 py-3 bg-white border-2 border-slate-100 rounded-2xl text-sm font-bold focus:border-rose-500 transition-colors outline-none"
-                      value={currentManualModeType}
-                      onChange={(e) => handleManualModeChange(e.target.value as 'material-issue' | 'finished-goods')}
-                    >
-                      <option value="material-issue">{MANUAL_ISSUE_LABEL}</option>
-                      <option value="finished-goods">{FINISHED_GOODS_LABEL}</option>
-                    </select>
-                  )}
-                </div>
-                {/* WO Stats Preview */}
-                {entryMode === 'wo' && newReport.woId && (
-                  <div className="flex flex-col gap-4 rounded-2xl border-2 border-blue-100 bg-blue-50 p-4 md:col-span-2 sm:flex-row sm:items-center sm:justify-between">
-                     {(() => {
-                       const wo = effectiveWorkOrders.find(w => w.id === newReport.woId);
-                       const target = wo?.targetQty || 0;
-                       const current = wo?.completedQty || 0;
-                       const unit = wo?.bom?.[0]?.unit || 'Unit';
-                       const progress = Math.min(100, (current / (target || 1)) * 100);
+                {entryMode === 'wo' ? (
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                    <div className="space-y-1.5">
+                      <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-slate-400">
+                        Work Order
+                      </label>
+                      <select
+                        className="w-full rounded-2xl border-2 border-slate-100 bg-white px-4 py-3 text-sm font-bold outline-none transition-colors focus:border-rose-500"
+                        value={newReport.woId || ''}
+                        onChange={(e) => handleWOSelect(e.target.value)}
+                      >
+                        <option value="">-- Pilih Work Order --</option>
+                        {activeWorkOrders.map(wo => (
+                          <option key={wo.id} value={wo.id}>{wo.woNumber}</option>
+                        ))}
+                      </select>
+                    </div>
+                    {newReport.woId && (
+                      <div className="flex flex-col gap-4 rounded-2xl border-2 border-blue-100 bg-blue-50 p-4 md:col-span-2 sm:flex-row sm:items-center sm:justify-between">
+                        {(() => {
+                          const wo = effectiveWorkOrders.find(w => w.id === newReport.woId);
+                          const target = wo?.targetQty || 0;
+                          const current = wo?.completedQty || 0;
+                          const unit = wo?.bom?.[0]?.unit || 'Unit';
+                          const progress = Math.min(100, (current / (target || 1)) * 100);
 
-                       return (
-                         <>
-                           <div>
-                              <p className="text-[9px] font-black text-blue-600 uppercase tracking-widest">Target Produksi</p>
-                              <p className="text-xl font-black text-slate-900">
-                                {target} 
-                                <span className="text-xs text-slate-500 font-bold ml-1 uppercase">{unit}</span>
-                              </p>
-                           </div>
-                           <div className="text-right">
-                              <p className="text-[9px] font-black text-emerald-600 uppercase tracking-widest">Tercapai (Current)</p>
-                              <p className="text-xl font-black text-emerald-700">
-                                {current}
-                              </p>
-                           </div>
-                           <div className="h-10 w-px bg-blue-100 mx-2"></div>
-                           <div className="flex-1 max-w-[120px]">
-                              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">
-                                Progress {newReport.selectedItem ? 'Item' : 'Overall'}
-                              </p>
-                              <div className="w-full bg-blue-100 h-1.5 rounded-full overflow-hidden">
-                                 <div 
-                                   className="h-full bg-blue-600 transition-all duration-500" 
-                                   style={{ width: `${progress}%` }}
-                                 ></div>
+                          return (
+                            <>
+                              <div>
+                                <p className="text-[9px] font-black uppercase tracking-widest text-blue-600">Target Produksi</p>
+                                <p className="text-xl font-black text-slate-900">
+                                  {target}
+                                  <span className="ml-1 text-xs font-bold uppercase text-slate-500">{unit}</span>
+                                </p>
                               </div>
-                           </div>
-                         </>
-                       );
-                     })()}
+                              <div className="text-right">
+                                <p className="text-[9px] font-black uppercase tracking-widest text-emerald-600">Tercapai (Current)</p>
+                                <p className="text-xl font-black text-emerald-700">{current}</p>
+                              </div>
+                              <div className="mx-2 h-10 w-px bg-blue-100"></div>
+                              <div className="max-w-[120px] flex-1">
+                                <p className="mb-1 text-[9px] font-black uppercase tracking-widest text-slate-400">
+                                  Progress {newReport.selectedItem ? 'Item' : 'Overall'}
+                                </p>
+                                <div className="h-1.5 w-full overflow-hidden rounded-full bg-blue-100">
+                                  <div
+                                    className="h-full bg-blue-600 transition-all duration-500"
+                                    style={{ width: `${progress}%` }}
+                                  ></div>
+                                </div>
+                              </div>
+                            </>
+                          );
+                        })()}
+                      </div>
+                    )}
+                    <div className="space-y-1.5">
+                      <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-slate-400">Mesin / Alat</label>
+                      <select
+                        className="w-full rounded-2xl border-2 border-slate-100 bg-white px-4 py-3 text-sm font-bold outline-none transition-colors focus:border-blue-500"
+                        value={newReport.machineId || ''}
+                        onChange={(e) => setNewReport({ ...newReport, machineId: e.target.value })}
+                      >
+                        <option value="">-- Tanpa Mesin --</option>
+                        {availableAssets.map(m => (
+                          <option key={m.id} value={m.id}>
+                            {m.name || m.assetCode || m.id} ({m.status || 'Unknown'})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="space-y-1.5 md:col-span-2">
+                      <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-slate-400">
+                        Item Output WO
+                      </label>
+                      <div className="space-y-2 rounded-2xl border-2 border-emerald-100 bg-emerald-50 p-4">
+                        <div className="rounded-2xl border border-emerald-200 bg-white px-4 py-3">
+                          <p className="text-xs font-black uppercase tracking-wide text-emerald-700">Barang Jadi Dari Work Order</p>
+                          <p className="mt-1 text-base font-black text-slate-900">
+                            {selectedWorkOrderOutput?.name || 'Pilih Work Order dulu'}
+                          </p>
+                          {selectedWorkOrderOutput?.code && (
+                            <p className="mt-1 text-[11px] font-bold uppercase tracking-wide text-slate-500">
+                              Referensi: {selectedWorkOrderOutput.code}
+                            </p>
+                          )}
+                        </div>
+                        <p className="text-[11px] font-medium leading-relaxed text-emerald-800">
+                          Mode WO sekarang fokus ke hasil produksi barang jadi. Pemakaian material/BOM tidak diinput di field ini lagi.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                      <div className="space-y-1.5">
+                        <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-slate-400">
+                          Jenis Pencatatan Manual
+                        </label>
+                        <select
+                          className="w-full rounded-2xl border-2 border-slate-100 bg-white px-4 py-3 text-sm font-bold outline-none transition-colors focus:border-rose-500"
+                          value={currentManualModeType}
+                          onChange={(e) => handleManualModeChange(e.target.value as 'material-issue' | 'finished-goods')}
+                        >
+                          <option value="material-issue">{MANUAL_ISSUE_LABEL}</option>
+                          <option value="finished-goods">{FINISHED_GOODS_LABEL}</option>
+                        </select>
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-slate-400">Mesin / Alat</label>
+                        <select
+                          className="w-full rounded-2xl border-2 border-slate-100 bg-white px-4 py-3 text-sm font-bold outline-none transition-colors focus:border-blue-500"
+                          value={newReport.machineId || ''}
+                          onChange={(e) => setNewReport({ ...newReport, machineId: e.target.value })}
+                        >
+                          <option value="">-- Tanpa Mesin --</option>
+                          {availableAssets.map(m => (
+                            <option key={m.id} value={m.id}>
+                              {m.name || m.assetCode || m.id} ({m.status || 'Unknown'})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.4fr)_minmax(320px,0.9fr)]">
+                      <div className="space-y-1.5">
+                        <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-slate-400">
+                          {currentManualModeType === 'finished-goods' ? 'Pilih Barang Jadi' : 'Pilih Material Gudang'}
+                        </label>
+                        <select
+                          className="w-full rounded-2xl border-2 border-slate-100 bg-white px-4 py-3 text-sm font-bold outline-none transition-colors focus:border-rose-500"
+                          value={newReport.selectedItem || ''}
+                          onChange={(e) => handleItemSelect(e.target.value)}
+                        >
+                          <option value="">
+                            {currentManualModeType === 'finished-goods'
+                              ? '-- Pilih Barang Jadi yang Masuk Gudang --'
+                              : '-- Pilih Material yang Dipakai --'}
+                          </option>
+                          {selectableWarehouseItems.map((item) => (
+                            <option key={item.id} value={item.value} disabled={item.disabled}>
+                              {item.name} ({item.code || '-'} • Stok {item.stock} {item.unit}{item.disabled ? ' • HABIS' : ''})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div
+                        className={`space-y-2 rounded-2xl px-4 py-4 ${
+                          currentManualModeType === 'finished-goods'
+                            ? 'border border-emerald-200 bg-emerald-50'
+                            : 'border border-amber-200 bg-amber-50'
+                        }`}
+                      >
+                        <p
+                          className={`text-[10px] font-bold uppercase tracking-wide ${
+                            currentManualModeType === 'finished-goods' ? 'text-emerald-700' : 'text-amber-700'
+                          }`}
+                        >
+                          {currentManualModeType === 'finished-goods'
+                            ? `${FINISHED_GOODS_LABEL}: qty output akan dicatat sebagai stok masuk barang jadi.`
+                            : `${MANUAL_ISSUE_LABEL}: qty output akan dicatat sebagai stok keluar material.`}
+                        </p>
+                        <p
+                          className={`text-[12px] font-medium leading-relaxed ${
+                            currentManualModeType === 'finished-goods' ? 'text-emerald-800' : 'text-amber-800'
+                          }`}
+                        >
+                          {manualModeHelp}
+                        </p>
+                        <div className="flex flex-col gap-2 sm:flex-row">
+                          <Link
+                            to="/inventory/stock-out"
+                            className="inline-flex items-center justify-center gap-2 rounded-xl border border-amber-200 bg-white px-3 py-2 text-[10px] font-black uppercase text-amber-700 transition-colors hover:bg-amber-100"
+                          >
+                            Buka Stock Out
+                          </Link>
+                          <Link
+                            to="/inventory/stock-in"
+                            className="inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-white px-3 py-2 text-[10px] font-black uppercase text-emerald-700 transition-colors hover:bg-emerald-100"
+                          >
+                            Cek Stock In Gudang
+                          </Link>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 )}
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Mesin / Alat</label>
-                  <select 
-                    className="w-full px-4 py-3 bg-white border-2 border-slate-100 rounded-2xl text-sm font-bold focus:border-blue-500 transition-colors outline-none"
-                    value={newReport.machineId || ''}
-                    onChange={(e) => setNewReport({ ...newReport, machineId: e.target.value })}
-                  >
-                    <option value="">-- Tanpa Mesin --</option>
-                    {availableAssets.map(m => (
-                      <option key={m.id} value={m.id}>
-                        {m.name || m.assetCode || m.id} ({m.status || 'Unknown'})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
-                    {entryMode === 'wo' ? 'Item Output WO' : 'Pilih Item (Gudang)'}
-                  </label>
-                  {entryMode === 'wo' ? (
-                    <div className="space-y-2 rounded-2xl border-2 border-emerald-100 bg-emerald-50 p-4">
-                      <div className="rounded-2xl border border-emerald-200 bg-white px-4 py-3">
-                        <p className="text-xs font-black uppercase tracking-wide text-emerald-700">Barang Jadi Dari Work Order</p>
-                        <p className="mt-1 text-base font-black text-slate-900">
-                          {selectedWorkOrderOutput?.name || 'Pilih Work Order dulu'}
-                        </p>
-                        {selectedWorkOrderOutput?.code && (
-                          <p className="mt-1 text-[11px] font-bold uppercase tracking-wide text-slate-500">
-                            Referensi: {selectedWorkOrderOutput.code}
-                          </p>
-                        )}
-                      </div>
-                      <p className="text-[11px] font-medium leading-relaxed text-emerald-800">
-                        Mode WO sekarang fokus ke hasil produksi barang jadi. Pemakaian material/BOM tidak diinput di field ini lagi.
-                      </p>
-                    </div>
-                  ) : (
-                    <select 
-                      className="w-full px-4 py-3 bg-white border-2 border-slate-100 rounded-2xl text-sm font-bold focus:border-rose-500 transition-colors outline-none"
-                      value={newReport.selectedItem || ''}
-                      onChange={(e) => handleItemSelect(e.target.value)}
-                    >
-                      <option value="">
-                        {currentManualModeType === 'finished-goods'
-                          ? '-- Pilih Barang Jadi yang Masuk Gudang --'
-                          : '-- Pilih Material yang Dipakai --'}
-                      </option>
-                      {selectableWarehouseItems.map((item) => (
-                        <option key={item.id} value={item.value} disabled={item.disabled}>
-                          {item.name} ({item.code || '-'} • Stok {item.stock} {item.unit}{item.disabled ? ' • HABIS' : ''})
-                        </option>
-                      ))}
-                    </select>
-                  )}
-                  {entryMode === 'manual' && (
-                    <div
-                      className={`space-y-2 rounded-2xl px-4 py-3 ${
-                        currentManualModeType === 'finished-goods'
-                          ? 'border border-emerald-200 bg-emerald-50'
-                          : 'border border-amber-200 bg-amber-50'
-                      }`}
-                    >
-                      <p
-                        className={`text-[10px] font-bold uppercase tracking-wide ${
-                          currentManualModeType === 'finished-goods' ? 'text-emerald-700' : 'text-amber-700'
-                        }`}
-                      >
-                        {currentManualModeType === 'finished-goods'
-                          ? `${FINISHED_GOODS_LABEL}: qty output akan dicatat sebagai stok masuk barang jadi.`
-                          : `${MANUAL_ISSUE_LABEL}: qty output akan dicatat sebagai stok keluar material.`}
-                      </p>
-                      <p
-                        className={`text-[11px] font-medium leading-relaxed ${
-                          currentManualModeType === 'finished-goods' ? 'text-emerald-800' : 'text-amber-800'
-                        }`}
-                      >
-                        {manualModeHelp}
-                      </p>
-                      <div className="flex flex-col gap-2 sm:flex-row">
-                        <Link
-                          to="/inventory/stock-out"
-                          className="inline-flex items-center justify-center gap-2 rounded-xl border border-amber-200 bg-white px-3 py-2 text-[10px] font-black uppercase text-amber-700 transition-colors hover:bg-amber-100"
-                        >
-                          Buka Stock Out
-                        </Link>
-                        <Link
-                          to="/inventory/stock-in"
-                          className="inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-white px-3 py-2 text-[10px] font-black uppercase text-emerald-700 transition-colors hover:bg-emerald-100"
-                        >
-                          Cek Stock In Gudang
-                        </Link>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
               </div>
 
               <div className="grid grid-cols-1 gap-4">
