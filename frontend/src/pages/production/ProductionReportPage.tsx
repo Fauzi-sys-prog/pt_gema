@@ -944,24 +944,30 @@ export default function ProductionReportPage() {
                       <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-slate-400">
                         Item Output WO
                       </label>
-                      <div className="space-y-2 rounded-2xl border-2 border-emerald-100 bg-emerald-50 p-4">
-                        <div className="rounded-2xl border border-emerald-200 bg-white px-4 py-3">
-                          <p className="text-xs font-black uppercase tracking-wide text-emerald-700">Barang Jadi Dari Work Order</p>
-                          <p className="mt-1 text-base font-black text-slate-900">
-                            {selectedWorkOrderOutput?.name || 'Pilih Work Order dulu'}
-                          </p>
-                          {selectedWorkOrderOutput?.code && (
-                            <p className="mt-1 text-[11px] font-bold uppercase tracking-wide text-slate-500">
-                              Referensi: {selectedWorkOrderOutput.code}
+                      {selectedWorkOrderOutput ? (
+                        <div className="space-y-2 rounded-2xl border-2 border-emerald-100 bg-emerald-50 p-4">
+                          <div className="rounded-2xl border border-emerald-200 bg-white px-4 py-3">
+                            <p className="text-xs font-black uppercase tracking-wide text-emerald-700">Barang Jadi Dari Work Order</p>
+                            <p className="mt-1 text-base font-black text-slate-900">
+                              {selectedWorkOrderOutput.name}
                             </p>
-                          )}
+                            {selectedWorkOrderOutput.code && (
+                              <p className="mt-1 text-[11px] font-bold uppercase tracking-wide text-slate-500">
+                                Referensi: {selectedWorkOrderOutput.code}
+                              </p>
+                            )}
+                          </div>
+                          <p className="text-[11px] font-medium leading-relaxed text-emerald-800">
+                            Output produksi akan mengikuti barang jadi yang terdaftar di Work Order ini.
+                          </p>
                         </div>
-                        <p className="text-[11px] font-medium leading-relaxed text-emerald-800">
-                          {selectedWorkOrderOutput
-                            ? 'Output produksi akan mengikuti barang jadi yang terdaftar di Work Order ini.'
-                            : 'Pilih Work Order dulu supaya item output, project, dan progres produksi bisa tersambung dengan benar.'}
-                        </p>
-                      </div>
+                      ) : (
+                        <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-3">
+                          <p className="text-[11px] font-bold text-slate-600">
+                            Pilih Work Order dulu supaya item output, project, dan progres produksi bisa tersambung dengan benar.
+                          </p>
+                        </div>
+                      )}
                     </div>
                   </div>
                 ) : (
