@@ -15,6 +15,7 @@ const FINISHED_GOODS_LABEL = 'Hasil Produksi Masuk Gudang';
 const FINISHED_GOODS_HELP =
   'Mode ini untuk hasil produksi berupa barang jadi. Setelah LHP disimpan, item masuk antrian QC dulu sebelum dirilis ke stok gudang.';
 const DEFAULT_MANUAL_MODE = 'material-issue';
+const DEFAULT_ENTRY_MODE = 'wo';
 
 export default function ProductionReportPage() {
   const { 
@@ -30,6 +31,7 @@ export default function ProductionReportPage() {
   const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [entryMode, setEntryMode] = useState<'wo' | 'manual'>(DEFAULT_ENTRY_MODE);
   const [serverReports, setServerReports] = useState<ProductionReport[]>([]);
   const [serverWorkOrders, setServerWorkOrders] = useState<WorkOrder[]>([]);
   const [serverStockItems, setServerStockItems] = useState<any[]>([]);
@@ -165,8 +167,9 @@ export default function ProductionReportPage() {
     () => effectiveWorkOrders.find((wo) => wo.id === newReport.woId),
     [effectiveWorkOrders, newReport.woId]
   );
+  const isManualEntry = entryMode === 'manual';
   const currentManualModeType =
-    !newReport.woId && newReport.manualModeType === 'finished-goods'
+    isManualEntry && newReport.manualModeType === 'finished-goods'
       ? 'finished-goods'
       : 'material-issue';
   const manualModeHelp =
@@ -257,6 +260,35 @@ export default function ProductionReportPage() {
     }
   };
 
+  const handleEntryModeChange = (mode: 'wo' | 'manual') => {
+    setEntryMode(mode);
+    if (mode === 'wo') {
+      setNewReport((prev) => ({
+        ...prev,
+        manualModeType: DEFAULT_MANUAL_MODE,
+        selectedItem: '',
+        selectedItemCode: '',
+        selectedItemName: '',
+        projectId: undefined,
+        projectName: undefined,
+      }));
+      return;
+    }
+
+    setNewReport((prev) => ({
+      ...prev,
+      woId: undefined,
+      activity: '',
+      unit: 'Pcs',
+      selectedItem: '',
+      selectedItemCode: '',
+      selectedItemName: '',
+      manualModeType: prev.manualModeType || DEFAULT_MANUAL_MODE,
+      projectId: MANUAL_LHP_PROJECT_ID,
+      projectName: MANUAL_LHP_PROJECT_NAME,
+    }));
+  };
+
   const handleManualModeChange = (mode: 'material-issue' | 'finished-goods') => {
     setNewReport((prev) => ({
       ...prev,
@@ -316,8 +348,14 @@ export default function ProductionReportPage() {
       return;
     }
 
-    const selectedWO = effectiveWorkOrders.find(w => w.id === newReport.woId);
-    const isManualMode = !selectedWO;
+    const selectedWO = entryMode === 'wo'
+      ? effectiveWorkOrders.find(w => w.id === newReport.woId)
+      : undefined;
+    const isManualMode = entryMode === 'manual';
+    if (!isManualMode && !selectedWO) {
+      toast.error('Pilih Work Order dulu supaya LHP produksi nyambung ke flow WO.');
+      return;
+    }
     const manualModeType =
       isManualMode && newReport.manualModeType === 'finished-goods'
         ? 'finished-goods'
@@ -384,6 +422,7 @@ export default function ProductionReportPage() {
   };
 
   const resetForm = () => {
+    setEntryMode(DEFAULT_ENTRY_MODE);
     setNewReport({
       tanggal: new Date().toISOString().split('T')[0],
       shift: '1',
@@ -735,7 +774,7 @@ export default function ProductionReportPage() {
               <div>
                 <h3 className="text-xl font-black text-slate-900 uppercase italic tracking-tight">Buat Laporan Harian (LHP)</h3>
                 <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1 italic">
-                  {newReport.woId
+                  {entryMode === 'wo'
                     ? 'Input Progress Pekerjaan Workshop'
                     : currentManualModeType === 'finished-goods'
                       ? 'Mode hasil produksi masuk gudang'
@@ -769,23 +808,65 @@ export default function ProductionReportPage() {
             </div>
 
             <div className="overflow-y-auto space-y-6 p-5 sm:p-8">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Work Order</label>
-                  <select 
-                    className="w-full px-4 py-3 bg-white border-2 border-slate-100 rounded-2xl text-sm font-bold focus:border-rose-500 transition-colors outline-none"
-                    value={newReport.woId || ''}
-                    onChange={(e) => handleWOSelect(e.target.value)}
-                  >
-                    <option value="">-- Tanpa WO / Manual --</option>
-                    {activeWorkOrders.map(wo => (
-                      <option key={wo.id} value={wo.id}>{wo.woNumber}</option>
-                    ))}
-                  </select>
+              <div className="grid grid-cols-1 gap-4">
+                <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4 sm:p-5">
+                  <div className="flex flex-col gap-3">
+                    <div>
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Mode Input LHP</p>
+                      <h4 className="mt-1 text-sm font-black text-slate-900 uppercase">Pilih flow kerja yang mau dipakai</h4>
+                    </div>
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      <button
+                        type="button"
+                        onClick={() => handleEntryModeChange('wo')}
+                        className={`rounded-2xl border-2 px-4 py-4 text-left transition-all ${
+                          entryMode === 'wo'
+                            ? 'border-blue-500 bg-blue-50 shadow-sm'
+                            : 'border-slate-200 bg-white hover:border-slate-300'
+                        }`}
+                      >
+                        <p className="text-[10px] font-black uppercase tracking-widest text-blue-600">LHP Produksi</p>
+                        <p className="mt-2 text-sm font-black text-slate-900">Berbasis Work Order</p>
+                        <p className="mt-1 text-xs font-medium leading-relaxed text-slate-500">
+                          Wajib pilih WO dulu. Progress, item produksi, dan output akan nyambung ke flow produksi normal.
+                        </p>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleEntryModeChange('manual')}
+                        className={`rounded-2xl border-2 px-4 py-4 text-left transition-all ${
+                          entryMode === 'manual'
+                            ? 'border-amber-500 bg-amber-50 shadow-sm'
+                            : 'border-slate-200 bg-white hover:border-slate-300'
+                        }`}
+                      >
+                        <p className="text-[10px] font-black uppercase tracking-widest text-amber-600">LHP Manual</p>
+                        <p className="mt-2 text-sm font-black text-slate-900">Non-WO / Gudang</p>
+                        <p className="mt-1 text-xs font-medium leading-relaxed text-slate-500">
+                          Dipakai hanya untuk pemakaian material manual atau hasil produksi manual yang tidak berbasis WO.
+                        </p>
+                      </button>
+                    </div>
+                  </div>
                 </div>
-                {!newReport.woId && (
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Jenis Pencatatan</label>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
+                    {entryMode === 'wo' ? 'Work Order' : 'Jenis Pencatatan Manual'}
+                  </label>
+                  {entryMode === 'wo' ? (
+                    <select 
+                      className="w-full px-4 py-3 bg-white border-2 border-slate-100 rounded-2xl text-sm font-bold focus:border-rose-500 transition-colors outline-none"
+                      value={newReport.woId || ''}
+                      onChange={(e) => handleWOSelect(e.target.value)}
+                    >
+                      <option value="">-- Pilih Work Order --</option>
+                      {activeWorkOrders.map(wo => (
+                        <option key={wo.id} value={wo.id}>{wo.woNumber}</option>
+                      ))}
+                    </select>
+                  ) : (
                     <select
                       className="w-full px-4 py-3 bg-white border-2 border-slate-100 rounded-2xl text-sm font-bold focus:border-rose-500 transition-colors outline-none"
                       value={currentManualModeType}
@@ -794,10 +875,10 @@ export default function ProductionReportPage() {
                       <option value="material-issue">{MANUAL_ISSUE_LABEL}</option>
                       <option value="finished-goods">{FINISHED_GOODS_LABEL}</option>
                     </select>
-                  </div>
-                )}
+                  )}
+                </div>
                 {/* WO Stats Preview */}
-                {newReport.woId && (
+                {entryMode === 'wo' && newReport.woId && (
                   <div className="flex flex-col gap-4 rounded-2xl border-2 border-blue-100 bg-blue-50 p-4 md:col-span-2 sm:flex-row sm:items-center sm:justify-between">
                      {(() => {
                        const wo = effectiveWorkOrders.find(w => w.id === newReport.woId);
@@ -864,20 +945,20 @@ export default function ProductionReportPage() {
                     onChange={(e) => handleItemSelect(e.target.value)}
                   >
                     <option value="">
-                      {newReport.woId
+                      {entryMode === 'wo'
                         ? '-- Pilih Item Gudang --'
                         : currentManualModeType === 'finished-goods'
                           ? '-- Pilih Barang Jadi yang Masuk Gudang --'
                           : '-- Pilih Material yang Dipakai --'}
                     </option>
-                    {newReport.woId && <option value="auto">-- Auto-Deduct All BOM (opsional) --</option>}
+                    {entryMode === 'wo' && newReport.woId && <option value="auto">-- Auto-Deduct All BOM (opsional) --</option>}
                     {selectableWarehouseItems.map((item) => (
                       <option key={item.id} value={item.value} disabled={item.disabled}>
                         {item.name} ({item.code || '-'} • Stok {item.stock} {item.unit}{item.disabled ? ' • HABIS' : ''})
                       </option>
                     ))}
                   </select>
-                  {!newReport.woId && (
+                  {entryMode === 'manual' && (
                     <div
                       className={`space-y-2 rounded-2xl px-4 py-3 ${
                         currentManualModeType === 'finished-goods'
@@ -918,6 +999,7 @@ export default function ProductionReportPage() {
                     </div>
                   )}
                 </div>
+              </div>
               </div>
 
               <div className="grid grid-cols-1 gap-4">
