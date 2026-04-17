@@ -167,6 +167,15 @@ export default function ProductionReportPage() {
     () => effectiveWorkOrders.find((wo) => wo.id === newReport.woId),
     [effectiveWorkOrders, newReport.woId]
   );
+  const selectedWorkOrderOutput = useMemo(() => {
+    if (!selectedWorkOrder) return null;
+    return {
+      value: String(selectedWorkOrder.itemToProduce || '').trim(),
+      code: String(selectedWorkOrder.number || selectedWorkOrder.id || '').trim(),
+      name: String(selectedWorkOrder.itemToProduce || '').trim(),
+      unit: String(selectedWorkOrder.bom?.[0]?.unit || newReport.unit || 'Unit'),
+    };
+  }, [selectedWorkOrder, newReport.unit]);
   const isManualEntry = entryMode === 'manual';
   const currentManualModeType =
     isManualEntry && newReport.manualModeType === 'finished-goods'
@@ -176,6 +185,21 @@ export default function ProductionReportPage() {
     currentManualModeType === 'finished-goods' ? FINISHED_GOODS_HELP : MANUAL_ISSUE_HELP;
 
   const selectableWarehouseItems = useMemo(() => {
+    if (selectedWorkOrderOutput) {
+      return [
+        {
+          id: selectedWorkOrderOutput.code || selectedWorkOrderOutput.value,
+          value: selectedWorkOrderOutput.value,
+          code: selectedWorkOrderOutput.code,
+          name: selectedWorkOrderOutput.name,
+          unit: selectedWorkOrderOutput.unit,
+          stock: 0,
+          disabled: false,
+          source: 'wo-output' as const,
+        },
+      ];
+    }
+
     const stockedItems = effectiveStockItems || [];
     const allowZeroStockSelection = !selectedWorkOrder && currentManualModeType === 'finished-goods';
     const stockByCode = new Map(
@@ -232,7 +256,7 @@ export default function ProductionReportPage() {
       }))
       .filter((item) => item.id && item.value)
       .sort((a, b) => a.name.localeCompare(b.name));
-  }, [currentManualModeType, effectiveStockItems, selectedWorkOrder]);
+  }, [currentManualModeType, effectiveStockItems, selectedWorkOrder, selectedWorkOrderOutput]);
 
   const handleWOSelect = (woId: string) => {
     const wo = effectiveWorkOrders.find(w => w.id === woId);
@@ -240,9 +264,9 @@ export default function ProductionReportPage() {
       setNewReport({
         ...newReport,
         woId: wo.id,
-        selectedItem: '', // Reset item selection when WO changes
-        selectedItemCode: '',
-        selectedItemName: '',
+        selectedItem: wo.itemToProduce,
+        selectedItemCode: wo.woNumber || wo.id,
+        selectedItemName: wo.itemToProduce,
         activity: `Produksi ${wo.itemToProduce} (${wo.woNumber})`,
         unit: wo.bom?.[0]?.unit || 'Unit'
       });
@@ -311,19 +335,14 @@ export default function ProductionReportPage() {
     }
     const itemLabel = selectedOption?.name || normalizedValue;
     if (wo) {
-      const bomItem = wo.bom?.find((b) => {
-        const bomName = String(b.nama || b.materialName || '').trim();
-        const bomCode = String(b.kode || '').trim();
-        return bomName === itemLabel || bomCode === normalizedValue;
-      });
       setNewReport({
         ...newReport,
         selectedItem: normalizedValue,
-        selectedItemCode: selectedOption?.code || normalizedValue,
+        selectedItemCode: selectedOption?.code || wo.woNumber || normalizedValue,
         selectedItemName: itemLabel,
-        unit: bomItem?.unit || selectedOption?.unit || (normalizedValue ? 'Pcs' : 'Unit'),
+        unit: selectedOption?.unit || (normalizedValue ? 'Pcs' : 'Unit'),
         activity: normalizedValue
-          ? `Pengerjaan ${itemLabel} untuk ${wo.itemToProduce} (${wo.woNumber})`
+          ? `Produksi ${itemLabel} (${wo.woNumber})`
           : `Produksi ${wo.itemToProduce} (${wo.woNumber})`
       });
     } else {
@@ -882,12 +901,9 @@ export default function ProductionReportPage() {
                   <div className="flex flex-col gap-4 rounded-2xl border-2 border-blue-100 bg-blue-50 p-4 md:col-span-2 sm:flex-row sm:items-center sm:justify-between">
                      {(() => {
                        const wo = effectiveWorkOrders.find(w => w.id === newReport.woId);
-                       const selectedBOMItem = wo?.bom?.find(b => b.nama === newReport.selectedItem);
-                       
-                       // Priority: selected item target, then wo targetQty
-                       const target = selectedBOMItem ? selectedBOMItem.qty : (wo?.targetQty || 0);
-                       const current = selectedBOMItem ? (selectedBOMItem.completedQty || 0) : (wo?.completedQty || 0);
-                       const unit = selectedBOMItem ? selectedBOMItem.unit : (wo?.bom?.[0]?.unit || 'Unit');
+                       const target = wo?.targetQty || 0;
+                       const current = wo?.completedQty || 0;
+                       const unit = wo?.bom?.[0]?.unit || 'Unit';
                        const progress = Math.min(100, (current / (target || 1)) * 100);
 
                        return (
@@ -938,26 +954,44 @@ export default function ProductionReportPage() {
                   </select>
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Pilih Item (Gudang)</label>
-                  <select 
-                    className="w-full px-4 py-3 bg-white border-2 border-slate-100 rounded-2xl text-sm font-bold focus:border-rose-500 transition-colors outline-none"
-                    value={newReport.selectedItem || ''}
-                    onChange={(e) => handleItemSelect(e.target.value)}
-                  >
-                    <option value="">
-                      {entryMode === 'wo'
-                        ? '-- Pilih Item Gudang --'
-                        : currentManualModeType === 'finished-goods'
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
+                    {entryMode === 'wo' ? 'Item Output WO' : 'Pilih Item (Gudang)'}
+                  </label>
+                  {entryMode === 'wo' ? (
+                    <div className="space-y-2 rounded-2xl border-2 border-emerald-100 bg-emerald-50 p-4">
+                      <div className="rounded-2xl border border-emerald-200 bg-white px-4 py-3">
+                        <p className="text-xs font-black uppercase tracking-wide text-emerald-700">Barang Jadi Dari Work Order</p>
+                        <p className="mt-1 text-base font-black text-slate-900">
+                          {selectedWorkOrderOutput?.name || 'Pilih Work Order dulu'}
+                        </p>
+                        {selectedWorkOrderOutput?.code && (
+                          <p className="mt-1 text-[11px] font-bold uppercase tracking-wide text-slate-500">
+                            Referensi: {selectedWorkOrderOutput.code}
+                          </p>
+                        )}
+                      </div>
+                      <p className="text-[11px] font-medium leading-relaxed text-emerald-800">
+                        Mode WO sekarang fokus ke hasil produksi barang jadi. Pemakaian material/BOM tidak diinput di field ini lagi.
+                      </p>
+                    </div>
+                  ) : (
+                    <select 
+                      className="w-full px-4 py-3 bg-white border-2 border-slate-100 rounded-2xl text-sm font-bold focus:border-rose-500 transition-colors outline-none"
+                      value={newReport.selectedItem || ''}
+                      onChange={(e) => handleItemSelect(e.target.value)}
+                    >
+                      <option value="">
+                        {currentManualModeType === 'finished-goods'
                           ? '-- Pilih Barang Jadi yang Masuk Gudang --'
                           : '-- Pilih Material yang Dipakai --'}
-                    </option>
-                    {entryMode === 'wo' && newReport.woId && <option value="auto">-- Auto-Deduct All BOM (opsional) --</option>}
-                    {selectableWarehouseItems.map((item) => (
-                      <option key={item.id} value={item.value} disabled={item.disabled}>
-                        {item.name} ({item.code || '-'} • Stok {item.stock} {item.unit}{item.disabled ? ' • HABIS' : ''})
                       </option>
-                    ))}
-                  </select>
+                      {selectableWarehouseItems.map((item) => (
+                        <option key={item.id} value={item.value} disabled={item.disabled}>
+                          {item.name} ({item.code || '-'} • Stok {item.stock} {item.unit}{item.disabled ? ' • HABIS' : ''})
+                        </option>
+                      ))}
+                    </select>
+                  )}
                   {entryMode === 'manual' && (
                     <div
                       className={`space-y-2 rounded-2xl px-4 py-3 ${
