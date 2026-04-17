@@ -221,8 +221,9 @@ export async function findFleetAssetContextOrThrow(assetId: string): Promise<{
 export async function syncLegacyWorkOrderRecordFromProduction(row: {
   id: string;
   number: string;
-  projectId: string;
+  projectId: string | null;
   projectName: string;
+  sourceType?: string | null;
   itemToProduce: string;
   targetQty: number;
   completedQty: number;

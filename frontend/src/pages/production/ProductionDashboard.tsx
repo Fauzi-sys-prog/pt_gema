@@ -18,6 +18,7 @@ type ProductionSummaryResponse = {
 
 export default function ProductionDashboard() {
   const { 
+    projectList,
     workOrderList, 
     updateWorkOrder, 
     addWorkOrder, 
@@ -67,14 +68,25 @@ export default function ProductionDashboard() {
     () => (serverAssets.length > 0 ? serverAssets : assetList),
     [serverAssets, assetList]
   );
-  const effectiveProjects = useMemo(
-    () => serverProjects.filter((project) => String(project?.id || '').trim() && String(project?.namaProject || '').trim()),
-    [serverProjects]
-  );
+  const effectiveProjects = useMemo(() => {
+    const byId = new Map<string, Project>();
+    for (const project of projectList || []) {
+      const id = String(project?.id || '').trim();
+      const name = String(project?.namaProject || '').trim();
+      if (id && name) byId.set(id, project);
+    }
+    for (const project of serverProjects || []) {
+      const id = String(project?.id || '').trim();
+      const name = String(project?.namaProject || '').trim();
+      if (id && name) byId.set(id, project);
+    }
+    return Array.from(byId.values());
+  }, [projectList, serverProjects]);
 
   // Form State for new WO
   const [formData, setFormData] = useState({
     woNumber: generateWONumber(),
+    sourceType: 'PROJECT' as WorkOrder['sourceType'],
     projectId: '',
     projectName: '',
     itemToProduce: '',
@@ -290,6 +302,12 @@ export default function ProductionDashboard() {
     return () => window.clearInterval(interval);
   }, [loadData, loadSummary]);
 
+  useEffect(() => {
+    if (showCreateModal && effectiveProjects.length === 0) {
+      void loadData(false);
+    }
+  }, [showCreateModal, effectiveProjects.length, loadData]);
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'In Progress': return 'text-blue-600 bg-blue-50 border-blue-100';
@@ -347,7 +365,7 @@ export default function ProductionDashboard() {
       toast.error("Harap isi semua field yang wajib.");
       return;
     }
-    if (!formData.projectId || !formData.projectName) {
+    if (formData.sourceType !== 'INTERNAL' && (!formData.projectId || !formData.projectName)) {
       toast.error("Work Order harus terhubung ke project yang valid.");
       return;
     }
@@ -355,8 +373,9 @@ export default function ProductionDashboard() {
     const newWO: WorkOrder = {
       id: `wo-${Date.now()}`,
       woNumber: formData.woNumber,
-      projectId: formData.projectId,
-      projectName: formData.projectName,
+      sourceType: formData.sourceType,
+      projectId: formData.sourceType === 'INTERNAL' ? undefined : formData.projectId,
+      projectName: formData.sourceType === 'INTERNAL' ? 'Produksi Internal' : formData.projectName,
       itemToProduce: formData.itemToProduce,
       targetQty: formData.targetQty,
       completedQty: 0,
@@ -386,6 +405,7 @@ export default function ProductionDashboard() {
   const resetForm = () => {
     setFormData({
       woNumber: generateWONumber(),
+      sourceType: 'PROJECT',
       projectId: '',
       projectName: '',
       itemToProduce: '',
@@ -926,6 +946,53 @@ export default function ProductionDashboard() {
             <form onSubmit={handleCreateWO} className="p-8 space-y-6">
               <div className="grid grid-cols-2 gap-6">
                 <div className="col-span-2">
+                  <label className="block text-[10px] font-black text-slate-400 uppercase mb-2">Jenis Work Order</label>
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          sourceType: 'PROJECT',
+                        }))
+                      }
+                      className={`rounded-2xl border-2 px-4 py-4 text-left transition-all ${
+                        formData.sourceType !== 'INTERNAL'
+                          ? 'border-blue-500 bg-blue-50 shadow-sm'
+                          : 'border-slate-200 bg-white hover:border-slate-300'
+                      }`}
+                    >
+                      <p className="text-[10px] font-black uppercase tracking-widest text-blue-600">WO Project</p>
+                      <p className="mt-2 text-sm font-black text-slate-900">Terhubung ke project</p>
+                      <p className="mt-1 text-xs font-medium leading-relaxed text-slate-500">
+                        Dipakai untuk produksi yang nyambung ke proyek/customer tertentu.
+                      </p>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          sourceType: 'INTERNAL',
+                          projectId: '',
+                          projectName: 'Produksi Internal',
+                        }))
+                      }
+                      className={`rounded-2xl border-2 px-4 py-4 text-left transition-all ${
+                        formData.sourceType === 'INTERNAL'
+                          ? 'border-emerald-500 bg-emerald-50 shadow-sm'
+                          : 'border-slate-200 bg-white hover:border-slate-300'
+                      }`}
+                    >
+                      <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600">WO Internal</p>
+                      <p className="mt-2 text-sm font-black text-slate-900">Tanpa project customer</p>
+                      <p className="mt-1 text-xs font-medium leading-relaxed text-slate-500">
+                        Dipakai untuk replenishment stok umum atau produksi internal workshop.
+                      </p>
+                    </button>
+                  </div>
+                </div>
+                <div className="col-span-2">
                   <label className="block text-[10px] font-black text-slate-400 uppercase mb-2">Project</label>
                   <select
                     value={formData.projectId}
@@ -938,15 +1005,23 @@ export default function ProductionDashboard() {
                       }));
                     }}
                     className="w-full px-4 py-3 bg-white border-2 border-slate-100 rounded-xl text-sm font-bold"
-                    required
+                    required={formData.sourceType !== 'INTERNAL'}
+                    disabled={formData.sourceType === 'INTERNAL'}
                   >
-                    <option value="">-- Pilih Project --</option>
+                    <option value="">
+                      {formData.sourceType === 'INTERNAL' ? '-- WO Internal tidak perlu project --' : '-- Pilih Project --'}
+                    </option>
                     {effectiveProjects.map((project) => (
                       <option key={project.id} value={project.id}>
                         {project.namaProject} ({project.customer || '-'})
                       </option>
                     ))}
                   </select>
+                  {formData.sourceType === 'INTERNAL' && (
+                    <p className="mt-2 text-[11px] font-medium text-emerald-700">
+                      WO internal akan tetap lewat flow produksi, QC, dan gudang, tapi tidak dikaitkan ke project customer.
+                    </p>
+                  )}
                 </div>
                 <div className="col-span-2">
                   <label className="block text-[10px] font-black text-slate-400 uppercase mb-2">Item to Produce</label>

@@ -799,8 +799,9 @@ model MaterialRequestRecord {
 model ProductionWorkOrder {
   id                 String                    @id
   number             String                    @unique
-  projectId          String
+  projectId          String?
   projectName        String
+  sourceType         String?
   itemToProduce      String
   targetQty          Float
   completedQty       Float                     @default(0)
@@ -812,7 +813,7 @@ model ProductionWorkOrder {
   startDate          DateTime?
   endDate            DateTime?
   workflowStatus     String?
-  project            ProjectRecord             @relation(fields: [projectId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  project            ProjectRecord?            @relation(fields: [projectId], references: [id], onDelete: SetNull, onUpdate: Cascade)
   machine            AssetRecord?              @relation(fields: [machineId], references: [id], onDelete: SetNull, onUpdate: Cascade)
   bomItems           ProductionWorkOrderBom[]
   productionReports  ProductionExecutionReport[]

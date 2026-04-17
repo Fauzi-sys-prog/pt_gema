@@ -3,8 +3,9 @@ import { projectNameFromPayload } from "./dataPayloadUtils";
 export function mapProductionWorkOrderToLegacyPayload(row: {
   id: string;
   number: string;
-  projectId: string;
+  projectId: string | null;
   projectName: string;
+  sourceType?: string | null;
   itemToProduce: string;
   targetQty: number;
   completedQty: number;
@@ -29,8 +30,9 @@ export function mapProductionWorkOrderToLegacyPayload(row: {
     id: row.id,
     woNumber: row.number,
     number: row.number,
-    projectId: row.projectId,
+    projectId: row.projectId ?? undefined,
     projectName: row.projectName,
+    sourceType: row.sourceType ?? (row.projectId ? "PROJECT" : "INTERNAL"),
     itemToProduce: row.itemToProduce,
     targetQty: row.targetQty,
     completedQty: row.completedQty,

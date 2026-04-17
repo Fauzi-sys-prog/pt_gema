@@ -138,8 +138,9 @@ function normalizeTrackerStatusFromWorkOrderPayload(payload: Record<string, unkn
 function toLegacyWorkOrderPayloadFromRelational(row: {
   id: string;
   number: string;
-  projectId: string;
+  projectId: string | null;
   projectName: string;
+  sourceType: string | null;
   itemToProduce: string;
   targetQty: number;
   completedQty: number;
@@ -162,8 +163,9 @@ function toLegacyWorkOrderPayloadFromRelational(row: {
     id: row.id,
     woNumber: row.number,
     number: row.number,
-    projectId: row.projectId,
+    projectId: row.projectId ?? undefined,
     projectName: row.projectName,
+    sourceType: row.sourceType ?? (row.projectId ? "PROJECT" : "INTERNAL"),
     itemToProduce: row.itemToProduce,
     targetQty: row.targetQty,
     completedQty: row.completedQty,
@@ -771,6 +773,7 @@ operationsRouter.post("/production/submit-lhp", authenticate, async (req: AuthRe
               number: true,
               projectId: true,
               projectName: true,
+              sourceType: true,
               itemToProduce: true,
               targetQty: true,
               completedQty: true,
@@ -811,6 +814,7 @@ operationsRouter.post("/production/submit-lhp", authenticate, async (req: AuthRe
               number: true,
               projectId: true,
               projectName: true,
+              sourceType: true,
               itemToProduce: true,
               targetQty: true,
               completedQty: true,
@@ -986,6 +990,8 @@ operationsRouter.post("/production/submit-lhp", authenticate, async (req: AuthRe
           relationalWo?.projectId || legacyWo?.projectId || asString(woPayload.projectId);
         woProjectName =
           relationalWo?.projectName || asString(woPayload.projectName);
+        const woSourceType =
+          relationalWo?.sourceType || asString(woPayload.sourceType) || (projectId ? "PROJECT" : "INTERNAL");
         if (!woProjectName && projectId) {
           const projectRow = await tx.projectRecord.findUnique({
             where: { id: projectId },
@@ -995,7 +1001,13 @@ operationsRouter.post("/production/submit-lhp", authenticate, async (req: AuthRe
           woProjectName = asString(projectPayload.namaProject) || asString(projectPayload.projectName);
         }
         if (!projectId) {
-          throw new Error(`WO ${woNumber || woIdInput || "-"} belum terhubung ke project`);
+          if (woSourceType === "INTERNAL") {
+            await ensureManualLhpProject(tx);
+            projectId = MANUAL_LHP_PROJECT_ID;
+            woProjectName = woProjectName || MANUAL_LHP_PROJECT_NAME;
+          } else {
+            throw new Error(`WO ${woNumber || woIdInput || "-"} belum terhubung ke project`);
+          }
         }
 
         const targetQty = relationalWo?.targetQty || asNumber(woPayload.targetQty, 0);

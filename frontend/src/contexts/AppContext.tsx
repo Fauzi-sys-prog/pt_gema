@@ -119,8 +119,9 @@ export interface ProductionTracker {
 export interface WorkOrder {
   id: string;
   woNumber: string;
-  projectId: string;
+  projectId?: string;
   projectName: string;
+  sourceType?: "PROJECT" | "INTERNAL";
   itemToProduce: string;
   targetQty: number;
   completedQty?: number;

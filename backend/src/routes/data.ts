@@ -1477,8 +1477,9 @@ async function relationalProductionCreate(resource: string, entityId: string, pa
         data: {
           id: entityId,
           number: asTrimmedString(record.woNumber || record.number) || entityId,
-          projectId: asTrimmedString(record.projectId) || "",
+          projectId: asTrimmedString(record.projectId) || null,
           projectName: asTrimmedString(record.projectName) || "",
+          sourceType: asTrimmedString(record.sourceType) || (asTrimmedString(record.projectId) ? "PROJECT" : "INTERNAL"),
           itemToProduce: asTrimmedString(record.itemToProduce) || "",
           targetQty: toFiniteNumber(record.targetQty, 0),
           completedQty: toFiniteNumber(record.completedQty, 0),
@@ -1654,8 +1655,9 @@ async function relationalProductionUpdate(resource: string, entityId: string, pa
         where: { id: entityId },
         data: {
           number: asTrimmedString(record.woNumber || record.number) || entityId,
-          projectId: asTrimmedString(record.projectId) || "",
+          projectId: asTrimmedString(record.projectId) || null,
           projectName: asTrimmedString(record.projectName) || "",
+          sourceType: asTrimmedString(record.sourceType) || (asTrimmedString(record.projectId) ? "PROJECT" : "INTERNAL"),
           itemToProduce: asTrimmedString(record.itemToProduce) || "",
           targetQty: toFiniteNumber(record.targetQty, 0),
           completedQty: toFiniteNumber(record.completedQty, 0),
@@ -3156,7 +3158,7 @@ async function assertDedicatedRelationsExist(
   resource: string,
   refs: DedicatedRelationRefs
 ): Promise<void> {
-  if (["work-orders", "production-reports", "production-trackers", "qc-inspections", "material-requests", "project-labor-entries"].includes(resource) && !refs.projectId) {
+  if (["production-reports", "production-trackers", "qc-inspections", "material-requests", "project-labor-entries"].includes(resource) && !refs.projectId) {
     throw new PayloadValidationError(`${resource}: projectId wajib diisi`);
   }
   if (resource === "fleet-health") {
