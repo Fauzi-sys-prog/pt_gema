@@ -957,7 +957,9 @@ export default function ProductionReportPage() {
                           )}
                         </div>
                         <p className="text-[11px] font-medium leading-relaxed text-emerald-800">
-                          Mode WO sekarang fokus ke hasil produksi barang jadi. Pemakaian material/BOM tidak diinput di field ini lagi.
+                          {selectedWorkOrderOutput
+                            ? 'Output produksi akan mengikuti barang jadi yang terdaftar di Work Order ini.'
+                            : 'Pilih Work Order dulu supaya item output, project, dan progres produksi bisa tersambung dengan benar.'}
                         </p>
                       </div>
                     </div>
@@ -1124,7 +1126,11 @@ export default function ProductionReportPage() {
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
-                    {currentManualModeType === 'finished-goods' ? 'Qty Hasil Produksi' : 'Qty Material Terpakai'}
+                    {entryMode === 'wo'
+                      ? 'Qty Output Produksi'
+                      : currentManualModeType === 'finished-goods'
+                        ? 'Qty Hasil Produksi'
+                        : 'Qty Material Terpakai'}
                   </label>
                   <div className="relative">
                     <Target className="absolute left-4 top-1/2 -translate-y-1/2 text-rose-500" size={16} />
@@ -1184,10 +1190,11 @@ export default function ProductionReportPage() {
               </button>
               <button 
                 onClick={handleAddReport}
-                className="flex-1 py-4 bg-rose-600 text-white rounded-2xl text-xs font-black uppercase hover:bg-rose-700 shadow-xl shadow-rose-200 transition-all flex items-center justify-center gap-2"
+                disabled={entryMode === 'wo' && !newReport.woId}
+                className="flex-1 py-4 bg-rose-600 text-white rounded-2xl text-xs font-black uppercase hover:bg-rose-700 shadow-xl shadow-rose-200 transition-all flex items-center justify-center gap-2 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-500 disabled:shadow-none"
               >
                 <ClipboardList size={16} />
-                {newReport.woId
+                {entryMode === 'wo'
                   ? 'SIMPAN & UPDATE PROGRESS'
                   : currentManualModeType === 'finished-goods'
                     ? 'SIMPAN HASIL PRODUKSI KE GUDANG'
