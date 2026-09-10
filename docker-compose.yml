@@ -1,0 +1,22 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: ptgema_postgres_local
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ptgema_local
+      POSTGRES_USER: ptgema
+      POSTGRES_PASSWORD: ptgema_local_password
+    ports:
+      - "5433:5432"
+    volumes:
+      - ptgema_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ptgema -d ptgema_local"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+volumes:
+  ptgema_postgres_data:
+
