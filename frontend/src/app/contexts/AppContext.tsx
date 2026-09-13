@@ -416,6 +416,7 @@ export interface StockItem {
 }
 
 export interface StockIn {
+  receivingId?: string;
   id: string;
   noStockIn: string;
   noSuratJalan?: string;
@@ -1579,7 +1580,7 @@ export interface AppContextType {
   deleteWorkOrder: (id: string) => void;
   addStockIn: (si: StockIn) => void;
   addStockOut: (so: StockOut) => void;
-  addReceiving: (rcv: Receiving) => void;
+  addReceiving: (rcv: Receiving) => Promise<void>;
   addInvoice: (inv: Invoice) => void;
   updateInvoice: (id: string, updates: Partial<Invoice>) => void;
   createInvoiceWithAR: (inv: Invoice) => Promise<boolean>;
@@ -1642,7 +1643,7 @@ export interface AppContextType {
   setStockMovementList: React.Dispatch<React.SetStateAction<StockMovement[]>>;
   setPoList: React.Dispatch<React.SetStateAction<PurchaseOrder[]>>;
   createStockOut: (so: StockOut) => void;
-  createStockIn: (si: StockIn) => void;
+  createStockIn: (si: StockIn) => Promise<void>;
   updateStockIn: (id: string, updates: Partial<StockIn>) => void;
   convertDataCollectionToQuotation: (dcId: string) => void;
   convertQuotationToProject: (quoId: string) => void;
@@ -3160,15 +3161,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
   };
 
-  const createStockIn = (si: StockIn) => {
-    setStockInList(prev => [...prev, si]);
-    api.request<StockIn>('/inventory/stock-ins', { method: 'POST', body: JSON.stringify(si) })
-      .then(() => refreshProcurementInventory())
-      .catch(error => {
-        setStockInList(prev => prev.filter(item => item.id !== si.id));
-        toast.error(`Stock In gagal disimpan: ${error.message}`);
-        refreshProcurementInventory().catch(() => undefined);
-      });
+  const createStockIn = async (si: StockIn) => {
+    const saved = await api.request<StockIn>('/inventory/stock-ins', {
+      method: 'POST', body: JSON.stringify(si),
+    });
+    setStockInList(prev => [...prev.filter(item => item.id !== saved.id), saved]);
+    await refreshProcurementInventory().catch(() => {
+      toast.warning('Stok masuk tersimpan. Muat ulang untuk memperbarui saldo stok.');
+    });
   };
 
   const addStockItem = (item: StockItem) => {
@@ -3194,54 +3194,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       });
   };
 
-  const addReceiving = (rcv: Receiving) => {
-    setReceivingList(prev => [...prev, rcv]);
-
-    // Receiving hanya memperbarui progress PO. Stock In dibuat terpisah dari
-    // halaman Stock In dengan memilih dokumen Receiving sebagai referensi.
-    // Blok optimistis ini hanya menjaga daftar PO tetap responsif sampai refresh.
-    if (rcv.poId) {
-      const po = poList.find(p => p.id === rcv.poId);
-      if (po) {
-        const updatedPOItems = po.items.map(poItem => {
-          const receivedItem = rcv.items.find(ri => ri.itemKode === poItem.kode || ri.itemName === poItem.nama);
-          if (receivedItem) {
-            return {
-              ...poItem,
-              qtyReceived: (poItem.qtyReceived || 0) + (receivedItem.qtyReceived || 0)
-            };
-          }
-          return poItem;
-        });
-
-        const allReceived = updatedPOItems.every(item => (item.qtyReceived || 0) >= item.qty);
-        const someReceived = updatedPOItems.some(item => (item.qtyReceived || 0) > 0);
-        
-        let poStatus: PurchaseOrder['status'] = po.status;
-        if (allReceived) poStatus = 'Received';
-        else if (someReceived) poStatus = 'Partial';
-
-        setPoList(prev => prev.map(item => item.id === rcv.poId
-          ? { ...item, items: updatedPOItems, status: poStatus }
-          : item));
-      }
-    }
-
-    addAuditLog({
-      action: 'MATERIAL_RECEIVED',
-      module: 'Procurement',
-      details: `Received materials for PO ${rcv.noPO} via GRN ${rcv.noReceiving}`,
-      status: 'Success'
+  const addReceiving = async (rcv: Receiving) => {
+    const saved = await api.request<Receiving>('/receivings', {
+      method: 'POST', body: JSON.stringify(rcv),
     });
-
-    api.request<Receiving>('/receivings', {
-      method: 'POST',
-      body: JSON.stringify(rcv),
-    }).then(() => refreshProcurementInventory())
-      .catch(error => {
-        toast.error(`Receiving gagal disimpan ke database: ${error.message}`);
-        refreshProcurementInventory().catch(() => {});
-      });
+    setReceivingList(prev => [...prev.filter(item => item.id !== saved.id), saved]);
+    await refreshProcurementInventory().catch(() => {
+      toast.warning('Receiving tersimpan. Muat ulang untuk memperbarui daftar PO dan stok.');
+    });
   };
 
   const handleProductionOutput = (woId: string, qty: number, _workerName: string, _selectedItem?: string) => {

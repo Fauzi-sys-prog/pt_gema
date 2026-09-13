@@ -91,7 +91,7 @@ export default function ProductionReportPage() {
         selectedItem: 'auto',
         namaBarang: wo.itemToProduce,
         activity: `Produksi ${wo.itemToProduce} (${wo.woNumber})`,
-        unit: wo.bom?.[0]?.unit || 'Unit',
+        unit: wo.targetUnit || 'Unit',
         nomorSPK: wo.nomorSPK || '',
       } as any));
       // Auto-fill teknisi from WO
@@ -129,7 +129,7 @@ export default function ProductionReportPage() {
       setNewReport({
         ...newReport,
         selectedItem: itemName,
-        unit: bomItem?.unit || (itemName ? 'Pcs' : 'Unit'),
+        unit: wo.targetUnit || 'Unit',
         activity: itemName 
           ? `Pengerjaan ${itemName} untuk ${wo.itemToProduce} (${wo.woNumber})`
           : `Produksi ${wo.itemToProduce} (${wo.woNumber})`
@@ -449,7 +449,7 @@ export default function ProductionReportPage() {
           <div className="grid grid-cols-3 gap-8">
             <div>
               <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Total Output</p>
-              <p className="text-2xl font-black">{productionReportList.reduce((sum, r) => sum + r.outputQty, 0)} <span className="text-xs text-slate-500 font-bold uppercase">Unit</span></p>
+              <p className="text-2xl font-black">{Object.entries(productionReportList.reduce<Record<string, number>>((totals, report) => { const unit = report.unit || 'Tanpa satuan'; totals[unit] = (totals[unit] || 0) + report.outputQty; return totals; }, {})).map(([unit, qty]) => `${qty} ${unit}`).join(' · ') || '0'}</p>
             </div>
             <div>
               <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Mesin Beroperasi</p>
@@ -487,25 +487,6 @@ export default function ProductionReportPage() {
                 <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1 italic">Input Progress Pekerjaan Workshop</p>
               </div>
               <div className="flex items-center gap-3">
-                <button 
-                  onClick={() => {
-                    setNewReport({
-                      ...newReport,
-                      woId: workOrderList.find(wo => wo.woNumber === 'WO-2026-001')?.id,
-                      workerName: 'Soleh',
-                      activity: 'Cutting Plate S-400 untuk PT Mustika (WO-2026-001)',
-                      machineId: 'M-01',
-                      outputQty: 200,
-                      unit: 'Pcs',
-                      remarks: 'Selesai tepat waktu',
-                      workshop: 'Gema Teknik Workshop'
-                    });
-                    toast.success('Data dari Foto LHP berhasil disimulasikan!');
-                  }}
-                  className="px-4 py-2 bg-emerald-50 text-emerald-600 rounded-xl text-[10px] font-black uppercase border border-emerald-100 hover:bg-emerald-100 transition-all flex items-center gap-2"
-                >
-                  <Camera size={14} /> Simulasi dari Foto
-                </button>
                 <button onClick={() => setShowAddModal(false)} className="w-10 h-10 bg-slate-50 text-slate-400 rounded-xl flex items-center justify-center hover:bg-rose-50 hover:text-rose-600 transition-all">
                   <X size={24} />
                 </button>

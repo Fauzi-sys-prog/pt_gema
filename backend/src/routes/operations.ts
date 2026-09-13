@@ -1212,7 +1212,7 @@ operationsRouter.post("/production/submit-lhp", authenticate, async (req: AuthRe
         nextWorkOrderPayload = {
           ...woPayload,
           completedQty: nextCompleted,
-          status: nextCompleted >= targetQty ? "Completed" : "In Progress",
+          status: nextCompleted >= targetQty ? "QC" : "In Progress",
           bom: nextBom,
         };
         if (legacyWo) {
@@ -1226,7 +1226,7 @@ operationsRouter.post("/production/submit-lhp", authenticate, async (req: AuthRe
             where: { id: relationalWo.id },
             data: {
               completedQty: nextCompleted,
-              status: nextCompleted >= targetQty ? "Completed" : "In Progress",
+              status: nextCompleted >= targetQty ? "QC" : "In Progress",
               bomItems: {
                 deleteMany: {},
                 create: nextBom.map((item, index) => ({

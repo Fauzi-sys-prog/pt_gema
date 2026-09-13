@@ -586,6 +586,51 @@ async function getResource(resource: InventoryResource, id: string) {
   }
 }
 
+export async function validateStockIn(tx: InventoryTx, payload: Record<string, unknown>, id: string) {
+  const items = (Array.isArray(payload.items) ? payload.items : []).map(asRecord);
+  if (!items.length || items.some(item => !asTrimmedString(item.kode ?? item.itemKode) ||
+      !Number.isFinite(Number(item.qty)) || Number(item.qty) <= 0)) {
+    throw new Error("Stok masuk tidak valid: isi SKU dan qty positif pada setiap baris.");
+  }
+  const receivingId = asTrimmedString(payload.receivingId);
+  if (!receivingId && ["Receiving", "Purchase Receiving"].includes(String(payload.type))) {
+    throw new Error("Stok masuk penerimaan tidak valid: pilih dokumen Receiving.");
+  }
+  if (!receivingId) return;
+  const receiving = await tx.procurementReceiving.findUnique({ where: { id: receivingId }, include: { items: true } });
+  if (!receiving || !["Partial", "Complete", "Completed"].includes(receiving.status)) {
+    throw new Error("Receiving tidak ditemukan atau belum dapat diposting.");
+  }
+  const duplicate = await tx.inventoryStockIn.findFirst({ where: {
+    id: { not: id },
+    OR: [
+      { legacyPayload: { path: ["receivingId"], equals: receivingId } },
+      { id: `SI-AUTO-${receivingId}` },
+      ...(receiving.suratJalanNo ? [{ suratJalanNumber: receiving.suratJalanNo,
+        type: { in: ["Receiving", "Purchase Receiving"] } }] : []),
+    ],
+  } });
+  if (duplicate) throw new Error("Receiving tidak dapat diposting ulang: sudah memiliki Stok Masuk.");
+  const allowed = new Map<string, number>();
+  for (const item of receiving.items) {
+    const code = item.itemCode || "";
+    allowed.set(code, (allowed.get(code) || 0) + item.qtyGood);
+  }
+  for (const item of items) {
+    const code = asTrimmedString(item.kode ?? item.itemKode) || "";
+    const qty = Number(item.qty);
+    const remaining = allowed.get(code) || 0;
+    if (qty > remaining) throw new Error("Qty stok masuk tidak boleh melebihi barang baik pada Receiving.");
+    allowed.set(code, remaining - qty);
+  }
+  if ([...allowed.values()].some(qty => qty > 0.000001)) {
+    throw new Error("Stok masuk tidak lengkap: seluruh qty barang baik harus diposting bersama.");
+  }
+  payload.type = "Receiving";
+  payload.noSuratJalan = receiving.suratJalanNo || receiving.purchaseOrderNo;
+  payload.warehouseLocation = receiving.warehouseLocation || "Gudang Utama";
+}
+
 type InventoryAuditWriter = (tx: InventoryTx) => Promise<void>;
 
 async function createResource(resource: InventoryResource, payload: Record<string, unknown>, audit?: InventoryAuditWriter) {
@@ -625,6 +670,7 @@ async function createResource(resource: InventoryResource, payload: Record<strin
     case "stock-ins":
       {
         await inventoryTransaction(async (tx) => {
+        await validateStockIn(tx, payload, entityId);
         const tanggal = new Date(inventoryDateString(asTrimmedString(payload.tanggal)));
         const supplierName = asTrimmedString(payload.supplier) || undefined;
         const createdByName = asTrimmedString(payload.createdBy) || undefined;
@@ -825,6 +871,11 @@ async function updateResource(resource: InventoryResource, id: string, payload: 
       break;
     case "stock-ins":
       await inventoryTransaction(async (tx) => {
+        const currentStockIn = await tx.inventoryStockIn.findUniqueOrThrow({ where: { id }, include: { items: true } });
+        const originalReceivingId = asTrimmedString(asRecord(currentStockIn.legacyPayload).receivingId);
+        payload = { ...mapInventoryStockIn(currentStockIn), ...payload };
+        if (originalReceivingId) payload.receivingId = originalReceivingId;
+        await validateStockIn(tx, payload, id);
         await reverseStockInInventory(tx, id);
         await tx.inventoryStockIn.update({ where: { id }, data: {
           number: asTrimmedString(payload.noStockIn) || id, tanggal: new Date(inventoryDateString(asTrimmedString(payload.tanggal))), type: asTrimmedString(payload.type) || "Receiving", status: asTrimmedString(payload.status) || "Draft", supplierName: asTrimmedString(payload.supplier) || null, suratJalanNumber: asTrimmedString(payload.noSuratJalan) || null, notes: asTrimmedString(payload.notes) || null, createdByName: asTrimmedString(payload.createdBy) || null, poId: asTrimmedString(payload.poId) || null, projectId: asTrimmedString(payload.projectId) || null, legacyPayload: payload as Prisma.InputJsonValue,

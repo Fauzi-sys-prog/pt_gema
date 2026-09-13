@@ -44,6 +44,7 @@ export default function StockInPage() {
   const warehouseCategories = getWarehouseCategories(stockItemList, extraCategories || []);
 
   const [formData, setFormData] = useState({
+    receivingId: '',
     tanggal: new Date().toISOString().split('T')[0],
     type: 'Adjustment' as StockIn['type'],
     noSuratJalan: '',
@@ -70,7 +71,7 @@ export default function StockInPage() {
     return matchSearch && matchType && matchStatus;
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isSubmitting) return;
     setIsSubmitting(true);
@@ -78,6 +79,7 @@ export default function StockInPage() {
       const stockIn: StockIn = {
         id: `SI-${Date.now()}`,
         noStockIn: `SI-${new Date().getFullYear()}-${String(stockInList.length + 1).padStart(3, '0')}`,
+        receivingId: formData.receivingId || undefined,
         noSuratJalan: formData.noSuratJalan,
         tanggal: formData.tanggal,
         type: formData.type,
@@ -91,7 +93,8 @@ export default function StockInPage() {
       };
 
       // Centralized execution (Updates both list and inventory)
-      createStockIn(stockIn);
+      if (!stockIn.items.length) throw new Error("Isi minimal satu SKU dengan qty positif.");
+      await createStockIn(stockIn);
 
       toast.success("Jurnal stok masuk berhasil diposting.");
       setShowModal(false);
@@ -105,7 +108,8 @@ export default function StockInPage() {
 
   const resetForm = () => {
     setFormData({
-      tanggal: new Date().toISOString().split('T')[0],
+      receivingId: '',
+    tanggal: new Date().toISOString().split('T')[0],
       type: 'Adjustment',
       noSuratJalan: '',
       items: [{ kode: '', nama: '', kategori: '', qty: 0, unit: '', lokasi: 'Gudang Utama', harga: 0, batchNo: '', kondisi: 'Baik', fotoKondisi: '', expiryDate: '' }],
@@ -113,26 +117,33 @@ export default function StockInPage() {
     });
   };
 
+  const canImportReceiving = (rcv: Receiving) =>
+    ['Complete', 'Completed', 'Partial'].includes(rcv.status) &&
+    rcv.items.some(item => (item.qtyGood ?? item.qtyReceived ?? 0) > 0) &&
+    !stockInList.some(si => si.receivingId === rcv.id ||
+      (si.noSuratJalan === (rcv.noSuratJalan || rcv.noPO) && ['Receiving', 'Purchase Receiving'].includes(si.type)));
+
   const importFromReceiving = (rcv: Receiving) => {
     const alreadyImported = stockInList.some(
-      si => si.noSuratJalan === (rcv.noSuratJalan || rcv.noPO) && si.type === 'Receiving'
+      si => si.receivingId === rcv.id || (si.noSuratJalan === (rcv.noSuratJalan || rcv.noPO) && ['Receiving', 'Purchase Receiving'].includes(si.type))
     );
     if (alreadyImported) {
       toast.warning(`Receiving ${rcv.noReceiving} sudah pernah di-import ke Stok Masuk.`);
       return;
     }
     setFormData({
+      receivingId: rcv.id,
       tanggal: rcv.tanggal,
       type: 'Receiving',
       noSuratJalan: rcv.noSuratJalan || rcv.noPO || '',
       notes: `Import dari Receiving ${rcv.noReceiving} — PO ${rcv.noPO}`,
-      items: rcv.items.map(i => ({
+      items: rcv.items.filter(i => (i.qtyGood ?? i.qtyReceived ?? 0) > 0).map(i => ({
         kode: i.itemKode || '',
         nama: i.itemName,
         kategori: '',
-        qty: i.qtyGood || i.qtyReceived || 0,
+        qty: i.qtyGood ?? i.qtyReceived ?? 0,
         unit: i.unit,
-        lokasi: 'Gudang Utama',
+        lokasi: rcv.lokasiGudang || 'Gudang Utama',
         harga: 0,
         batchNo: i.batchNo || '',
         kondisi: i.condition === 'Good' ? 'Baik' : i.condition || 'Baik',
@@ -334,7 +345,7 @@ export default function StockInPage() {
                   <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest mb-1">Import dari Receiving PO</p>
                   <p className="text-xs text-indigo-500 font-medium">Pilih receiving untuk auto-isi form otomatis.</p>
                 </div>
-                {receivingList.filter(r => r.status === 'Complete' || r.status === 'Partial').length > 0 ? (
+                {receivingList.filter(canImportReceiving).length > 0 ? (
                   <select
                     className="px-4 py-3 bg-white border border-indigo-200 rounded-xl text-xs font-black text-slate-700 outline-none min-w-[220px]"
                     defaultValue=""
@@ -345,7 +356,7 @@ export default function StockInPage() {
                   >
                     <option value="">— Pilih Receiving —</option>
                     {receivingList
-                      .filter(r => r.status === 'Complete' || r.status === 'Partial')
+                      .filter(canImportReceiving)
                       .slice(0, 20)
                       .map(r => (
                         <option key={r.id} value={r.id}>

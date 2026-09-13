@@ -226,11 +226,18 @@ export default function ReceivingPage() {
     setItems([]);
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (isSubmitting) return;
     if (!formData.poId || items.length === 0) return;
     if (!formData.noSuratJalan) {
       toast.error('Mohon masukkan Nomor Surat Jalan (SJ) dari Vendor');
+      return;
+    }
+    if (!items.some(item => item.qtyReceived > 0) || items.some(item =>
+      !Number.isFinite(item.qtyReceived) || item.qtyReceived < 0 ||
+      item.qtyReceived > Math.max(0, item.qtyOrdered - item.qtyPreviouslyReceived) ||
+      !Number.isFinite(item.qtyDamaged) || item.qtyDamaged < 0 || item.qtyDamaged > item.qtyReceived)) {
+      toast.error('Qty diterima harus positif, tidak melebihi sisa PO, dan qty rusak tidak melebihi qty diterima.');
       return;
     }
     setIsSubmitting(true);
@@ -265,7 +272,7 @@ export default function ReceivingPage() {
     // Receiving hanya mencatat penerimaan dan memperbarui progress PO.
     // Stock In dibuat terpisah setelah gudang memilih dokumen Receiving.
     try {
-      addReceiving(newReceiving as any);
+      await addReceiving(newReceiving as any);
 
       // Backend menyimpan Receiving, progres PO, dan draft expense dalam satu
       // transaksi. Stock In tetap dibuat terpisah setelah verifikasi gudang.
@@ -587,9 +594,9 @@ export default function ReceivingPage() {
                               <div className="text-sm font-black italic uppercase text-slate-900">{item.itemName}</div>
                               <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{item.itemKode} • {item.unit}</div>
                             </td>
-                            <td className="px-6 py-4 text-center text-sm font-bold text-slate-400">{item.qtyOrdered}</td>
+                            <td className="px-6 py-4 text-center text-sm font-bold text-slate-400">{item.qtyOrdered}<div className="text-xs">Sudah: {item.qtyPreviouslyReceived} · Sisa: {Math.max(0, item.qtyOrdered - item.qtyPreviouslyReceived)}</div></td>
                             <td className="px-6 py-4 text-center">
-                              <input type="number" value={item.qtyReceived} onChange={(e) => {
+                              <input type="number" min="0" max={Math.max(0, item.qtyOrdered - item.qtyPreviouslyReceived)} value={item.qtyReceived} onChange={(e) => {
                                 const val = Number(e.target.value);
                                 const newItems = [...items];
                                 newItems[index].qtyReceived = val;
@@ -598,7 +605,7 @@ export default function ReceivingPage() {
                               }} className="w-20 px-3 py-2 border-2 border-slate-100 rounded-xl text-center font-black italic focus:border-indigo-500 outline-none transition-all" />
                             </td>
                             <td className="px-6 py-4 text-center">
-                              <input type="number" value={item.qtyDamaged} onChange={(e) => {
+                              <input type="number" min="0" max={item.qtyReceived} value={item.qtyDamaged} onChange={(e) => {
                                 const val = Number(e.target.value);
                                 const newItems = [...items];
                                 newItems[index].qtyDamaged = val;
