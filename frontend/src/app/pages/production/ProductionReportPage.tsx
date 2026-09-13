@@ -140,8 +140,8 @@ export default function ProductionReportPage() {
   const handleAddReport = async () => {
     if (isSubmitting) return;
     const resolvedWorker = lhpTeknisiList.length > 0 ? lhpTeknisiList.join(', ') : newTeknisiInput.trim();
-    if (!resolvedWorker || !newReport.activity || !newReport.outputQty) {
-      toast.error('Mohon lengkapi data teknisi, aktivitas, dan qty');
+    if (!resolvedWorker || !newReport.woId || !newReport.activity || !newReport.outputQty) {
+      toast.error('Pilih Work Order, lalu lengkapi teknisi, aktivitas, dan qty');
       return;
     }
 
@@ -301,6 +301,11 @@ export default function ProductionReportPage() {
             Input LHP Baru
           </button>
         </div>
+      </div>
+
+      <div className="bg-blue-50 border border-blue-100 rounded-2xl px-5 py-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+        <div><p className="text-[10px] font-black uppercase tracking-widest text-blue-600">Langkah 2 dari 4</p><p className="text-sm font-black text-slate-800">LHP = catat hasil harian dari Work Order yang dipilih</p><p className="text-xs text-slate-500 mt-1">Jangan membuat rencana baru di sini. Pilih WO, isi output hari ini, lalu simpan.</p></div>
+        <span className="text-[10px] font-black uppercase text-blue-700 bg-white border border-blue-200 px-3 py-2 rounded-xl">LHP → potong bahan & tambah progress</span>
       </div>
 
       <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
@@ -520,18 +525,34 @@ export default function ProductionReportPage() {
                       value={newReport.woId || ''}
                       onChange={(e) => handleWOSelect(e.target.value)}
                     >
-                      <option value="">-- Manual (tanpa WO) --</option>
+                      <option value="">-- Pilih Work Order --</option>
                       {activeWorkOrders.map(wo => (
                         <option key={wo.id} value={wo.id}>{wo.woNumber}{wo.nomorSPK ? ` — SPK: ${wo.nomorSPK}` : ''}</option>
                       ))}
                     </select>
                   </div>
+                  {newReport.woId && (() => {
+                    const wo = workOrderList.find(item => item.id === newReport.woId);
+                    if (!wo) return null;
+                    const target = Number(wo.targetQty || 0);
+                    const completed = Number(wo.completedQty || 0);
+                    const remaining = Math.max(target - completed, 0);
+                    return (
+                      <div className="md:col-span-2 grid grid-cols-2 md:grid-cols-4 gap-3 p-4 bg-blue-50 border border-blue-100 rounded-2xl">
+                        <div><p className="text-[9px] font-black text-blue-400 uppercase">Project</p><p className="text-sm font-black text-slate-800 truncate">{wo.projectName || '-'}</p></div>
+                        <div><p className="text-[9px] font-black text-blue-400 uppercase">Barang</p><p className="text-sm font-black text-slate-800 truncate">{wo.itemToProduce || '-'}</p></div>
+                        <div><p className="text-[9px] font-black text-blue-400 uppercase">Target / Sebelumnya</p><p className="text-sm font-black text-slate-800">{target} / {completed} {wo.targetUnit || ''}</p></div>
+                        <div><p className="text-[9px] font-black text-blue-400 uppercase">Sisa Target</p><p className="text-sm font-black text-rose-600">{remaining} {wo.targetUnit || ''}</p></div>
+                      </div>
+                    );
+                  })()}
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">No. SPK</label>
                     <input
                       type="text"
+                      readOnly={Boolean(newReport.woId)}
                       placeholder="Contoh: SPK/GTP/2026/001"
-                      className="w-full px-4 py-3 bg-white border-2 border-slate-100 rounded-2xl text-sm font-bold text-black focus:border-rose-500 transition-colors outline-none"
+                      className={`w-full px-4 py-3 border-2 rounded-2xl text-sm font-bold text-black outline-none ${newReport.woId ? 'bg-slate-100 border-slate-100 cursor-not-allowed' : 'bg-white border-slate-100 focus:border-rose-500'}`}
                       value={(newReport as any).nomorSPK || ''}
                       onChange={(e) => setNewReport({ ...newReport, nomorSPK: e.target.value } as any)}
                     />
@@ -540,8 +561,9 @@ export default function ProductionReportPage() {
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Nama Barang / Item yang Dikerjakan <span className="text-rose-400">*</span></label>
                     <input
                       type="text"
-                      placeholder="Contoh: Castable Refractory, Brick Lining, Repair Boiler..."
-                      className="w-full px-4 py-3 bg-white border-2 border-slate-100 rounded-2xl text-sm font-bold text-black focus:border-rose-500 transition-colors outline-none"
+                      readOnly={Boolean(newReport.woId)}
+                      placeholder="Nama barang dari Work Order"
+                      className={`w-full px-4 py-3 border-2 rounded-2xl text-sm font-bold text-black outline-none ${newReport.woId ? 'bg-slate-100 border-slate-100 cursor-not-allowed' : 'bg-white border-slate-100 focus:border-rose-500'}`}
                       value={(newReport as any).namaBarang || ''}
                       onChange={(e) => setNewReport({ ...newReport, namaBarang: e.target.value } as any)}
                     />

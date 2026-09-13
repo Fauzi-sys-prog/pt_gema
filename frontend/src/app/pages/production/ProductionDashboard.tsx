@@ -718,6 +718,29 @@ export default function ProductionDashboard() {
         </div>
       </div>
 
+      <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-indigo-900 rounded-3xl p-6 text-white shadow-lg">
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-5">
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-indigo-300 mb-2">Alur Produksi</p>
+            <h2 className="text-xl font-black">Ikuti 4 langkah sampai barang masuk gudang</h2>
+            <p className="text-xs text-slate-300 mt-1">WO merencanakan, LHP mencatat hasil, QC memeriksa, Gudang memposting.</p>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 lg:min-w-[560px]">
+            {[
+              ['1', 'Buat WO', 'Rencana produksi'],
+              ['2', 'Mulai LHP', 'Catat hasil harian'],
+              ['3', 'QC', 'Terima / rework'],
+              ['4', 'Stok Masuk', 'Posting barang jadi'],
+            ].map(([number, title, desc]) => (
+              <div key={number} className="rounded-2xl bg-white/10 border border-white/10 p-3">
+                <div className="flex items-center gap-2"><span className="w-6 h-6 rounded-full bg-white text-slate-900 text-xs font-black flex items-center justify-center">{number}</span><span className="text-xs font-black">{title}</span></div>
+                <p className="text-[9px] text-slate-300 mt-2">{desc}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         {[
           {
@@ -845,8 +868,7 @@ export default function ProductionDashboard() {
                       <div className="max-w-[180px]">
                         <div className="flex justify-between items-end mb-1.5">
                           <span className="text-[10px] font-black text-slate-500 uppercase">
-                            {calculateBOMProgress(wo)}% BOM
-                            Progress
+                            Output: {wo.completedQty || 0}/{wo.targetQty} {wo.targetUnit || ''}
                           </span>
                           <span className="text-[10px] font-bold text-slate-400 uppercase">
                             DL: {wo.deadline}
@@ -907,7 +929,7 @@ export default function ProductionDashboard() {
                             }}
                             className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500 text-white rounded-lg text-[10px] font-black uppercase hover:bg-amber-600 transition-all shadow-md shadow-amber-100 disabled:opacity-50 disabled:cursor-not-allowed"
                           >
-                            <ShieldCheck size={14} /> Send to QC
+                            <ShieldCheck size={14} /> Kirim ke QC
                           </button>
                         )}
                         {wo.status === "Draft" && (
@@ -919,7 +941,7 @@ export default function ProductionDashboard() {
                             className="p-2 text-blue-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
                             title="Verifikasi BOM & Mulai Produksi"
                           >
-                            <Layers size={16} />
+                            <Layers size={16} /> Verifikasi BOM & Mulai
                           </button>
                         )}
                         {wo.status === "QC" && <span className="px-3 py-1.5 text-[9px] font-black uppercase text-amber-700 bg-amber-50 rounded-lg">Menunggu QC</span>}

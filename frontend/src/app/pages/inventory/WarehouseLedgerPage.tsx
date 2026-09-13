@@ -26,6 +26,7 @@ import {
 import { useApp } from '../../contexts/AppContext';
 import { motion } from 'motion/react';
 import { useNavigate } from 'react-router';
+import { getWarehouseCategories } from '../../utils/warehouseCategories';
 import { toast } from 'sonner';
 
 const KATEGORI_OPTIONS = [
@@ -44,13 +45,8 @@ export default function WarehouseLedgerPage() {
   const [newKategoriCustom, setNewKategoriCustom] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const allCategories = useMemo(() => {
-    return [...new Set([
-      ...KATEGORI_OPTIONS,
-      ...stockItemList.map(s => s.kategori).filter(Boolean),
-      ...extraCategories,
-    ])].sort();
-  }, [stockItemList, extraCategories]);
+  const allCategories = getWarehouseCategories(stockItemList, extraCategories);
+
 
   const handleAddCategory = () => {
     if (isSubmitting) return;
@@ -81,9 +77,9 @@ export default function WarehouseLedgerPage() {
   }, [stockItemList, receivingList]);
 
   const categories = useMemo(() => {
-    const cats = ['All', ...new Set(stockItemList.map(i => i.kategori))];
+    const cats = ['All', ...getWarehouseCategories(stockItemList, extraCategories)];
     return cats;
-  }, [stockItemList]);
+  }, [stockItemList, extraCategories]);
 
   const locations = useMemo(() => {
     const locs = ['All', ...new Set(stockItemList.map(i => i.lokasi))];

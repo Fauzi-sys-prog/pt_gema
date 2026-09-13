@@ -10,6 +10,7 @@ import {
 import { toast } from 'sonner';
 import { KwitansiTemplate } from '../../components/KwitansiTemplate';
 import { motion } from 'motion/react';
+import { UnitSelect } from '../../components/data-collection/UnitSelect';
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -35,9 +36,10 @@ const STATUS_STYLE: Record<string, string> = {
   Overdue: 'bg-rose-100 text-rose-700',
 };
 
-type InvItem = { deskripsi: string; qty: number; unit: string; hargaSatuan: number; total: number };
+type PricingMethod = 'PER_UNIT' | 'LUMP_SUM';
+type InvItem = { deskripsi: string; qty: number; unit: string; pricingMethod: PricingMethod; hargaSatuan: number; total: number };
 
-const emptyItem = (): InvItem => ({ deskripsi: '', qty: 1, unit: 'Unit', hargaSatuan: 0, total: 0 });
+const emptyItem = (): InvItem => ({ deskripsi: '', qty: 1, unit: 'Unit', pricingMethod: 'PER_UNIT', hargaSatuan: 0, total: 0 });
 
 // ─── types ───────────────────────────────────────────────────────────────────
 
@@ -163,8 +165,9 @@ export default function InvoicePage() {
             deskripsi: it.keterangan,
             qty: it.qty || 1,
             unit: it.satuan || 'Unit',
+            pricingMethod: (it.pricingMethod || 'PER_UNIT') as PricingMethod,
             hargaSatuan: it.hargaJualUnit || it.hargaJual || 0,
-            total: (it.qty || 1) * (it.hargaJualUnit || it.hargaJual || 0),
+            total: it.pricingMethod === 'LUMP_SUM' ? (it.hargaJualUnit || it.hargaJual || 0) : (it.qty || 1) * (it.hargaJualUnit || it.hargaJual || 0),
           });
         }
       });
@@ -193,14 +196,18 @@ export default function InvoicePage() {
         deskripsi: `${label} — ${base.perihal || 'Pekerjaan'}`,
         qty: 1,
         unit: 'LS',
+        pricingMethod: 'LUMP_SUM',
         hargaSatuan: terminAmt,
         total: terminAmt,
       }],
     });
   };
 
+  const calcItemTotal = (item: Pick<InvItem, 'qty' | 'pricingMethod' | 'hargaSatuan'>) =>
+    item.pricingMethod === 'LUMP_SUM' ? item.hargaSatuan : item.qty * item.hargaSatuan;
+
   const calcTotals = () => {
-    const subtotal = form.items.reduce((s, it) => s + it.total, 0);
+    const subtotal = form.items.reduce((s, it) => s + calcItemTotal(it), 0);
     const ppn = form.ppnEnabled ? Math.round(subtotal * 0.11) : 0;
     return { subtotal, ppn, totalBayar: subtotal + ppn };
   };
@@ -210,7 +217,7 @@ export default function InvoicePage() {
       const items = prev.items.map((it, i) => {
         if (i !== idx) return it;
         const merged = { ...it, ...patch };
-        merged.total = merged.qty * merged.hargaSatuan;
+        merged.total = calcItemTotal(merged);
         return merged;
       });
       return { ...prev, items };
@@ -295,7 +302,7 @@ export default function InvoicePage() {
         };
         const items: InvItem[] = sj.items.map((it: any) => {
           const h = resolveHarga(it.namaItem, it.itemKode);
-          return { deskripsi: `${it.namaItem} (${sj.noSurat} / Batch: ${it.batchNo || '-'})`, qty: it.jumlah, unit: it.satuan, hargaSatuan: h, total: it.jumlah * h };
+          return { deskripsi: `${it.namaItem} (${sj.noSurat} / Batch: ${it.batchNo || '-'})`, qty: it.jumlah, unit: it.satuan, pricingMethod: 'PER_UNIT' as PricingMethod, hargaSatuan: h, total: it.jumlah * h };
         });
         const subtotal = items.reduce((s, i) => s + i.total, 0);
         const ppn = Math.round(subtotal * 0.11);
@@ -934,8 +941,22 @@ export default function InvoicePage() {
                             className="w-full px-3 py-2 bg-slate-50 rounded-xl text-sm font-medium border-none focus:ring-2 focus:ring-blue-500" placeholder="Qty" />
                         </div>
                         <div className="col-span-3 sm:col-span-2">
-                          <input value={it.unit} onChange={e => updateItem(idx, { unit: e.target.value })}
-                            className="w-full px-3 py-2 bg-slate-50 rounded-xl text-sm font-medium border-none focus:ring-2 focus:ring-blue-500" placeholder="Satuan" />
+                          <UnitSelect
+                            value={it.unit}
+                            onChange={(unit) => updateItem(idx, { unit })}
+                            inputClassName="w-full px-3 py-2 bg-slate-50 rounded-xl text-sm font-medium border-none"
+                            placeholder="Tulis satuan..."
+                          />
+                        </div>
+                        <div className="col-span-5 sm:col-span-2">
+                          <select
+                            value={it.pricingMethod}
+                            onChange={e => updateItem(idx, { pricingMethod: e.target.value as PricingMethod })}
+                            className="w-full px-3 py-2 bg-slate-50 rounded-xl text-sm font-medium border-none focus:ring-2 focus:ring-blue-500 text-slate-700"
+                          >
+                            <option value="PER_UNIT">Per Satuan</option>
+                            <option value="LUMP_SUM">Lump Sum</option>
+                          </select>
                         </div>
                         <div className="col-span-5 sm:col-span-2">
                           <input type="number" min={0} value={it.hargaSatuan} onChange={e => updateItem(idx, { hargaSatuan: Number(e.target.value) })}

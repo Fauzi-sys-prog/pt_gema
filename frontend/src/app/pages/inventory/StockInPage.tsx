@@ -20,6 +20,7 @@ import { useApp, type StockIn, type Receiving } from '../../contexts/AppContext'
 import { useNavigate } from 'react-router';
 import { toast } from 'sonner';
 import { useEscapeKey } from '../../hooks/useEscapeKey';
+import { getWarehouseCategories } from '../../utils/warehouseCategories';
 
 export default function StockInPage() {
   const navigate = useNavigate();
@@ -40,6 +41,7 @@ export default function StockInPage() {
   const [selectedStockIn, setSelectedStockIn] = useState<StockIn | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isPosting, setIsPosting] = useState(false);
+  const warehouseCategories = getWarehouseCategories(stockItemList, extraCategories || []);
 
   const [formData, setFormData] = useState({
     tanggal: new Date().toISOString().split('T')[0],
@@ -428,7 +430,7 @@ export default function StockInPage() {
                           className={`w-full px-4 py-2.5 rounded-xl text-xs font-bold outline-none border-transparent ${item.kategori ? 'bg-blue-50 text-blue-700' : 'bg-slate-100 text-slate-400'}`}
                         >
                           <option value="">— Pilih Kategori —</option>
-                          {[...new Set([...stockItemList.map(s => s.kategori).filter(Boolean), ...(extraCategories || [])])].sort().map(k => (
+                          {warehouseCategories.map(k => (
                             <option key={k} value={k}>{k}</option>
                           ))}
                         </select>

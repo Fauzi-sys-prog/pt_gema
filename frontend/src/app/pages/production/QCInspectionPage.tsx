@@ -25,13 +25,11 @@ import { toast } from 'sonner';
 import { ImageWithFallback } from '../../components/figma/ImageWithFallback';
 import { InspectionReportPrint } from '../../components/InspectionReportPrint';
 import { useEscapeKey } from '../../hooks/useEscapeKey';
+import { getWarehouseCategories } from '../../utils/warehouseCategories';
 
 export default function QCInspectionPage() {
   const { workOrderList, qcInspectionList, addQCInspection, updateWorkOrder, productionReportList, updateProductionReport, stockItemList, extraCategories } = useApp();
-  const warehouseCategories = useMemo(() => [...new Set([
-    ...(extraCategories || []),
-    ...(stockItemList || []).map(item => item.kategori).filter(Boolean),
-  ])].sort((a, b) => a.localeCompare(b)), [extraCategories, stockItemList]);
+  const warehouseCategories = getWarehouseCategories(stockItemList, extraCategories || []);
   const [searchTerm, setSearchTerm] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [selectedWO, setSelectedWO] = useState<WorkOrder | null>(null);
@@ -94,16 +92,21 @@ export default function QCInspectionPage() {
 
   const handleOpenInspection = (wo: WorkOrder) => {
     setSelectedWO(wo);
-    setNewInspection({
-      tanggal: new Date().toISOString().split('T')[0],
+      const linkedOutputQty = productionReportList
+        .filter(report => (report as any).workOrderId === wo.id || (report as any).woNumber === wo.woNumber)
+        .reduce((sum, report) => sum + (Number(report.outputQty) || 0), 0);
+      const actualQty = linkedOutputQty || Number(wo.completedQty || wo.targetQty || 0);
+      setNewInspection({
+        tanggal: new Date().toISOString().split('T')[0],
       visualCheck: true,
       dimensionCheck: true,
       materialCheck: true,
       status: 'Passed',
       notes: '',
       itemNama: wo.itemToProduce,
-      qtyInspected: wo.targetQty,
-      qtyPassed: wo.targetQty,
+      unit: wo.targetUnit || 'Unit',
+      qtyInspected: actualQty,
+      qtyPassed: actualQty,
       qtyRejected: 0,
       woNumber: wo.woNumber,
       workOrderId: wo.id,
@@ -174,6 +177,7 @@ export default function QCInspectionPage() {
       tanggal: newInspection.tanggal!,
       batchNo: newInspection.batchNo!,
       itemNama: newInspection.itemNama!,
+      unit: (newInspection as any).unit || selectedWO?.targetUnit || 'Unit',
       qtyInspected,
       qtyPassed,
       qtyRejected,
@@ -257,6 +261,11 @@ export default function QCInspectionPage() {
             <p className="text-xs text-slate-500 font-bold uppercase tracking-widest">Inspection, Verification & Release</p>
           </div>
         </div>
+      </div>
+
+      <div className="bg-indigo-50 border border-indigo-100 rounded-2xl px-5 py-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+        <div><p className="text-[10px] font-black uppercase tracking-widest text-indigo-600">Langkah 3 dari 4</p><p className="text-sm font-black text-slate-800">QC = putuskan hasil produksi diterima atau perlu rework</p><p className="text-xs text-slate-500 mt-1">QC Passed dapat membuat Draft Stok Masuk Barang Jadi. QC Rejected mengembalikan WO ke produksi.</p></div>
+        <span className="text-[10px] font-black uppercase text-indigo-700 bg-white border border-indigo-200 px-3 py-2 rounded-xl">QC → Stok Masuk / Rework</span>
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">

@@ -176,6 +176,7 @@ export interface QCInspection {
   sendToWarehouse?: boolean;
   warehouseLocation?: string;
   stockCategory?: string;
+  unit?: string;
   // NEW: Inspection Report Fields
   customerName?: string;
   drawingUrl?: string;
@@ -587,6 +588,7 @@ export interface Invoice {
     deskripsi: string;
     qty: number;
     unit: string;
+    pricingMethod?: 'PER_UNIT' | 'LUMP_SUM';
     hargaSatuan: number;
     total: number;
   }>;
@@ -666,6 +668,23 @@ export interface MaintenanceRecord {
   notes?: string;
 }
 
+export interface WorkSectionItem {
+  id: string;
+  description: string;
+  specification?: string;
+  quantity: number;
+  unit: string;
+  area?: string;
+  notes?: string;
+}
+
+export interface WorkSection {
+  id: string;
+  title: string;
+  collapsed?: boolean;
+  items: WorkSectionItem[];
+}
+
 export interface DataCollection {
   id: string;
   noKoleksi: string;
@@ -682,6 +701,7 @@ export interface DataCollection {
   schedule?: any[];
   consumables?: any[];
   equipment?: any[];
+  workSections?: WorkSection[];
   status: "Draft" | "Verified" | "Completed";
   notes?: string;
   priority: "Low" | "Medium" | "High" | "Urgent";

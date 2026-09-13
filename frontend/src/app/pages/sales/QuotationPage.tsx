@@ -15,6 +15,7 @@ import { downloadQuotationWordDocument } from '../../components/QuotationWordExp
 import { exportQuotationToXlsx } from '../../utils/quotationExcelExport';
 import { loadSampleQuotation } from '../../data/sampleQuotationGTP';
 import { useEscapeKey } from '../../hooks/useEscapeKey';
+import { UnitSelect } from '../../components/data-collection/UnitSelect';
 
 // Quotation Management Page - Transformed to Commercial Pricing Tool
 export default function QuotationPage() {
@@ -138,6 +139,7 @@ export default function QuotationPage() {
       subKeterangan: string;
       qty: number;
       satuan: string;
+      pricingMethod: 'PER_UNIT' | 'LUMP_SUM';
       hargaJualUnit: number;
       disc?: number;
       hargaJual: number;
@@ -223,7 +225,7 @@ export default function QuotationPage() {
     // Map survey data ke dynamic sections
     const makeItem = (id: string, keterangan: string, qty: number, satuan: string, _surveyCost: number, notes = '') => {
       // Survey costs are not customer selling prices; enter the agreed price explicitly.
-      return { id, keterangan, subKeterangan: notes, qty, satuan, hargaJualUnit: 0, disc: 0, hargaJual: 0 };
+      return { id, keterangan, subKeterangan: notes, qty, satuan, pricingMethod: defaultPricingMethod(satuan), hargaJualUnit: 0, disc: 0, hargaJual: 0 };
     };
     const newSections: typeof sections = [];
     if ((survey.manpower || []).length > 0) newSections.push({ id: `sec-mp-${Date.now()}`, nama: 'Manpower', items: survey.manpower.map((mp: any) => makeItem(`mp-${Date.now()}-${Math.random()}`, mp.position || mp.jabatan || 'Tenaga Kerja', mp.quantity || mp.jumlah || 1, 'Orang', mp.upah || mp.hargaSatuan || 0, mp.notes || mp.keterangan || '')) });
@@ -261,12 +263,17 @@ export default function QuotationPage() {
     }
   }, [location.state]);
 
+  const calculateItemTotal = (item: { qty: number; pricingMethod?: 'PER_UNIT' | 'LUMP_SUM'; hargaJualUnit: number }) =>
+    item.pricingMethod === 'LUMP_SUM' ? (item.hargaJualUnit || 0) : (item.hargaJualUnit || 0) * (item.qty || 0);
+
+  const defaultPricingMethod = (satuan: string): 'PER_UNIT' | 'LUMP_SUM' =>
+    ['Lot', 'Paket', 'LS'].includes(satuan) ? 'LUMP_SUM' : 'PER_UNIT';
+
   // Calculate totals from dynamic sections
   const calculateCommercialTotals = () => {
     let totalHargaJual = 0;
     sections.forEach(sec => sec.items.forEach(item => {
-      const qty = item.qty || 0;
-      totalHargaJual += (item.hargaJualUnit || 0) * qty;
+      totalHargaJual += calculateItemTotal(item);
     }));
     const discount = totalHargaJual * ((pricingConfig.discountPercent || 0) / 100);
     const grandTotal = totalHargaJual - discount;
@@ -326,7 +333,7 @@ export default function QuotationPage() {
       toast.error('Tambahkan minimal 1 item ke dalam section sebelum menyimpan!');
       return;
     }
-    const hasEmptyItem = sections.some(s => s.items.some(i => !i.keterangan.trim() || !i.satuan.trim() || !Number.isFinite(i.qty) || i.qty <= 0 || !Number.isFinite(i.hargaJualUnit) || i.hargaJualUnit <= 0));
+    const hasEmptyItem = sections.some(s => s.items.some(i => !i.keterangan.trim() || !i.satuan.trim() || !i.pricingMethod || !Number.isFinite(i.qty) || i.qty <= 0 || !Number.isFinite(i.hargaJualUnit) || i.hargaJualUnit <= 0));
     if (hasEmptyItem) {
       toast.error('Lengkapi keterangan, satuan, jumlah, dan harga jual per satuan yang lebih dari 0.');
       return;
@@ -467,7 +474,7 @@ export default function QuotationPage() {
   };
 
   const addItem = (secId: string) => {
-    const newItem = { id: `item-${Date.now()}`, keterangan: '', subKeterangan: '', qty: 1, satuan: 'Lot', hargaJualUnit: 0, hargaJual: 0 };
+    const newItem = { id: `item-${Date.now()}`, keterangan: '', subKeterangan: '', qty: 1, satuan: 'Lot', pricingMethod: 'LUMP_SUM' as const, hargaJualUnit: 0, hargaJual: 0 };
     setSections(prev => prev.map(s => s.id === secId ? { ...s, items: [...s.items, newItem] } : s));
   };
 
@@ -479,10 +486,8 @@ export default function QuotationPage() {
         items: s.items.map(item => {
           if (item.id !== itemId) return item;
           const updated = { ...item, [field]: value };
-          // Recalculate on any relevant field change
-          const qty = updated.qty || 0;
-          const jualUnit = updated.hargaJualUnit || 0;
-          updated.hargaJual = qty * jualUnit;
+          // Recalculate using explicit pricing method, not the unit label.
+          updated.hargaJual = calculateItemTotal(updated);
           return updated;
         })
       };
@@ -1120,7 +1125,8 @@ export default function QuotationPage() {
                                     <th className="text-left p-2 text-[11px] font-semibold text-gray-900">Keterangan</th>
                                     <th className="text-center p-2 text-[11px] font-semibold text-gray-900 w-16">Qty</th>
                                     <th className="text-center p-2 text-[11px] font-semibold text-gray-900 w-20">Satuan</th>
-                                    <th className="text-right p-2 text-[11px] font-semibold text-blue-700 w-32">Jual/Unit</th>
+                                    <th className="text-center p-2 text-[11px] font-semibold text-gray-900 w-28">Metode Harga</th>
+                                    <th className="text-right p-2 text-[11px] font-semibold text-blue-700 w-32">Harga</th>
                                     <th className="text-right p-2 text-[11px] font-semibold text-green-700 w-32">Total Jual</th>
                                     <th className="w-8"></th>
                                   </tr>
@@ -1154,13 +1160,22 @@ export default function QuotationPage() {
                                         />
                                       </td>
                                       <td className="p-2">
-                                        <input
-                                          type="text"
+                                        <UnitSelect
                                           value={item.satuan}
-                                          onChange={e => updateItemField(sec.id, item.id, 'satuan', e.target.value)}
-                                          className="w-full px-2 py-1 border border-gray-300 rounded text-sm text-center text-gray-900"
-                                          placeholder="Lot"
+                                          onChange={(value) => updateItemField(sec.id, item.id, 'satuan', value)}
+                                          inputClassName="w-full px-2 py-1 border border-gray-300 rounded text-sm text-center text-gray-900"
+                                          placeholder="Tulis satuan..."
                                         />
+                                      </td>
+                                      <td className="p-2">
+                                        <select
+                                          value={item.pricingMethod || defaultPricingMethod(item.satuan)}
+                                          onChange={e => updateItemField(sec.id, item.id, 'pricingMethod', e.target.value)}
+                                          className="w-full px-1 py-1 border border-gray-300 rounded text-xs text-gray-900 bg-white"
+                                        >
+                                          <option value="PER_UNIT">Per Satuan</option>
+                                          <option value="LUMP_SUM">Lump Sum</option>
+                                        </select>
                                       </td>
                                       <td className="p-2">
                                         <input
@@ -1172,7 +1187,7 @@ export default function QuotationPage() {
                                         />
                                       </td>
                                       <td className="p-2 text-right text-sm font-semibold text-green-700 pt-3">
-                                        {((item.hargaJualUnit || 0) * (item.qty || 0)).toLocaleString('id-ID')}
+                                        {calculateItemTotal(item).toLocaleString('id-ID')}
                                       </td>
                                       <td className="p-2 pt-3">
                                         <button type="button" onClick={() => deleteItem(sec.id, item.id)} className="p-1 text-red-500 hover:bg-red-50 rounded">
@@ -1183,15 +1198,15 @@ export default function QuotationPage() {
                                   ))}
                                   {sec.items.length === 0 && (
                                     <tr>
-                                      <td colSpan={7} className="p-4 text-center text-gray-400 text-sm italic">Belum ada item. Klik "Tambah Item" untuk menambahkan.</td>
+                                      <td colSpan={8} className="p-4 text-center text-gray-400 text-sm italic">Belum ada item. Klik "Tambah Item" untuk menambahkan.</td>
                                     </tr>
                                   )}
                                 </tbody>
                                 {sec.items.length > 0 && (
                                   <tfoot>
                                     <tr className="border-t-2 border-gray-200 bg-gray-50">
-                                      <td colSpan={5} className="p-2 text-right text-xs font-bold text-gray-600 uppercase">Subtotal {sec.nama}</td>
-                                      <td className="p-2 text-right text-sm font-bold text-green-700">{sec.items.reduce((s, i) => s + (i.hargaJualUnit || 0) * (i.qty || 0), 0).toLocaleString('id-ID')}</td>
+                                      <td colSpan={6} className="p-2 text-right text-xs font-bold text-gray-600 uppercase">Subtotal {sec.nama}</td>
+                                      <td className="p-2 text-right text-sm font-bold text-green-700">{sec.items.reduce((s, i) => s + calculateItemTotal(i), 0).toLocaleString('id-ID')}</td>
                                       <td></td>
                                     </tr>
                                   </tfoot>

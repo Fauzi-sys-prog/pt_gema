@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { X, Save, Wrench } from "lucide-react";
+import { UnitSelect } from './UnitSelect';
 
 export interface Consumable {
   id: string;
@@ -159,38 +160,12 @@ export function ConsumableModal({
                 <label className="block text-gray-700 mb-2 font-semibold">
                   Unit <span className="text-red-600">*</span>
                 </label>
-                <div className="relative">
-                  <input
-                    type="text"
-                    list="unit-options"
-                    value={form.unit || ""}
-                    onChange={(e) =>
-                      setForm({ ...form, unit: e.target.value })
-                    }
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                    placeholder="Pilih atau ketik satuan (kg, pcs...)"
-                    required
-                  />
-                  <datalist id="unit-options">
-                    <option value="pcs" />
-                    <option value="set" />
-                    <option value="kg" />
-                    <option value="gram" />
-                    <option value="liter" />
-                    <option value="ml" />
-                    <option value="box" />
-                    <option value="roll" />
-                    <option value="m" />
-                    <option value="m2" />
-                    <option value="m3" />
-                    <option value="pasang" />
-                    <option value="unit" />
-                    <option value="sak" />
-                    <option value="pail" />
-                    <option value="can" />
-                    <option value="btl" />
-                  </datalist>
-                </div>
+                <UnitSelect
+                  value={form.unit}
+                  onChange={(unit) => setForm({ ...form, unit })}
+                  inputClassName="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                  placeholder="Tulis satuan..."
+                />
               </div>
             </div>
           </div>

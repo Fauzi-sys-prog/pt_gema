@@ -1445,8 +1445,28 @@ operationsRouter.post("/production/submit-qc", authenticate, async (req: AuthReq
             id: stockInId, number: `SI-FG-${id}`, tanggal: new Date(toDateOnly(inspection.tanggal)), type: "Production Output", status: "Draft",
             notes: `Draft barang jadi dari QC ${asString(inspection.batchNo) || id} — WO ${wo.number}`,
             createdByName: asString(inspection.inspectorName) || "QC System", projectId: wo.projectId,
-            legacyPayload: { id: stockInId, qcInspectionId: id, workOrderId: wo.id } as Prisma.InputJsonValue,
-            items: { create: [{ id: `${stockInId}-ITEM-001`, itemCode: `FG-${wo.number}`, itemName: asString(inspection.itemNama) || wo.itemToProduce, qty: qtyPassed, unit: "Unit", batchNo: asString(inspection.batchNo) || undefined }] },
+            legacyPayload: {
+              id: stockInId,
+              noStockIn: `SI-FG-${id}`,
+              type: "Production Output",
+              status: "Draft",
+              qcInspectionId: id,
+              workOrderId: wo.id,
+              projectId: wo.projectId,
+              projectName: asString(inspection.customerName) || undefined,
+              warehouseLocation: asString(inspection.warehouseLocation) || "Gudang Barang Jadi",
+              stockCategory: asString(inspection.stockCategory) || "Barang Jadi",
+              items: [{
+                kode: `FG-${wo.number}`,
+                nama: asString(inspection.itemNama) || wo.itemToProduce,
+                qty: qtyPassed,
+                satuan: asString(inspection.unit) || asString(inspection.stockUnit) || "Unit",
+                kategori: asString(inspection.stockCategory) || "Barang Jadi",
+                lokasi: asString(inspection.warehouseLocation) || "Gudang Barang Jadi",
+                batchNo: asString(inspection.batchNo) || undefined,
+              }],
+            } as Prisma.InputJsonValue,
+            items: { create: [{ id: `${stockInId}-ITEM-001`, itemCode: `FG-${wo.number}`, itemName: asString(inspection.itemNama) || wo.itemToProduce, qty: qtyPassed, unit: asString(inspection.unit) || asString(inspection.stockUnit) || "Unit", batchNo: asString(inspection.batchNo) || undefined }] },
           }});
         }
       }

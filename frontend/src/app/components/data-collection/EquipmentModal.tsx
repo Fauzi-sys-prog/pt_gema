@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { X, Save, Truck } from 'lucide-react';
+import { UnitSelect } from './UnitSelect';
 
 export interface Equipment {
   id: string;
@@ -90,27 +91,11 @@ export function EquipmentModal({ show, onClose, onSave, editingItem }: Equipment
                 <label className="block text-gray-700 mb-2 font-semibold">
                   Unit <span className="text-red-600">*</span>
                 </label>
-                <div className="relative">
-                  <input
-                    type="text"
-                    list="equipment-unit-options"
-                    value={form.unit || ''}
-                    onChange={(e) => setForm({ ...form, unit: e.target.value })}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                    placeholder="unit/set/hari..."
-                    required
-                  />
-                  <datalist id="equipment-unit-options">
-                    <option value="unit" />
-                    <option value="set" />
-                    <option value="hari" />
-                    <option value="jam" />
-                    <option value="bulan" />
-                    <option value="trip" />
-                    <option value="m3" />
-                    <option value="kg" />
-                  </datalist>
-                </div>
+                <UnitSelect
+                  value={form.unit}
+                  onChange={(unit) => setForm({ ...form, unit })}
+                  inputClassName="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                />
               </div>
 
               <div>
