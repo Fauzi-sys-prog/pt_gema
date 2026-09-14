@@ -40,6 +40,38 @@ interface Material {
   status?: string;
 }
 
+interface WorkSectionItem {
+  id: string;
+  description: string;
+  specification: string;
+  quantity: number;
+  unit: string;
+  area: string;
+  notes: string;
+}
+
+interface WorkSection {
+  id: string;
+  title: string;
+  collapsed?: boolean;
+  items: WorkSectionItem[];
+}
+
+const WORK_UNIT_OPTIONS = [
+  "Orang",
+  "Lot",
+  "Unit",
+  "Paket",
+  "Set",
+  "m²",
+  "m³",
+  "Meter",
+  "Kg",
+  "Ton",
+  "Hari",
+  "LS",
+];
+
 // Signature Canvas Component
 const SignatureCanvas = ({
   onSave,
@@ -183,6 +215,59 @@ export function DataCollectionFormModal({
 }: DataCollectionFormModalProps) {
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [showCreateFormMaterialModal, setShowCreateFormMaterialModal] = useState(false);
+  const [workSections, setWorkSections] = useState<WorkSection[]>(formData.workSections || []);
+
+  useEffect(() => {
+    setWorkSections(formData.workSections || []);
+  }, [formData.workSections]);
+
+  const updateWorkSections = (next: WorkSection[]) => {
+    setWorkSections(next);
+    setFormData({ ...formData, workSections: next });
+  };
+
+  const addWorkSection = () => {
+    updateWorkSections([
+      ...workSections,
+      { id: `work-section-${Date.now()}`, title: "Section Baru", items: [] },
+    ]);
+  };
+
+  const addWorkItem = (sectionIndex: number) => {
+    const next = workSections.map((section, index) =>
+      index === sectionIndex
+        ? {
+            ...section,
+            items: [
+              ...section.items,
+              {
+                id: `work-item-${Date.now()}`,
+                description: "",
+                specification: "",
+                quantity: 1,
+                unit: "Lot",
+                area: "",
+                notes: "",
+              },
+            ],
+          }
+        : section,
+    );
+    updateWorkSections(next);
+  };
+
+  const updateWorkSection = (sectionIndex: number, patch: Partial<WorkSection>) => {
+    updateWorkSections(workSections.map((section, index) => index === sectionIndex ? { ...section, ...patch } : section));
+  };
+
+  const updateWorkItem = (sectionIndex: number, itemIndex: number, patch: Partial<WorkSectionItem>) => {
+    updateWorkSections(workSections.map((section, index) =>
+      index === sectionIndex
+        ? { ...section, items: section.items.map((item, itemIdx) => itemIdx === itemIndex ? { ...item, ...patch } : item) }
+        : section,
+    ));
+  };
+
   const [editingCreateFormMaterialIndex, setEditingCreateFormMaterialIndex] = useState<number | null>(null);
   const [materialSearchTerm, setMaterialSearchTerm] = useState("");
   const [createFormMaterialForm, setCreateFormMaterialForm] = useState<Material>({
@@ -592,6 +677,179 @@ export function DataCollectionFormModal({
                   </div>
                 </div>
               )}
+            </div>
+
+            {/* WORK SECTIONS - Dynamic scope of work */}
+            <div className="bg-gradient-to-br from-emerald-50 via-white to-gray-50 border-4 border-emerald-600 rounded-xl p-6 shadow-lg">
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <h3 className="font-bold text-gray-900 text-2xl flex items-center gap-3 mb-1">
+                    <div className="w-12 h-12 bg-emerald-600 rounded-lg flex items-center justify-center">
+                      <FileText size={24} className="text-white" />
+                    </div>
+                    🧰 Rincian Pekerjaan
+                  </h3>
+                  <p className="text-sm text-gray-600 ml-14">Kelompokkan scope pekerjaan dan detail item pekerjaan project</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={addWorkSection}
+                  className="flex items-center gap-2 px-5 py-3 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors font-bold shadow-md"
+                >
+                  <Plus size={20} />
+                  Tambah Section
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                {workSections.map((section, sectionIndex) => (
+                  <div key={section.id} className="border-2 border-gray-300 rounded-xl overflow-hidden bg-white">
+                    <div className="flex items-center gap-3 px-4 py-3 bg-gray-50 border-b border-gray-200">
+                      <span className="w-8 h-8 rounded-full bg-emerald-600 text-white flex items-center justify-center font-bold">
+                        {String.fromCharCode(65 + sectionIndex)}
+                      </span>
+                      <input
+                        type="text"
+                        value={section.title}
+                        onChange={(e) => updateWorkSection(sectionIndex, { title: e.target.value })}
+                        className="flex-1 min-w-0 bg-transparent border-0 border-b border-transparent hover:border-gray-300 focus:border-emerald-600 focus:ring-0 font-bold text-lg text-gray-900 px-1 py-1"
+                        placeholder="Nama section..."
+                      />
+                      <button
+                        type="button"
+                        onClick={() => updateWorkSection(sectionIndex, { collapsed: !section.collapsed })}
+                        className="p-2 text-gray-500 hover:bg-gray-200 rounded-lg"
+                        title={section.collapsed ? "Expand" : "Collapse"}
+                      >
+                        {section.collapsed ? <ChevronDown size={20} /> : <ChevronUp size={20} />}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => updateWorkSections(workSections.filter((_, index) => index !== sectionIndex))}
+                        className="p-2 text-red-600 hover:bg-red-50 rounded-lg"
+                        title="Hapus section"
+                      >
+                        <Trash2 size={18} />
+                      </button>
+                    </div>
+
+                    {!section.collapsed && (
+                      <div className="p-4">
+                        {section.items.length > 0 ? (
+                          <div className="space-y-3">
+                            {section.items.map((item, itemIndex) => (
+                              <div key={item.id} className="border border-gray-200 rounded-lg p-3 bg-gray-50">
+                                <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-start">
+                                  <div className="md:col-span-1 flex items-center gap-2 pt-2">
+                                    <span className="font-bold text-gray-500">{itemIndex + 1}</span>
+                                  </div>
+                                  <div className="md:col-span-5">
+                                    <label className="block text-xs font-bold text-gray-600 mb-1">Uraian Pekerjaan *</label>
+                                    <input
+                                      type="text"
+                                      value={item.description}
+                                      onChange={(e) => updateWorkItem(sectionIndex, itemIndex, { description: e.target.value })}
+                                      placeholder="Keterangan item pekerjaan..."
+                                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
+                                    />
+                                  </div>
+                                  <div className="md:col-span-2">
+                                    <label className="block text-xs font-bold text-gray-600 mb-1">Qty</label>
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      value={item.quantity}
+                                      onChange={(e) => updateWorkItem(sectionIndex, itemIndex, { quantity: Number(e.target.value) })}
+                                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
+                                    />
+                                  </div>
+                                  <div className="md:col-span-2">
+                                    <label className="block text-xs font-bold text-gray-600 mb-1">Satuan</label>
+                                    <select
+                                      value={WORK_UNIT_OPTIONS.includes(item.unit) ? item.unit : "Lainnya"}
+                                      onChange={(e) => updateWorkItem(sectionIndex, itemIndex, { unit: e.target.value === "Lainnya" ? "" : e.target.value })}
+                                      className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
+                                    >
+                                      {WORK_UNIT_OPTIONS.map((unit) => (
+                                        <option key={unit} value={unit}>{unit}</option>
+                                      ))}
+                                      <option value="Lainnya">Lainnya</option>
+                                    </select>
+                                    {!WORK_UNIT_OPTIONS.includes(item.unit) && (
+                                      <input
+                                        type="text"
+                                        value={item.unit}
+                                        onChange={(e) => updateWorkItem(sectionIndex, itemIndex, { unit: e.target.value })}
+                                        placeholder="Tulis satuan..."
+                                        autoFocus
+                                        className="w-full mt-2 px-3 py-2 border border-emerald-400 rounded-lg focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
+                                      />
+                                    )}
+                                  </div>
+                                  <div className="md:col-span-2 flex justify-end pt-5">
+                                    <button
+                                      type="button"
+                                      onClick={() => updateWorkSection(sectionIndex, { items: section.items.filter((_, index) => index !== itemIndex) })}
+                                      className="p-2 text-red-600 hover:bg-red-50 rounded-lg"
+                                      title="Hapus item"
+                                    >
+                                      <Trash2 size={18} />
+                                    </button>
+                                  </div>
+                                  <div className="md:col-span-6">
+                                    <label className="block text-xs font-bold text-gray-600 mb-1">Spesifikasi / Detail</label>
+                                    <textarea
+                                      rows={2}
+                                      value={item.specification}
+                                      onChange={(e) => updateWorkItem(sectionIndex, itemIndex, { specification: e.target.value })}
+                                      placeholder="Spesifikasi atau catatan tambahan..."
+                                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
+                                    />
+                                  </div>
+                                  <div className="md:col-span-3">
+                                    <label className="block text-xs font-bold text-gray-600 mb-1">Area / Lokasi</label>
+                                    <input
+                                      type="text"
+                                      value={item.area}
+                                      onChange={(e) => updateWorkItem(sectionIndex, itemIndex, { area: e.target.value })}
+                                      placeholder="Area pengerjaan"
+                                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
+                                    />
+                                  </div>
+                                  <div className="md:col-span-3">
+                                    <label className="block text-xs font-bold text-gray-600 mb-1">Catatan</label>
+                                    <input
+                                      type="text"
+                                      value={item.notes}
+                                      onChange={(e) => updateWorkItem(sectionIndex, itemIndex, { notes: e.target.value })}
+                                      placeholder="Catatan tambahan"
+                                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
+                                    />
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="text-center py-6 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300 text-gray-500 italic">
+                            Belum ada item. Klik "Tambah Item" untuk menambahkan.
+                          </div>
+                        )}
+                        <div className="flex items-center justify-between mt-4">
+                          <button
+                            type="button"
+                            onClick={() => addWorkItem(sectionIndex)}
+                            className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors font-bold"
+                          >
+                            <Plus size={18} /> Tambah Item
+                          </button>
+                          <span className="text-sm font-semibold text-gray-600">{section.items.length} item</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
 
             {/* MATERIAL BOQ SECTION - Always Visible! */}

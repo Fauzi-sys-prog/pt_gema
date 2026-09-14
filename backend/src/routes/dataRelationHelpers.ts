@@ -85,7 +85,9 @@ export async function findWorkOrderRelationContext(
           where: { id: relationalById.id },
           select: { id: true, projectId: true, payload: true },
         })
-        .then((row) => (row ? mapLegacyWorkOrderRelationContext(row) : null))) ||
+        .then((row) =>
+          row ? mapLegacyWorkOrderRelationContext(row) : null,
+        )) ||
       (relationalById.number
         ? await findLegacyWorkOrderRelationByNumber(relationalById.number)
         : null) || {
@@ -107,12 +109,15 @@ export async function findWorkOrderRelationContext(
           where: { id: relationalByNumber.id },
           select: { id: true, projectId: true, payload: true },
         })
-        .then((row) => (row ? mapLegacyWorkOrderRelationContext(row) : null))) ||
+        .then((row) =>
+          row ? mapLegacyWorkOrderRelationContext(row) : null,
+        )) ||
       (relationalByNumber.number
         ? await findLegacyWorkOrderRelationByNumber(relationalByNumber.number)
         : null) || {
         projectId: relationalByNumber.projectId || undefined,
-        projectName: asTrimmedString(relationalByNumber.projectName) || undefined,
+        projectName:
+          asTrimmedString(relationalByNumber.projectName) || undefined,
         number: asTrimmedString(relationalByNumber.number) || undefined,
       }
     );
@@ -218,31 +223,35 @@ export async function findFleetAssetContextOrThrow(assetId: string): Promise<{
   };
 }
 
-export async function syncLegacyWorkOrderRecordFromProduction(row: {
-  id: string;
-  number: string;
-  projectId: string;
-  projectName: string;
-  itemToProduce: string;
-  targetQty: number;
-  completedQty: number;
-  status: string;
-  priority: string;
-  deadline: Date | null;
-  leadTechnician: string;
-  machineId: string | null;
-  startDate: Date | null;
-  endDate: Date | null;
-  workflowStatus: string | null;
-  bomItems: Array<{
+export async function syncLegacyWorkOrderRecordFromProduction(
+  row: {
     id: string;
-    itemCode: string | null;
-    itemName: string;
-    qty: number;
+    number: string;
+    projectId: string;
+    projectName: string;
+    itemToProduce: string;
+    targetQty: number;
     completedQty: number;
-    unit: string;
-  }>;
-}, tx?: Prisma.TransactionClient) {
+    status: string;
+    priority: string;
+    deadline: Date | null;
+    leadTechnician: string;
+    machineId: string | null;
+    startDate: Date | null;
+    endDate: Date | null;
+    workflowStatus: string | null;
+    requiresBom: boolean;
+    bomItems: Array<{
+      id: string;
+      itemCode: string | null;
+      itemName: string;
+      qty: number;
+      completedQty: number;
+      unit: string;
+    }>;
+  },
+  tx?: Prisma.TransactionClient,
+) {
   const db = tx ?? prisma;
   const legacyPayload = mapProductionWorkOrderToLegacyPayload(row);
   await db.workOrderRecord.upsert({
@@ -259,11 +268,15 @@ export async function syncLegacyWorkOrderRecordFromProduction(row: {
   });
 }
 
-export function productionTrackerIdFromWorkOrderId(workOrderId: string): string {
+export function productionTrackerIdFromWorkOrderId(
+  workOrderId: string,
+): string {
   return `TRK-${workOrderId}`;
 }
 
-function normalizeTrackerStatusFromWorkOrder(record: Record<string, unknown>): string {
+function normalizeTrackerStatusFromWorkOrder(
+  record: Record<string, unknown>,
+): string {
   const status = asTrimmedString(record.status) || "Draft";
   const upper = status.toUpperCase().replace(/[\s-]+/g, "_");
   if (upper === "COMPLETED" || upper === "DONE") return "Completed";
@@ -335,7 +348,8 @@ export async function syncProductionTrackerForWorkOrder(
         : undefined,
       status: trackerPayload.status,
       machineId: resolvedMachineId,
-      workflowStatus: asTrimmedString(trackerPayload.workflowStatus) || undefined,
+      workflowStatus:
+        asTrimmedString(trackerPayload.workflowStatus) || undefined,
     },
     update: {
       projectId: trackerPayload.projectId,

@@ -321,7 +321,7 @@ async function syncPurchaseOrderProgress(poId: string, db: ProcurementDb = prism
 
   for (const receiving of receivings) {
     for (const item of receiving.items) {
-      const qty = Math.max(0, item.qtyGood || item.qtyReceived || 0);
+      const qty = Math.max(0, item.qtyReceived);
       if (qty <= 0) continue;
       const codeKey = String(item.itemCode || "").trim().toLowerCase();
       const nameKey = String(item.itemName || "").trim().toLowerCase();
@@ -596,6 +596,38 @@ async function syncInventoryFromReceiving(receivingId: string) {
   }
 }
 
+export async function validateReceiving(payload: Record<string, unknown>, db: ProcurementDb, id: string) {
+  const poId = asTrimmedString(payload.poId) || "";
+  // Serialize receiving submissions for the same PO before calculating its remainder.
+  await db.$queryRaw`SELECT id FROM "ProcurementPurchaseOrder" WHERE id = ${poId} FOR UPDATE`;
+  const po = await db.procurementPurchaseOrder.findUnique({ where: { id: poId }, include: { items: true } });
+  if (!po || !["Approved", "Partial"].includes(po.status)) throw new Error("PO tidak dapat diterima: harus Approved atau Partial.");
+  const previous = await db.procurementReceiving.findMany({ where: { purchaseOrderId: poId, id: { not: id }, status: { not: "Rejected" } }, include: { items: true } });
+  const remaining = new Map(po.items.map(item => [item.id, item.qty]));
+  const match = (code: string, name: string) => po.items.find(item => code ? item.itemCode === code : item.itemName === name);
+  for (const receipt of previous) for (const item of receipt.items) {
+    const poItem = match(item.itemCode || "", item.itemName);
+    if (poItem) remaining.set(poItem.id, (remaining.get(poItem.id) || 0) - item.qtyReceived);
+  }
+  const items = (Array.isArray(payload.items) ? payload.items : []).map(asRecord);
+  if (!items.some(item => Number(item.qtyReceived) > 0)) throw new Error("Receiving tidak boleh kosong.");
+  for (const item of items) {
+    const poItem = match(asTrimmedString(item.itemKode) || "", String(item.itemName || ""));
+    const qty = Number(item.qtyReceived);
+    const damaged = Number(item.qtyDamaged ?? 0);
+    if (!poItem || !Number.isFinite(qty) || qty < 0 || !Number.isFinite(damaged) || damaged < 0 || damaged > qty || qty > (remaining.get(poItem.id) || 0)) {
+      throw new Error("Receiving tidak valid: periksa SKU, sisa PO, dan jumlah barang rusak.");
+    }
+    item.qtyOrdered = poItem.qty;
+    item.qtyPreviouslyReceived = poItem.qty - (remaining.get(poItem.id) || 0);
+    item.qtyGood = qty - damaged;
+    item.unit = poItem.unit;
+    remaining.set(poItem.id, (remaining.get(poItem.id) || 0) - qty);
+  }
+  payload.items = items;
+  payload.status = [...remaining.values()].every(qty => qty <= 0) ? "Complete" : "Partial";
+}
+
 async function createResource(resource: ProcurementResource, payload: Record<string, unknown>, db: ProcurementDb = prisma) {
   const id = String(payload.id);
   if (resource === "purchase-orders") {
@@ -646,6 +678,7 @@ async function createResource(resource: ProcurementResource, payload: Record<str
     return getResource(resource, id, db);
   }
 
+  await validateReceiving(payload, db, id);
   await db.procurementReceiving.create({
     data: {
       id,
@@ -666,7 +699,7 @@ async function createResource(resource: ProcurementResource, payload: Record<str
           .map((raw, index) => {
             const item = asRecord(raw);
             return {
-              id: asTrimmedString(item.id) || `${id}-ITEM-${String(index + 1).padStart(3, "0")}`,
+              id: `${id}-ITEM-${String(index + 1).padStart(3, "0")}`,
               itemCode: asTrimmedString(item.itemKode) || undefined,
               itemName: asTrimmedString(item.itemName) || "",
               qtyOrdered: toFiniteNumber(item.qtyOrdered, 0),

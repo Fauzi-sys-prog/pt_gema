@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { X, Save, Package } from "lucide-react";
+import { UnitSelect } from './UnitSelect';
 
 /**
  * BOM Material Interface
@@ -375,22 +376,11 @@ export const BOMMaterialModal = ({
                 <label className="block text-sm font-bold text-gray-900 mb-2">
                   Unit *
                 </label>
-                <select
+                <UnitSelect
                   value={formData.unitInstalled}
-                  onChange={(e) =>
-                    setFormData({ ...formData, unitInstalled: e.target.value })
-                  }
-                  required
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-600 focus:border-transparent"
-                >
-                  <option value="Kgs">Kgs</option>
-                  <option value="Pcs">Pcs</option>
-                  <option value="Roll">Roll</option>
-                  <option value="m²">m²</option>
-                  <option value="m³">m³</option>
-                  <option value="Lembar">Lembar</option>
-                  <option value="Unit">Unit</option>
-                </select>
+                  onChange={(unit) => setFormData({ ...formData, unitInstalled: unit })}
+                  inputClassName="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                />
               </div>
             </div>
           </div>
@@ -452,13 +442,10 @@ export const BOMMaterialModal = ({
                 <label className="block text-sm font-bold text-gray-900 mb-2">
                   Unit Delivery
                 </label>
-                <input
-                  type="text"
+                <UnitSelect
                   value={formData.unitDelivery}
-                  onChange={(e) =>
-                    setFormData({ ...formData, unitDelivery: e.target.value })
-                  }
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-600 focus:border-transparent"
+                  onChange={(unit) => setFormData({ ...formData, unitDelivery: unit })}
+                  inputClassName="w-full px-4 py-2 border border-gray-300 rounded-lg"
                 />
               </div>
             </div>

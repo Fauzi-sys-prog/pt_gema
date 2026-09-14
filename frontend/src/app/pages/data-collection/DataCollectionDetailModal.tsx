@@ -25,6 +25,7 @@ import type { Consumable } from "../../components/data-collection/ConsumableModa
 import { EquipmentModal } from "../../components/data-collection/EquipmentModal";
 import type { Equipment } from "../../components/data-collection/EquipmentModal";
 import { useEscapeKey } from '../../hooks/useEscapeKey';
+import { UnitSelect } from '../../components/data-collection/UnitSelect';
 
 // Helper functions
 const getStatusColor = (status: string) => {
@@ -1245,26 +1246,12 @@ export function DataCollectionDetailModal({
                   </div>
                   <div>
                     <label className="block text-gray-900 font-bold mb-2">Unit *</label>
-                    <input
-                      type="text"
-                      list="dc-detail-unit-options"
+                    <UnitSelect
                       value={materialForm.unit}
-                      onChange={(e) => setMaterialForm({ ...materialForm, unit: e.target.value })}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-600 focus:border-transparent font-bold text-slate-700"
-                      placeholder="kg, pcs, lot, dll"
-                      required
+                      onChange={(unit) => setMaterialForm({ ...materialForm, unit })}
+                      inputClassName="w-full px-4 py-2 border border-gray-300 rounded-lg font-bold text-slate-700"
+                      placeholder="Tulis satuan..."
                     />
-                    <datalist id="dc-detail-unit-options">
-                      <option value="kg" />
-                      <option value="pcs" />
-                      <option value="set" />
-                      <option value="m" />
-                      <option value="m2" />
-                      <option value="m3" />
-                      <option value="lot" />
-                      <option value="sak" />
-                      <option value="liter" />
-                    </datalist>
                   </div>
                 </div>
               </div>

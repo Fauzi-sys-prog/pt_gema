@@ -71,7 +71,7 @@ export default function ApprovalCenterPage() {
   // 1. Filter Pending POs
   const pendingPOs = useMemo(() => {
     return poList.filter(po =>
-      po.status === 'Sent' &&
+      (po.status === 'Pending' || po.status === 'Sent') &&
       ((po.noPO || '').toLowerCase().includes(searchTerm.toLowerCase()) || (po.supplier || '').toLowerCase().includes(searchTerm.toLowerCase()))
     );
   }, [poList, searchTerm]);

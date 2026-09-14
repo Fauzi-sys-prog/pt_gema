@@ -122,7 +122,7 @@ export function buildPendingPurchaseOrders(
         auditStatus:
           status === "DRAFT"
             ? "Ready to Send"
-            : status === "SENT"
+            : ["SENT", "PENDING"].includes(status)
               ? "Owner / SPV Review"
               : status === "PARTIAL"
                 ? "Receiving Partial"
@@ -130,20 +130,20 @@ export function buildPendingPurchaseOrders(
                   ? "Received"
                   : status.replace(/_/g, " "),
         auditTrail:
-          status === "SENT"
+          ["SENT", "PENDING"].includes(status)
             ? "Waiting owner / SPV approval"
             : status === "DRAFT"
               ? "PO masih draft dan belum masuk approval"
               : "PO processed from procurement database",
         availableActions: toActionList(
-          status === "SENT" && canApprovePoByRole(role, total) && "APPROVE",
-          status === "SENT" && canApprovePoByRole(role, total) && "REJECT"
+          ["SENT", "PENDING"].includes(status) && canApprovePoByRole(role, total) && "APPROVE",
+          ["SENT", "PENDING"].includes(status) && canApprovePoByRole(role, total) && "REJECT"
         ),
       };
     })
     .filter((po) => {
       const status = String(po.status || "").toUpperCase();
-      return status === "DRAFT" || status === "SENT";
+      return status === "DRAFT" || ["SENT", "PENDING"].includes(status);
     })
     .sort((a, b) => b.total - a.total);
 }
