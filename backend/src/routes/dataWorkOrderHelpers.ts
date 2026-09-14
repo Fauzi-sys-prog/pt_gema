@@ -20,7 +20,11 @@ export async function ensureStockItemSkuOnCreate(
   });
   const used = new Set(
     rows
-      .map((row) => String(asRecord(row.payload).kode || "").trim().toUpperCase())
+      .map((row) =>
+        String(asRecord(row.payload).kode || "")
+          .trim()
+          .toUpperCase(),
+      )
       .filter(Boolean),
   );
 
@@ -56,7 +60,9 @@ async function loadStockItemLookups(): Promise<{
   byCode: Map<string, StockItemLookup>;
   byName: Map<string, StockItemLookup>;
 }> {
-  const rows = await prisma.stockItemRecord.findMany({ select: { payload: true } });
+  const rows = await prisma.stockItemRecord.findMany({
+    select: { payload: true },
+  });
   const byCode = new Map<string, StockItemLookup>();
   const byName = new Map<string, StockItemLookup>();
   for (const row of rows) {
@@ -77,9 +83,15 @@ async function loadStockItemLookups(): Promise<{
 }
 
 function isNonMaterialBomItem(item: Record<string, unknown>): boolean {
-  const unit = String(item.unit || "").trim().toLowerCase();
-  const category = String(item.category || "").trim().toLowerCase();
-  const name = String(item.nama || item.materialName || "").trim().toLowerCase();
+  const unit = String(item.unit || "")
+    .trim()
+    .toLowerCase();
+  const category = String(item.category || "")
+    .trim()
+    .toLowerCase();
+  const name = String(item.nama || item.materialName || "")
+    .trim()
+    .toLowerCase();
   const manpowerUnits = new Set([
     "orang",
     "man",
@@ -115,24 +127,153 @@ export async function sanitizeWorkOrderPayload(
 ): Promise<Record<string, unknown>> {
   const existing = asRecord(existingPayload);
   const incoming = asRecord(payload);
+
+  // Generic Work Order update hanya untuk data administratif.
+  // Field transaksi produksi harus berubah lewat command khusus
+  // seperti /start, /submit-lhp, dan /submit-qc.
+  if (Object.keys(existing).length > 0) {
+    const textValue = (value: unknown) =>
+      value == null ? "" : String(value).trim();
+
+    const assertTextUnchanged = (field: string) => {
+      if (textValue(existing[field]) !== textValue(incoming[field])) {
+        throw new PayloadValidationError(
+          `work-orders: field '${field}' dikelola oleh transaksi produksi dan tidak boleh diubah lewat generic update`,
+        );
+      }
+    };
+
+    for (const field of ["status", "workflowStatus", "startDate", "endDate"]) {
+      assertTextUnchanged(field);
+    }
+
+    const existingCompletedQty = toFiniteNumber(existing.completedQty, 0);
+    const incomingCompletedQty = toFiniteNumber(incoming.completedQty, 0);
+
+    if (Math.abs(existingCompletedQty - incomingCompletedQty) > 1e-9) {
+      throw new PayloadValidationError(
+        "work-orders: field 'completedQty' hanya boleh diubah oleh transaksi LHP/QC",
+      );
+    }
+
+    const existingBom = Array.isArray(existing.bom)
+      ? existing.bom.map((row) => asRecord(row))
+      : [];
+
+    const incomingBom = Array.isArray(incoming.bom)
+      ? incoming.bom.map((row) => asRecord(row))
+      : [];
+
+    const maxBomRows = Math.max(existingBom.length, incomingBom.length);
+
+    for (let index = 0; index < maxBomRows; index += 1) {
+      const before = existingBom[index] || {};
+      const after = incomingBom[index] || {};
+
+      const beforeCompleted = toFiniteNumber(before.completedQty, 0);
+      const afterCompleted = toFiniteNumber(after.completedQty, 0);
+
+      if (Math.abs(beforeCompleted - afterCompleted) > 1e-9) {
+        throw new PayloadValidationError(
+          `work-orders: BOM baris ${index + 1} field 'completedQty' hanya boleh diubah oleh transaksi produksi`,
+        );
+      }
+    }
+
+    const existingStatus = textValue(existing.status).toUpperCase();
+    const existingWorkflow = textValue(existing.workflowStatus).toUpperCase();
+
+    const hasStarted =
+      existingCompletedQty > 0 ||
+      ["IN PROGRESS", "QC", "COMPLETED"].includes(existingStatus) ||
+      [
+        "MATERIAL_RESERVED",
+        "QC",
+        "QC_REJECTED",
+        "QC_PARTIAL",
+        "QC_PASSED",
+      ].includes(existingWorkflow);
+
+    if (hasStarted) {
+      const existingTargetQty = toFiniteNumber(existing.targetQty, 0);
+      const incomingTargetQty = toFiniteNumber(incoming.targetQty, 0);
+
+      if (Math.abs(existingTargetQty - incomingTargetQty) > 1e-9) {
+        throw new PayloadValidationError(
+          "work-orders: targetQty tidak boleh diubah setelah WO dimulai",
+        );
+      }
+
+      const existingRequiresBom = existing.requiresBom !== false;
+      const incomingRequiresBom = Object.prototype.hasOwnProperty.call(
+        incoming,
+        "requiresBom",
+      )
+        ? incoming.requiresBom !== false
+        : existingRequiresBom;
+
+      if (existingRequiresBom !== incomingRequiresBom) {
+        throw new PayloadValidationError(
+          "work-orders: requiresBom tidak boleh diubah setelah WO dimulai",
+        );
+      }
+
+      const bomShape = (rows: Record<string, unknown>[]) =>
+        rows.map((row) => ({
+          kode: textValue(row.kode || row.itemKode).toUpperCase(),
+          nama: textValue(row.nama || row.materialName),
+          unit: textValue(row.unit).toLowerCase(),
+          qty: toFiniteNumber(row.qty, 0),
+          completedQty: toFiniteNumber(row.completedQty, 0),
+        }));
+
+      if (
+        JSON.stringify(bomShape(existingBom)) !==
+        JSON.stringify(bomShape(incomingBom))
+      ) {
+        throw new PayloadValidationError(
+          "work-orders: BOM tidak boleh diubah setelah WO dimulai karena sudah terkait reservation/consumption material",
+        );
+      }
+    }
+  }
+
   const merged = { ...existing, ...incoming };
-  const bomRows = Array.isArray(merged.bom) ? merged.bom : [];
+  const requiresBom = merged.requiresBom !== false;
+  const bomRows = requiresBom && Array.isArray(merged.bom) ? merged.bom : [];
+
+  if (!requiresBom) {
+    return {
+      ...merged,
+      requiresBom: false,
+      bom: [],
+    };
+  }
+
   if (bomRows.length === 0) {
-    return { ...merged, bom: [] };
+    return {
+      ...merged,
+      requiresBom: true,
+      bom: [],
+    };
   }
 
   const { byCode, byName } = await loadStockItemLookups();
+
   const normalizedBom = bomRows
     .map((row) => asRecord(row))
     .filter((row) => !isNonMaterialBomItem(row))
     .map((row) => {
       const codeInput = String(row.kode || row.itemKode || "").trim();
       const nameInput = String(row.nama || row.materialName || "").trim();
+
       const match =
         (codeInput ? byCode.get(codeInput.toLowerCase()) : undefined) ||
         (nameInput ? byName.get(nameInput.toLowerCase()) : undefined);
+
       const qty = Math.max(0, toFiniteNumber(row.qty, 0));
       const unit = String(row.unit || match?.satuan || "pcs").trim() || "pcs";
+
       return {
         ...row,
         kode: match?.kode || codeInput,

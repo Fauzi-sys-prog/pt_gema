@@ -617,9 +617,11 @@ model InventoryStockIn {
   createdByName    String?
   poId             String?
   projectId        String?
+  receivingId      String?                  @unique
   legacyPayload    Json?
   po               PurchaseOrderRecord?     @relation(fields: [poId], references: [id], onDelete: SetNull, onUpdate: Cascade)
   project          ProjectRecord?           @relation(fields: [projectId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  receiving        ProcurementReceiving?    @relation(fields: [receivingId], references: [id], onDelete: SetNull, onUpdate: Cascade)
   items            InventoryStockInItem[]
   movementRows     InventoryStockMovement[]
   createdAt        DateTime                 @default(now())
@@ -928,6 +930,7 @@ model ProcurementReceiving {
   purchaseOrder     ProcurementPurchaseOrder   @relation(fields: [purchaseOrderId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   project           ProjectRecord?             @relation(fields: [projectId], references: [id], onDelete: SetNull, onUpdate: Cascade)
   items             ProcurementReceivingItem[]
+  inventoryStockIn  InventoryStockIn?
   createdAt         DateTime                   @default(now())
   updatedAt         DateTime                   @updatedAt
 
@@ -1046,6 +1049,7 @@ model ProductionWorkOrder {
   startDate                 DateTime?
   endDate                   DateTime?
   workflowStatus            String?
+  requiresBom               Boolean                               @default(true)
   project                   ProjectRecord                         @relation(fields: [projectId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   machine                   AssetRecord?                          @relation(fields: [machineId], references: [id], onDelete: SetNull, onUpdate: Cascade)
   bomItems                  ProductionWorkOrderBom[]
@@ -1193,7 +1197,7 @@ model ProductionQcInspection {
 }
 
 model LogisticsPodAsset {
-  id               String             @id
+  id               String              @id
   suratJalanId     String
   projectId        String?
   kind             String
@@ -1205,8 +1209,8 @@ model LogisticsPodAsset {
   uploadedByUserId String?
   uploadedByName   String?
   suratJalan       LogisticsSuratJalan @relation(fields: [suratJalanId], references: [id], onDelete: Cascade, onUpdate: Cascade)
-  createdAt        DateTime           @default(now())
-  updatedAt        DateTime           @updatedAt
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
 
   @@index([suratJalanId])
   @@index([projectId])
@@ -1316,7 +1320,8 @@ model LogisticsSuratJalan {
   createdAt          DateTime                   @default(now())
   updatedAt          DateTime                   @updatedAt
 
-  podAssets        LogisticsPodAsset[]
+  podAssets LogisticsPodAsset[]
+
   @@index([projectId])
   @@index([assetId])
   @@index([tanggal])
@@ -1864,45 +1869,45 @@ model FinanceCustomerInvoicePayment {
   paidAt    DateTime?
   invoice   FinanceCustomerInvoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade, onUpdate: Cascade)
 
+  @@unique([invoiceId, proofNo])
   @@index([invoiceId])
   @@index([tanggal])
-  @@unique([invoiceId, proofNo])
 }
 
 model FinanceVendorExpense {
-  id           String         @id
-  vendorId     String?
-  projectId    String?
-  number       String
-  tanggal      DateTime
-  vendorName   String
-  projectName  String?
-  rabItemId    String?
-  rabItemName  String?
-  kategori     String?
-  costRecognition String      @default("DIRECT_PROJECT")
-  keterangan   String?
-  nominal      Float          @default(0)
-  ppn          Float          @default(0)
-  totalNominal Float          @default(0)
-  hasKwitansi  Boolean        @default(false)
-  kwitansiUrl  String?
-  noKwitansi   String?
-  metodeBayar  String?
-  bank         String?
-  status       String
-  remark       String?
-  approvedBy   String?
-  approvedAt   DateTime?
-  rejectedBy   String?
-  rejectedAt   DateTime?
-  rejectReason String?
-  paidAt       DateTime?
-  createdBy    String?
-  vendor       VendorRecord?  @relation(fields: [vendorId], references: [id], onDelete: SetNull, onUpdate: Cascade)
-  project      ProjectRecord? @relation(fields: [projectId], references: [id], onDelete: SetNull, onUpdate: Cascade)
-  createdAt    DateTime       @default(now())
-  updatedAt    DateTime       @updatedAt
+  id              String         @id
+  vendorId        String?
+  projectId       String?
+  number          String
+  tanggal         DateTime
+  vendorName      String
+  projectName     String?
+  rabItemId       String?
+  rabItemName     String?
+  kategori        String?
+  costRecognition String         @default("DIRECT_PROJECT")
+  keterangan      String?
+  nominal         Float          @default(0)
+  ppn             Float          @default(0)
+  totalNominal    Float          @default(0)
+  hasKwitansi     Boolean        @default(false)
+  kwitansiUrl     String?
+  noKwitansi      String?
+  metodeBayar     String?
+  bank            String?
+  status          String
+  remark          String?
+  approvedBy      String?
+  approvedAt      DateTime?
+  rejectedBy      String?
+  rejectedAt      DateTime?
+  rejectReason    String?
+  paidAt          DateTime?
+  createdBy       String?
+  vendor          VendorRecord?  @relation(fields: [vendorId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  project         ProjectRecord? @relation(fields: [projectId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
 
   @@index([vendorId])
   @@index([projectId])
@@ -1960,9 +1965,9 @@ model FinanceVendorInvoicePayment {
   vendorInvoice   FinanceVendorInvoice @relation(fields: [vendorInvoiceId], references: [id], onDelete: Cascade, onUpdate: Cascade)
   createdAt       DateTime             @default(now())
 
+  @@unique([vendorInvoiceId, noBukti])
   @@index([vendorInvoiceId])
   @@index([tanggal])
-  @@unique([vendorInvoiceId, noBukti])
 }
 
 model FinanceVendorInvoiceApproval {
@@ -2017,30 +2022,30 @@ model FinanceWorkingExpenseItem {
 }
 
 model FinanceBankReconciliation {
-  id                String                  @id
-  projectId         String?
-  customerInvoiceId String?
-  vendorInvoiceId   String?
-  koperasiCashTransactionId String? @unique
-  date              DateTime
-  periodLabel       String?
-  account           String?
-  description       String?
-  debit             Float                   @default(0)
-  credit            Float                   @default(0)
-  balance           Float                   @default(0)
-  status            String
-  matchedId         String?
-  note              String?
-  legacyPayload     Json?
-  sourceType        String?
-  sourceId          String?
-  project           ProjectRecord?          @relation(fields: [projectId], references: [id], onDelete: SetNull, onUpdate: Cascade)
-  customerInvoice   FinanceCustomerInvoice? @relation(fields: [customerInvoiceId], references: [id], onDelete: SetNull, onUpdate: Cascade)
-  vendorInvoice     FinanceVendorInvoice?   @relation(fields: [vendorInvoiceId], references: [id], onDelete: SetNull, onUpdate: Cascade)
-  koperasiCashTransaction KoperasiCashTransaction? @relation(fields: [koperasiCashTransactionId], references: [id], onDelete: SetNull, onUpdate: Cascade)
-  createdAt         DateTime                @default(now())
-  updatedAt         DateTime                @updatedAt
+  id                        String                   @id
+  projectId                 String?
+  customerInvoiceId         String?
+  vendorInvoiceId           String?
+  koperasiCashTransactionId String?                  @unique
+  date                      DateTime
+  periodLabel               String?
+  account                   String?
+  description               String?
+  debit                     Float                    @default(0)
+  credit                    Float                    @default(0)
+  balance                   Float                    @default(0)
+  status                    String
+  matchedId                 String?
+  note                      String?
+  legacyPayload             Json?
+  sourceType                String?
+  sourceId                  String?
+  project                   ProjectRecord?           @relation(fields: [projectId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  customerInvoice           FinanceCustomerInvoice?  @relation(fields: [customerInvoiceId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  vendorInvoice             FinanceVendorInvoice?    @relation(fields: [vendorInvoiceId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  koperasiCashTransaction   KoperasiCashTransaction? @relation(fields: [koperasiCashTransactionId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  createdAt                 DateTime                 @default(now())
+  updatedAt                 DateTime                 @updatedAt
 
   @@index([projectId])
   @@index([customerInvoiceId])
@@ -2238,35 +2243,35 @@ model HrLeaveRecord {
 // Koperasi is operated by HR but its balance is a finance sub-ledger.  The
 // transaction table below is the single source of truth for the cash balance.
 model KoperasiMember {
-  id            String         @id
-  memberNo      String         @unique
-  employeeId    String         @unique
-  employeeName  String
-  joinDate      DateTime
-  status        String         @default("Active")
-  simpananPokok Float          @default(0)
-  simpananWajibBulanan Float   @default(0)
-  employee      EmployeeRecord @relation(fields: [employeeId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  simpanans     KoperasiSimpanan[]
-  pinjamans     KoperasiPinjaman[]
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
+  id                   String             @id
+  memberNo             String             @unique
+  employeeId           String             @unique
+  employeeName         String
+  joinDate             DateTime
+  status               String             @default("Active")
+  simpananPokok        Float              @default(0)
+  simpananWajibBulanan Float              @default(0)
+  employee             EmployeeRecord     @relation(fields: [employeeId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  simpanans            KoperasiSimpanan[]
+  pinjamans            KoperasiPinjaman[]
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
 
   @@index([status])
 }
 
 model KoperasiSimpanan {
-  id        String         @id
-  memberId  String
+  id         String         @id
+  memberId   String
   memberName String
-  type      String
-  amount    Float          @default(0)
-  date      DateTime
-  period    String?
-  notes     String?
-  member    KoperasiMember @relation(fields: [memberId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  createdAt DateTime       @default(now())
-  updatedAt DateTime       @updatedAt
+  type       String
+  amount     Float          @default(0)
+  date       DateTime
+  period     String?
+  notes      String?
+  member     KoperasiMember @relation(fields: [memberId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
 
   @@index([memberId])
   @@index([date])
@@ -2300,22 +2305,22 @@ model KoperasiPinjaman {
 }
 
 model KoperasiCashTransaction {
-  id            String   @id
-  date          DateTime
-  type          String
-  direction     String
-  amount        Float    @default(0)
-  status        String   @default("Posted")
-  referenceType String?
-  referenceId   String?
-  description   String
-  bankAccount   String?
-  notes         String?
-  createdBy     String?
-  approvedBy    String?
-  approvedAt    DateTime?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id                  String                      @id
+  date                DateTime
+  type                String
+  direction           String
+  amount              Float                       @default(0)
+  status              String                      @default("Posted")
+  referenceType       String?
+  referenceId         String?
+  description         String
+  bankAccount         String?
+  notes               String?
+  createdBy           String?
+  approvedBy          String?
+  approvedAt          DateTime?
+  createdAt           DateTime                    @default(now())
+  updatedAt           DateTime                    @updatedAt
   bankReconciliations FinanceBankReconciliation[]
 
   @@index([date])

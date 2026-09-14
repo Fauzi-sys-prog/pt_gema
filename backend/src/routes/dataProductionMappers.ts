@@ -16,6 +16,7 @@ export function mapProductionWorkOrderToLegacyPayload(row: {
   startDate: Date | null;
   endDate: Date | null;
   workflowStatus: string | null;
+  requiresBom: boolean;
   bomItems: Array<{
     id: string;
     itemCode: string | null;
@@ -39,9 +40,12 @@ export function mapProductionWorkOrderToLegacyPayload(row: {
     deadline: row.deadline ? row.deadline.toISOString().slice(0, 10) : "",
     leadTechnician: row.leadTechnician,
     machineId: row.machineId ?? undefined,
-    startDate: row.startDate ? row.startDate.toISOString().slice(0, 10) : undefined,
+    startDate: row.startDate
+      ? row.startDate.toISOString().slice(0, 10)
+      : undefined,
     endDate: row.endDate ? row.endDate.toISOString().slice(0, 10) : undefined,
     workflowStatus: row.workflowStatus ?? undefined,
+    requiresBom: row.requiresBom,
     bom: row.bomItems.map((item) => ({
       id: item.id,
       kode: item.itemCode ?? undefined,
@@ -72,7 +76,11 @@ export function mapProductionExecutionReportToLegacyPayload(row: {
   endTime: string | null;
   unit: string | null;
   photoUrl: string | null;
-  photoAsset?: { id: string; publicUrl: string; originalName: string | null } | null;
+  photoAsset?: {
+    id: string;
+    publicUrl: string;
+    originalName: string | null;
+  } | null;
   project: { payload: unknown } | null;
   workOrder: { number: string } | null;
 }) {
@@ -149,7 +157,11 @@ export function mapProductionQcInspectionToLegacyPayload(row: {
   drawingUrl?: string | null;
   remark?: string | null;
   workflowStatus?: string | null;
-  drawingAsset?: { id: string; publicUrl: string; originalName: string | null } | null;
+  drawingAsset?: {
+    id: string;
+    publicUrl: string;
+    originalName: string | null;
+  } | null;
   dimensions?: Array<{
     parameter: string;
     specification: string;
