@@ -124,8 +124,9 @@ export default function GeneralLedgerPage() {
       .filter(vi => !['Draft', 'Pending', 'Rejected'].includes(vi.status) && Boolean(vi.tanggal))
       .forEach(vi => {
         const ref = `#GJ-AP-${vi.noInvoiceVendor}`;
-        const vatRate = Math.max(0, vi.ppn || 0);
-        const vatAmount = vatRate > 0 ? (vi.totalAmount || 0) * vatRate / (100 + vatRate) : 0;
+        // PPN vendor invoice dari API tersimpan sebagai nominal rupiah, bukan
+        // persentase. Jangan dihitung ulang dengan rumus rate.
+        const vatAmount = Math.max(0, vi.ppn || 0);
         const base = Math.max(0, (vi.totalAmount || 0) - vatAmount);
         addLine({ id: `${vi.id}-expense`, date: vi.tanggal!, reference: ref, description: `Tagihan vendor ${vi.noInvoiceVendor} — ${vi.supplier}`, category: 'Purchase / Project Expense', debit: base, credit: 0 });
         if (vatAmount > 0) addLine({ id: `${vi.id}-input-vat`, date: vi.tanggal!, reference: ref, description: `PPN masukan ${vi.noInvoiceVendor}`, category: 'Input VAT', debit: vatAmount, credit: 0 });

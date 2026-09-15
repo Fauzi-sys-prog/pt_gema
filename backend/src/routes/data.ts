@@ -6,6 +6,11 @@ import { prisma } from "../prisma";
 import { authenticate } from "../middlewares/auth";
 import { AuthRequest } from "../types/auth";
 import { sendError } from "../utils/http";
+import { serializeDecimals } from "../utils/decimal";
+
+function asNumbered<T>(row: unknown): T {
+  return serializeDecimals(row as T);
+}
 import {
   materializeMediaDataUrls,
   removeStoredMediaUrls,
@@ -409,7 +414,7 @@ async function relationalFleetFindMany(resource: string) {
       return rows.map((row) =>
         toEntityRow(
           row.id,
-          mapFleetHealthEntryToDedicatedPayload(row),
+          mapFleetHealthEntryToDedicatedPayload(asNumbered(row)),
           row.createdAt,
           row.updatedAt,
         ),
@@ -433,7 +438,7 @@ async function relationalFleetFindUnique(resource: string, entityId: string) {
       return row
         ? toEntityRow(
             row.id,
-            mapFleetHealthEntryToDedicatedPayload(row),
+            mapFleetHealthEntryToDedicatedPayload(asNumbered(row)),
             row.createdAt,
             row.updatedAt,
           )
@@ -575,7 +580,7 @@ async function relationalInventoryFindMany(resource: string) {
       return rows.map((row) =>
         toEntityRow(
           row.id,
-          mapInventoryItemToLegacyPayload(row),
+          mapInventoryItemToLegacyPayload(asNumbered(row)),
           row.createdAt,
           row.updatedAt,
         ),
@@ -593,7 +598,7 @@ async function relationalInventoryFindMany(resource: string) {
       return rows.map((row) =>
         toEntityRow(
           row.id,
-          mapInventoryStockInToLegacyPayload(row),
+          mapInventoryStockInToLegacyPayload(asNumbered(row)),
           row.createdAt,
           row.updatedAt,
         ),
@@ -607,7 +612,7 @@ async function relationalInventoryFindMany(resource: string) {
       return rows.map((row) =>
         toEntityRow(
           row.id,
-          mapInventoryStockOutToLegacyPayload(row),
+          mapInventoryStockOutToLegacyPayload(asNumbered(row)),
           row.createdAt,
           row.updatedAt,
         ),
@@ -621,7 +626,7 @@ async function relationalInventoryFindMany(resource: string) {
       return rows.map((row) =>
         toEntityRow(
           row.id,
-          mapInventoryMovementToLegacyPayload(row),
+          mapInventoryMovementToLegacyPayload(asNumbered(row)),
           row.createdAt,
           row.updatedAt,
         ),
@@ -635,7 +640,7 @@ async function relationalInventoryFindMany(resource: string) {
       return rows.map((row) =>
         toEntityRow(
           row.id,
-          mapInventoryOpnameToLegacyPayload(row),
+          mapInventoryOpnameToLegacyPayload(asNumbered(row)),
           row.createdAt,
           row.updatedAt,
         ),
@@ -658,7 +663,7 @@ async function relationalInventoryFindUnique(
       return row
         ? toEntityRow(
             row.id,
-            mapInventoryItemToLegacyPayload(row),
+            mapInventoryItemToLegacyPayload(asNumbered(row)),
             row.createdAt,
             row.updatedAt,
           )
@@ -676,7 +681,7 @@ async function relationalInventoryFindUnique(
       return row
         ? toEntityRow(
             row.id,
-            mapInventoryStockInToLegacyPayload(row),
+            mapInventoryStockInToLegacyPayload(asNumbered(row)),
             row.createdAt,
             row.updatedAt,
           )
@@ -690,7 +695,7 @@ async function relationalInventoryFindUnique(
       return row
         ? toEntityRow(
             row.id,
-            mapInventoryStockOutToLegacyPayload(row),
+            mapInventoryStockOutToLegacyPayload(asNumbered(row)),
             row.createdAt,
             row.updatedAt,
           )
@@ -704,7 +709,7 @@ async function relationalInventoryFindUnique(
       return row
         ? toEntityRow(
             row.id,
-            mapInventoryMovementToLegacyPayload(row),
+            mapInventoryMovementToLegacyPayload(asNumbered(row)),
             row.createdAt,
             row.updatedAt,
           )
@@ -718,7 +723,7 @@ async function relationalInventoryFindUnique(
       return row
         ? toEntityRow(
             row.id,
-            mapInventoryOpnameToLegacyPayload(row),
+            mapInventoryOpnameToLegacyPayload(asNumbered(row)),
             row.createdAt,
             row.updatedAt,
           )
@@ -1203,7 +1208,7 @@ async function relationalLogisticsDocsFindMany(resource: string) {
       return rows.map((row) =>
         toEntityRow(
           row.id,
-          mapLogisticsSuratJalanToLegacyPayload(row),
+          mapLogisticsSuratJalanToLegacyPayload(asNumbered(row)),
           row.createdAt,
           row.updatedAt,
         ),
@@ -1217,7 +1222,7 @@ async function relationalLogisticsDocsFindMany(resource: string) {
       return rows.map((row) =>
         toEntityRow(
           row.id,
-          mapLogisticsProofOfDeliveryToLegacyPayload(row),
+          mapLogisticsProofOfDeliveryToLegacyPayload(asNumbered(row)),
           row.createdAt,
           row.updatedAt,
         ),
@@ -1268,7 +1273,7 @@ async function relationalLogisticsDocsFindUnique(
       return row
         ? toEntityRow(
             row.id,
-            mapLogisticsSuratJalanToLegacyPayload(row),
+            mapLogisticsSuratJalanToLegacyPayload(asNumbered(row)),
             row.createdAt,
             row.updatedAt,
           )
@@ -1282,7 +1287,7 @@ async function relationalLogisticsDocsFindUnique(
       return row
         ? toEntityRow(
             row.id,
-            mapLogisticsProofOfDeliveryToLegacyPayload(row),
+            mapLogisticsProofOfDeliveryToLegacyPayload(asNumbered(row)),
             row.createdAt,
             row.updatedAt,
           )
@@ -1857,7 +1862,7 @@ async function relationalProductionFindMany(resource: string) {
       return rows.map((row) =>
         toEntityRow(
           row.id,
-          mapProductionWorkOrderToLegacyPayload(row),
+          mapProductionWorkOrderToLegacyPayload(asNumbered(row)),
           row.createdAt,
           row.updatedAt,
         ),
@@ -1877,7 +1882,7 @@ async function relationalProductionFindMany(resource: string) {
       return rows.map((row) =>
         toEntityRow(
           row.id,
-          mapProductionExecutionReportToLegacyPayload(row),
+          mapProductionExecutionReportToLegacyPayload(asNumbered(row)),
           row.createdAt,
           row.updatedAt,
         ),
@@ -1890,7 +1895,7 @@ async function relationalProductionFindMany(resource: string) {
       return rows.map((row) =>
         toEntityRow(
           row.id,
-          mapProductionTrackerEntryToLegacyPayload(row),
+          mapProductionTrackerEntryToLegacyPayload(asNumbered(row)),
           row.createdAt,
           row.updatedAt,
         ),
@@ -1924,7 +1929,7 @@ async function relationalProductionFindMany(resource: string) {
       return rows.map((row) =>
         toEntityRow(
           row.id,
-          mapProductionMaterialRequestToLegacyPayload(row),
+          mapProductionMaterialRequestToLegacyPayload(asNumbered(row)),
           row.createdAt,
           row.updatedAt,
         ),
@@ -1948,7 +1953,7 @@ async function relationalProductionFindUnique(
       return row
         ? toEntityRow(
             row.id,
-            mapProductionWorkOrderToLegacyPayload(row),
+            mapProductionWorkOrderToLegacyPayload(asNumbered(row)),
             row.createdAt,
             row.updatedAt,
           )
@@ -1968,7 +1973,7 @@ async function relationalProductionFindUnique(
       return row
         ? toEntityRow(
             row.id,
-            mapProductionExecutionReportToLegacyPayload(row),
+            mapProductionExecutionReportToLegacyPayload(asNumbered(row)),
             row.createdAt,
             row.updatedAt,
           )
@@ -1981,7 +1986,7 @@ async function relationalProductionFindUnique(
       return row
         ? toEntityRow(
             row.id,
-            mapProductionTrackerEntryToLegacyPayload(row),
+            mapProductionTrackerEntryToLegacyPayload(asNumbered(row)),
             row.createdAt,
             row.updatedAt,
           )
@@ -2015,7 +2020,7 @@ async function relationalProductionFindUnique(
       return row
         ? toEntityRow(
             row.id,
-            mapProductionMaterialRequestToLegacyPayload(row),
+            mapProductionMaterialRequestToLegacyPayload(asNumbered(row)),
             row.createdAt,
             row.updatedAt,
           )
@@ -2043,7 +2048,7 @@ async function syncQcReleaseToWarehouse(
 
   const status = asTrimmedString(record.status) || "Pending";
   const qtyPassed = toFiniteNumber(record.qtyPassed, 0);
-  const completed = status === "Passed" && qtyPassed >= workOrder.targetQty;
+  const completed = status === "Passed" && qtyPassed >= Number(workOrder.targetQty);
   await db.productionWorkOrder.update({
     where: { id: workOrder.id },
     data: {
@@ -2155,13 +2160,13 @@ async function recalculateWorkOrderAndProjectProgress(
   if (!current) return;
 
   const completedQty = current.productionReports.reduce(
-    (total, report) => total + Math.max(0, report.outputQty),
+    (total, report) => total + Math.max(0, Number(report.outputQty)),
     0,
   );
   const status =
     completedQty <= 0
       ? "Draft"
-      : current.targetQty > 0 && completedQty >= current.targetQty
+      : Number(current.targetQty) > 0 && completedQty >= Number(current.targetQty)
         ? "QC"
         : "In Progress";
 
@@ -2170,7 +2175,7 @@ async function recalculateWorkOrderAndProjectProgress(
     data: { completedQty, status },
     include: { bomItems: true },
   });
-  await syncLegacyWorkOrderRecordFromProduction(updatedWorkOrder, db);
+  await syncLegacyWorkOrderRecordFromProduction(asNumbered(updatedWorkOrder), db);
 
   const project = await db.projectRecord.findUnique({
     where: { id: current.projectId },
@@ -2181,13 +2186,13 @@ async function recalculateWorkOrderAndProjectProgress(
     select: { targetQty: true, completedQty: true },
   });
   const totalTarget = projectWorkOrders.reduce(
-    (total, row) => total + Math.max(0, row.targetQty),
+    (total, row) => total + Math.max(0, Number(row.targetQty)),
     0,
   );
   const totalCompleted = projectWorkOrders.reduce(
     (total, row) =>
       total +
-      Math.min(Math.max(0, row.completedQty), Math.max(0, row.targetQty)),
+      Math.min(Math.max(0, Number(row.completedQty)), Math.max(0, Number(row.targetQty))),
     0,
   );
   const progressAuto =
@@ -2274,10 +2279,10 @@ async function relationalProductionCreate(
         include: { bomItems: true },
       });
       await prisma.$transaction(async (tx) => {
-        await syncLegacyWorkOrderRecordFromProduction(workOrder, tx);
+        await syncLegacyWorkOrderRecordFromProduction(asNumbered(workOrder), tx);
         await syncProductionTrackerForWorkOrder(
           entityId,
-          mapProductionWorkOrderToLegacyPayload(workOrder),
+          mapProductionWorkOrderToLegacyPayload(asNumbered(workOrder)),
           tx,
         );
       });
@@ -2509,7 +2514,7 @@ async function relationalProductionUpdate(
         include: { bomItems: true },
       });
       await prisma.$transaction(async (tx) => {
-        await syncLegacyWorkOrderRecordFromProduction(workOrder, tx);
+        await syncLegacyWorkOrderRecordFromProduction(asNumbered(workOrder), tx);
         await syncProductionTrackerForWorkOrder(entityId, record, tx);
       });
       return relationalProductionFindUnique(resource, entityId);
@@ -2726,7 +2731,7 @@ async function relationalProductionDelete(resource: string, entityId: string) {
         ]);
 
         const hasTransactionalHistory =
-          workOrder.completedQty > 0 ||
+          Number(workOrder.completedQty) > 0 ||
           workflowStatus.length > 0 ||
           !deletablePlanningStatuses.has(status) ||
           productionReportCount > 0 ||
@@ -2909,7 +2914,7 @@ async function relationalFinanceMiscFindMany(resource: string) {
       return rows.map((row) =>
         toEntityRow(
           row.id,
-          mapProjectLaborEntryToLegacyPayload(row),
+          mapProjectLaborEntryToLegacyPayload(asNumbered(row)),
           row.createdAt,
           row.updatedAt,
         ),
@@ -2983,7 +2988,7 @@ async function relationalFinanceMiscFindUnique(
       return row
         ? toEntityRow(
             row.id,
-            mapProjectLaborEntryToLegacyPayload(row),
+            mapProjectLaborEntryToLegacyPayload(asNumbered(row)),
             row.createdAt,
             row.updatedAt,
           )
@@ -3336,7 +3341,7 @@ async function relationalProcurementFinanceFindMany(resource: string) {
       return rows.map((row) =>
         toEntityRow(
           row.id,
-          mapProcurementPurchaseOrderToLegacyPayload(row),
+          mapProcurementPurchaseOrderToLegacyPayload(asNumbered(row)),
           row.createdAt,
           row.updatedAt,
         ),
@@ -3350,7 +3355,7 @@ async function relationalProcurementFinanceFindMany(resource: string) {
       return rows.map((row) =>
         toEntityRow(
           row.id,
-          mapProcurementReceivingToLegacyPayload(row),
+          mapProcurementReceivingToLegacyPayload(asNumbered(row)),
           row.createdAt,
           row.updatedAt,
         ),
@@ -3418,7 +3423,7 @@ async function relationalProcurementFinanceFindUnique(
       return row
         ? toEntityRow(
             row.id,
-            mapProcurementPurchaseOrderToLegacyPayload(row),
+            mapProcurementPurchaseOrderToLegacyPayload(asNumbered(row)),
             row.createdAt,
             row.updatedAt,
           )
@@ -3432,7 +3437,7 @@ async function relationalProcurementFinanceFindUnique(
       return row
         ? toEntityRow(
             row.id,
-            mapProcurementReceivingToLegacyPayload(row),
+            mapProcurementReceivingToLegacyPayload(asNumbered(row)),
             row.createdAt,
             row.updatedAt,
           )
@@ -6018,7 +6023,7 @@ dataRouter.get(
       const rows = await prisma.archiveRegistryEntry.findMany({
         orderBy: { tanggal: "desc" },
       });
-      return res.json(rows.map(mapArchiveRegistryEntry));
+      return res.json(rows.map((row) => mapArchiveRegistryEntry(asNumbered(row))));
     } catch {
       return sendError(res, 500, {
         code: "INTERNAL_ERROR",
@@ -6138,7 +6143,7 @@ dataRouter.get(
       const rows = await prisma.assetRecord.findMany({
         orderBy: { updatedAt: "desc" },
       });
-      return res.json(rows.map((row) => mapAssetRecord(row)));
+      return res.json(rows.map((row) => mapAssetRecord(asNumbered(row))));
     } catch {
       return sendError(res, 500, {
         code: "INTERNAL_ERROR",
@@ -6256,7 +6261,7 @@ dataRouter.post(
       }
       const created = await prisma.assetRecord.create({ data: payload });
       await writeDataAuditLog(req, "create", "assets", created.id);
-      return res.status(201).json(mapAssetRecord(created));
+      return res.status(201).json(mapAssetRecord(asNumbered(created)));
     } catch (err) {
       if (
         err instanceof Prisma.PrismaClientKnownRequestError &&
@@ -6306,7 +6311,7 @@ dataRouter.patch(
           legacyError: "Not found",
         });
       const merged = sanitizeAssetPayload(req.params.id, {
-        ...mapAssetRecord(existing),
+        ...mapAssetRecord(asNumbered(existing)),
         ...(req.body as Record<string, unknown>),
       });
       if (merged.projectId) {
@@ -6326,7 +6331,7 @@ dataRouter.patch(
         data: merged,
       });
       await writeDataAuditLog(req, "update", "assets", saved.id);
-      return res.json(mapAssetRecord(saved));
+      return res.json(mapAssetRecord(asNumbered(saved)));
     } catch {
       return sendError(res, 500, {
         code: "INTERNAL_ERROR",
@@ -6387,7 +6392,7 @@ dataRouter.get(
       const rows = await prisma.maintenanceRecord.findMany({
         orderBy: { updatedAt: "desc" },
       });
-      return res.json(rows.map((row) => mapMaintenanceRecord(row)));
+      return res.json(rows.map((row) => mapMaintenanceRecord(asNumbered(row))));
     } catch {
       return sendError(res, 500, {
         code: "INTERNAL_ERROR",
@@ -6602,7 +6607,7 @@ dataRouter.post(
         },
       });
       await writeDataAuditLog(req, "create", "maintenances", created.id);
-      return res.status(201).json(mapMaintenanceRecord(created));
+      return res.status(201).json(mapMaintenanceRecord(asNumbered(created)));
     } catch (err) {
       if (
         err instanceof Prisma.PrismaClientKnownRequestError &&
@@ -6652,7 +6657,7 @@ dataRouter.patch(
           legacyError: "Not found",
         });
       const merged = sanitizeMaintenancePayload(req.params.id, {
-        ...mapMaintenanceRecord(existing),
+        ...mapMaintenanceRecord(asNumbered(existing)),
         ...(req.body as Record<string, unknown>),
       });
       const asset = merged.assetId
@@ -6701,7 +6706,7 @@ dataRouter.patch(
         },
       });
       await writeDataAuditLog(req, "update", "maintenances", saved.id);
-      return res.json(mapMaintenanceRecord(saved));
+      return res.json(mapMaintenanceRecord(asNumbered(saved)));
     } catch {
       return sendError(res, 500, {
         code: "INTERNAL_ERROR",
@@ -6763,7 +6768,7 @@ dataRouter.get(
         include: { items: { orderBy: { id: "asc" } } },
         orderBy: { updatedAt: "desc" },
       });
-      return res.json(rows.map((row) => mapInvoiceRecord(row)));
+      return res.json(rows.map((row) => mapInvoiceRecord(asNumbered(row))));
     } catch {
       return sendError(res, 500, {
         code: "INTERNAL_ERROR",
@@ -6995,7 +7000,7 @@ dataRouter.post(
         });
       });
       await writeDataAuditLog(req, "create", "invoices", created.id);
-      return res.status(201).json(mapInvoiceRecord(created));
+      return res.status(201).json(mapInvoiceRecord(asNumbered(created)));
     } catch (err) {
       if (err instanceof PayloadValidationError) {
         return sendError(res, 400, {
@@ -7055,7 +7060,7 @@ dataRouter.patch(
       const normalized = sanitizeInvoicePayload(
         req.params.id,
         req.body,
-        mapInvoiceRecord(existing),
+        mapInvoiceRecord(asNumbered(existing)),
       );
       const { items: invoiceItems, ...invoiceData } = normalized;
       const project = normalized.projectId
@@ -7115,7 +7120,7 @@ dataRouter.patch(
         });
       });
       await writeDataAuditLog(req, "update", "invoices", saved.id);
-      return res.json(mapInvoiceRecord(saved));
+      return res.json(mapInvoiceRecord(asNumbered(saved)));
     } catch (err) {
       if (err instanceof PayloadValidationError) {
         return sendError(res, 400, {
@@ -8294,7 +8299,7 @@ dataRouter.get(
       const rows = await prisma.hrLeaveRecord.findMany({
         orderBy: [{ startDate: "desc" }, { updatedAt: "desc" }],
       });
-      return res.json(rows.map((row) => mapHrLeaveRecord(row)));
+      return res.json(rows.map((row) => mapHrLeaveRecord(asNumbered(row))));
     } catch {
       return sendError(res, 500, {
         code: "INTERNAL_ERROR",
@@ -8391,7 +8396,7 @@ dataRouter.post(
       const payload = sanitizeHrLeavePayload(parsed.data.id, parsed.data);
       const created = await prisma.hrLeaveRecord.create({ data: payload });
       await writeDataAuditLog(req, "create", "hr-leaves", created.id);
-      return res.status(201).json(mapHrLeaveRecord(created));
+      return res.status(201).json(mapHrLeaveRecord(asNumbered(created)));
     } catch (err) {
       if (
         err instanceof Prisma.PrismaClientKnownRequestError &&
@@ -8441,7 +8446,7 @@ dataRouter.patch(
           legacyError: "Not found",
         });
       const merged = sanitizeHrLeavePayload(req.params.id, {
-        ...mapHrLeaveRecord(existing),
+        ...mapHrLeaveRecord(asNumbered(existing)),
         ...(req.body as Record<string, unknown>),
       });
       const saved = await prisma.hrLeaveRecord.update({
@@ -8449,7 +8454,7 @@ dataRouter.patch(
         data: merged,
       });
       await writeDataAuditLog(req, "update", "hr-leaves", saved.id);
-      return res.json(mapHrLeaveRecord(saved));
+      return res.json(mapHrLeaveRecord(asNumbered(saved)));
     } catch (err) {
       if (err instanceof PayloadValidationError) {
         return sendError(res, 400, {

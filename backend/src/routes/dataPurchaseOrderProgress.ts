@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { asRecord, asTrimmedString, toFiniteNumber } from "./dataPayloadUtils";
 
 type QuantityMaps = {
@@ -76,14 +77,14 @@ export function buildReceivedQuantitiesFromRelationalStockIns(
   rows: Array<{
     type?: string | null;
     status?: string | null;
-    items: Array<{ qty: number; itemCode: string | null; itemName: string }>;
+    items: Array<{ qty: number | Prisma.Decimal; itemCode: string | null; itemName: string }>;
   }>,
 ): QuantityMaps {
   const quantityMaps = createQuantityMaps();
   for (const row of rows) {
     if (!isPostedReceivingStockIn(row as Record<string, unknown>)) continue;
     for (const item of row.items) {
-      const qty = Math.max(0, item.qty);
+      const qty = Math.max(0, Number(item.qty));
       addReceivedQuantity(
         quantityMaps,
         normalizeLookupKey(item.itemCode),
@@ -99,8 +100,8 @@ export function buildReceivedQuantitiesFromRelationalReceivings(
   rows: Array<{
     status: string;
     items: Array<{
-      qtyReceived: number;
-      qtyGood: number;
+      qtyReceived: Prisma.Decimal | number;
+      qtyGood: Prisma.Decimal | number;
       itemCode: string | null;
       itemName: string;
     }>;
@@ -110,7 +111,7 @@ export function buildReceivedQuantitiesFromRelationalReceivings(
   for (const row of rows) {
     if (row.status === "Rejected") continue;
     for (const item of row.items) {
-      const qty = Math.max(0, item.qtyReceived || item.qtyGood || 0);
+      const qty = Math.max(0, Number(item.qtyReceived || item.qtyGood || 0));
       addReceivedQuantity(
         quantityMaps,
         normalizeLookupKey(item.itemCode),
@@ -201,13 +202,13 @@ export function applyReceivedQuantitiesToRelationalPoItems<
   T extends {
     itemCode: string | null;
     itemName: string;
-    qty: number;
+    qty: number | Prisma.Decimal;
   },
 >(items: T[], quantityMaps: QuantityMaps): Array<T & { qtyReceived: number }> {
   return items.map((item) => {
     const codeKey = normalizeLookupKey(item.itemCode);
     const nameKey = normalizeLookupKey(item.itemName);
-    const ordered = Math.max(0, item.qty);
+    const ordered = Math.max(0, Number(item.qty));
     const qtyReceived = Math.min(
       ordered,
       Math.max(
@@ -245,14 +246,14 @@ export function applyReceivedQuantitiesToLegacyPoItems(
 
 export function summarizePurchaseOrderProgress<T>(
   items: T[],
-  getOrdered: (item: T) => number,
-  getReceived: (item: T) => number,
+  getOrdered: (item: T) => number | Prisma.Decimal,
+  getReceived: (item: T) => number | Prisma.Decimal,
 ) {
   const hasItems = items.length > 0;
   const allReceived =
     hasItems &&
-    items.every((item) => Math.max(0, getReceived(item)) >= Math.max(0, getOrdered(item)));
-  const someReceived = items.some((item) => Math.max(0, getReceived(item)) > 0);
+    items.every((item) => Math.max(0, Number(getReceived(item))) >= Math.max(0, Number(getOrdered(item))));
+  const someReceived = items.some((item) => Math.max(0, Number(getReceived(item))) > 0);
   return {
     hasItems,
     allReceived,

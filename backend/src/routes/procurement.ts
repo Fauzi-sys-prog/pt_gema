@@ -66,6 +66,10 @@ function toFiniteNumber(value: unknown, fallback = 0): number {
     const parsed = Number(value.replace(/,/g, "").trim());
     return Number.isFinite(parsed) ? parsed : fallback;
   }
+  if (value && typeof (value as { toNumber?: unknown }).toNumber === "function") {
+    const parsed = (value as { toNumber: () => number }).toNumber();
+    if (Number.isFinite(parsed)) return parsed;
+  }
   return fallback;
 }
 
@@ -97,23 +101,23 @@ function mapPurchaseOrder(row: {
   supplierContact: string | null;
   attention: string | null;
   notes: string | null;
-  ppnRate: number;
+  ppnRate: Prisma.Decimal | number;
   topDays: number;
   ref: string | null;
   poCode: string | null;
   deliveryDate: Date | null;
   signatoryName: string | null;
-  totalAmount: number;
+  totalAmount: Prisma.Decimal | number;
   status: string;
   items: Array<{
     id: string;
     itemCode: string | null;
     itemName: string;
-    qty: number;
+    qty: Prisma.Decimal | number;
     unit: string;
-    unitPrice: number;
-    total: number;
-    qtyReceived: number;
+    unitPrice: Prisma.Decimal | number;
+    total: Prisma.Decimal | number;
+    qtyReceived: Prisma.Decimal | number;
     source: string | null;
     sourceRef: string | null;
   }>;
@@ -131,25 +135,25 @@ function mapPurchaseOrder(row: {
     supplierContact: row.supplierContact ?? "",
     attention: row.attention ?? "",
     notes: row.notes ?? "",
-    ppn: row.ppnRate,
-    ppnRate: row.ppnRate,
+    ppn: Number(row.ppnRate),
+    ppnRate: Number(row.ppnRate),
     top: row.topDays,
     ref: row.ref ?? "",
     po: row.poCode ?? "",
     deliveryDate: row.deliveryDate ? row.deliveryDate.toISOString().slice(0, 10) : undefined,
     signatoryName: row.signatoryName ?? "",
-    total: row.totalAmount,
+    total: Number(row.totalAmount),
     status: row.status,
     items: row.items.map((item) => ({
       id: item.id,
       kode: item.itemCode ?? "",
       nama: item.itemName,
-      qty: item.qty,
+      qty: Number(item.qty),
       unit: item.unit,
-      unitPrice: item.unitPrice,
-      harga: item.unitPrice,
-      total: item.total,
-      qtyReceived: item.qtyReceived,
+      unitPrice: Number(item.unitPrice),
+      harga: Number(item.unitPrice),
+      total: Number(item.total),
+      qtyReceived: Number(item.qtyReceived),
       source: item.source ?? undefined,
       sourceRef: item.sourceRef ?? undefined,
     })),
@@ -174,11 +178,11 @@ function mapReceiving(row: {
     id: string;
     itemCode: string | null;
     itemName: string;
-    qtyOrdered: number;
-    qtyReceived: number;
-    qtyGood: number;
-    qtyDamaged: number;
-    qtyPreviouslyReceived: number;
+    qtyOrdered: Prisma.Decimal | number;
+    qtyReceived: Prisma.Decimal | number;
+    qtyGood: Prisma.Decimal | number;
+    qtyDamaged: Prisma.Decimal | number;
+    qtyPreviouslyReceived: Prisma.Decimal | number;
     unit: string;
     condition: string | null;
     batchNo: string | null;
@@ -205,11 +209,11 @@ function mapReceiving(row: {
       id: item.id,
       itemKode: item.itemCode ?? "",
       itemName: item.itemName,
-      qtyOrdered: item.qtyOrdered,
-      qtyReceived: item.qtyReceived,
-      qtyGood: item.qtyGood,
-      qtyDamaged: item.qtyDamaged,
-      qtyPreviouslyReceived: item.qtyPreviouslyReceived,
+      qtyOrdered: Number(item.qtyOrdered),
+      qtyReceived: Number(item.qtyReceived),
+      qtyGood: Number(item.qtyGood),
+      qtyDamaged: Number(item.qtyDamaged),
+      qtyPreviouslyReceived: Number(item.qtyPreviouslyReceived),
       unit: item.unit,
       condition: item.condition ?? undefined,
       batchNo: item.batchNo ?? "",
@@ -321,7 +325,7 @@ async function syncPurchaseOrderProgress(poId: string, db: ProcurementDb = prism
 
   for (const receiving of receivings) {
     for (const item of receiving.items) {
-      const qty = Math.max(0, item.qtyReceived);
+      const qty = Math.max(0, Number(item.qtyReceived));
       if (qty <= 0) continue;
       const codeKey = String(item.itemCode || "").trim().toLowerCase();
       const nameKey = String(item.itemName || "").trim().toLowerCase();
@@ -334,15 +338,15 @@ async function syncPurchaseOrderProgress(poId: string, db: ProcurementDb = prism
     const codeKey = String(item.itemCode || "").trim().toLowerCase();
     const nameKey = String(item.itemName || "").trim().toLowerCase();
     const qtyReceived = Math.min(
-      item.qty,
+      Number(item.qty),
       Math.max(receivedByCode.get(codeKey) || 0, receivedByName.get(nameKey) || 0)
     );
     return { ...item, qtyReceived };
   });
 
   const hasItems = nextItems.length > 0;
-  const allReceived = hasItems && nextItems.every((item) => item.qtyReceived >= item.qty);
-  const someReceived = nextItems.some((item) => item.qtyReceived > 0);
+  const allReceived = hasItems && nextItems.every((item) => Number(item.qtyReceived) >= Number(item.qty));
+  const someReceived = nextItems.some((item) => Number(item.qtyReceived) > 0);
   const nextStatus = allReceived
     ? "Received"
     : someReceived
@@ -393,7 +397,7 @@ async function reverseInventoryStockIn(stockInId: string) {
   for (const item of stockIn.items) {
     const inventoryItem = await prisma.inventoryItem.findFirst({ where: { code: item.itemCode } });
     if (!inventoryItem) continue;
-    const stockAfter = Math.max(0, inventoryItem.onHandQty - Math.max(0, item.qty));
+    const stockAfter = Math.max(0, Number(inventoryItem.onHandQty) - Math.max(0, Number(item.qty)));
     await prisma.inventoryItem.update({
       where: { id: inventoryItem.id },
       data: {
@@ -426,7 +430,7 @@ async function syncInventoryFromReceiving(receivingId: string) {
     .map((item) => ({
       code: asTrimmedString(item.itemCode) || "",
       name: item.itemName,
-      qty: Math.max(0, item.qtyGood || item.qtyReceived || 0),
+      qty: Math.max(0, Number(item.qtyGood || item.qtyReceived || 0)),
       unit: item.unit,
       batchNo: item.batchNo || undefined,
       expiryDate: item.expiryDate || undefined,
@@ -489,8 +493,8 @@ async function syncInventoryFromReceiving(receivingId: string) {
     const existing = await prisma.inventoryItem.findFirst({
       where: { code: item.code },
     });
-    const stockBefore = existing?.onHandQty || 0;
-    const stockAfter = stockBefore + item.qty;
+    const stockBefore = Number(existing?.onHandQty) || 0;
+    const stockAfter = stockBefore + Number(item.qty);
 
     if (existing) {
       await prisma.inventoryItem.update({
@@ -509,8 +513,8 @@ async function syncInventoryFromReceiving(receivingId: string) {
             stok: stockAfter,
             satuan: existing.unit || item.unit,
             kategori: asTrimmedString(asRecord(existing.metadata).kategori) || "General",
-            minStock: toFiniteNumber(asRecord(existing.metadata).minStock, existing.minStock),
-            hargaSatuan: toFiniteNumber(asRecord(existing.metadata).hargaSatuan, existing.unitPrice ?? 0),
+            minStock: toFiniteNumber(asRecord(existing.metadata).minStock, Number(existing.minStock)),
+            hargaSatuan: toFiniteNumber(asRecord(existing.metadata).hargaSatuan, Number(existing.unitPrice ?? 0)),
             supplier: existing.supplierName || receiving.supplierName || "",
             lokasi: existing.location,
             lastUpdate: new Date().toISOString(),
@@ -603,11 +607,11 @@ export async function validateReceiving(payload: Record<string, unknown>, db: Pr
   const po = await db.procurementPurchaseOrder.findUnique({ where: { id: poId }, include: { items: true } });
   if (!po || !["Approved", "Partial"].includes(po.status)) throw new Error("PO tidak dapat diterima: harus Approved atau Partial.");
   const previous = await db.procurementReceiving.findMany({ where: { purchaseOrderId: poId, id: { not: id }, status: { not: "Rejected" } }, include: { items: true } });
-  const remaining = new Map(po.items.map(item => [item.id, item.qty]));
+  const remaining = new Map(po.items.map(item => [item.id, Number(item.qty)]));
   const match = (code: string, name: string) => po.items.find(item => code ? item.itemCode === code : item.itemName === name);
   for (const receipt of previous) for (const item of receipt.items) {
     const poItem = match(item.itemCode || "", item.itemName);
-    if (poItem) remaining.set(poItem.id, (remaining.get(poItem.id) || 0) - item.qtyReceived);
+    if (poItem) remaining.set(poItem.id, (remaining.get(poItem.id) || 0) - Number(item.qtyReceived));
   }
   const items = (Array.isArray(payload.items) ? payload.items : []).map(asRecord);
   if (!items.some(item => Number(item.qtyReceived) > 0)) throw new Error("Receiving tidak boleh kosong.");
@@ -618,8 +622,8 @@ export async function validateReceiving(payload: Record<string, unknown>, db: Pr
     if (!poItem || !Number.isFinite(qty) || qty < 0 || !Number.isFinite(damaged) || damaged < 0 || damaged > qty || qty > (remaining.get(poItem.id) || 0)) {
       throw new Error("Receiving tidak valid: periksa SKU, sisa PO, dan jumlah barang rusak.");
     }
-    item.qtyOrdered = poItem.qty;
-    item.qtyPreviouslyReceived = poItem.qty - (remaining.get(poItem.id) || 0);
+    item.qtyOrdered = Number(poItem.qty);
+    item.qtyPreviouslyReceived = Number(poItem.qty) - (remaining.get(poItem.id) || 0);
     item.qtyGood = qty - damaged;
     item.unit = poItem.unit;
     remaining.set(poItem.id, (remaining.get(poItem.id) || 0) - qty);
@@ -731,7 +735,7 @@ async function createResource(resource: ProcurementResource, payload: Record<str
         (asTrimmedString(item.itemKode) && candidate.itemCode === asTrimmedString(item.itemKode)) ||
         candidate.itemName === asTrimmedString(item.itemName)
       );
-      return sum + Math.max(0, toFiniteNumber(item.qtyGood ?? item.qtyReceived, 0)) * (poItem?.unitPrice || 0);
+      return sum + Math.max(0, toFiniteNumber(item.qtyGood ?? item.qtyReceived, 0)) * Number(poItem?.unitPrice || 0);
     }, 0);
     if (totalNominal > 0) {
       await db.financeVendorExpense.create({ data: {

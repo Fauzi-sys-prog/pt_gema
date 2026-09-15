@@ -71,6 +71,7 @@ export default function DaftarAsset() {
       location: newAsset.location || '',
       status: (newAsset.status as any) || 'Available',
       condition: (newAsset.condition as any) || 'Good',
+      spesifikasi: newAsset.spesifikasi || '',
       purchaseDate: new Date().toISOString().split('T')[0]
     };
 
@@ -194,6 +195,16 @@ export default function DaftarAsset() {
                     </SelectContent>
                   </Select>
                 </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="spesifikasi" className="font-semibold text-slate-700">Spesifikasi Barang</Label>
+                <Input
+                  id="spesifikasi"
+                  placeholder="Contoh: Excavator CAT 320D, 20 Ton, Tahun 2020"
+                  className="rounded-lg border-slate-200"
+                  value={newAsset.spesifikasi || ''}
+                  onChange={e => setNewAsset({...newAsset, spesifikasi: e.target.value})}
+                />
               </div>
             </div>
             <DialogFooter className="gap-2 sm:gap-0">

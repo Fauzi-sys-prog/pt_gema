@@ -24,6 +24,7 @@ export function mapAssetRecord(row: {
   projectName: string | null;
   rentedTo: string | null;
   notes: string | null;
+  spesifikasi: string | null;
 }) {
   return {
     id: row.id,
@@ -43,6 +44,7 @@ export function mapAssetRecord(row: {
     projectName: row.projectName ?? undefined,
     rentedTo: row.rentedTo ?? undefined,
     notes: row.notes ?? undefined,
+    spesifikasi: row.spesifikasi ?? undefined,
   };
 }
 
@@ -97,6 +99,7 @@ export function sanitizeAssetPayload(id: string, payload: Record<string, unknown
     projectName: asTrimmedString(payload.projectName) ?? null,
     rentedTo: asTrimmedString(payload.rentedTo) ?? null,
     notes: asTrimmedString(payload.notes) ?? null,
+    spesifikasi: asTrimmedString(payload.spesifikasi) ?? null,
   };
 }
 
@@ -368,30 +371,30 @@ export function mapPayrollRecord(row: {
   employeeId: string | null;
   month: string;
   year: number;
-  totalPayroll: number;
+  totalPayroll: Prisma.Decimal | number;
   status: string;
   employeeCount: number;
   employeeName: string | null;
-  baseSalary: number | null;
-  totalOutput: number | null;
-  incentiveTotal: number | null;
-  allowanceTotal: number | null;
-  totalGaji: number | null;
+  baseSalary: Prisma.Decimal | number | null;
+  totalOutput: Prisma.Decimal | number | null;
+  incentiveTotal: Prisma.Decimal | number | null;
+  allowanceTotal: Prisma.Decimal | number | null;
+  totalGaji: Prisma.Decimal | number | null;
 }) {
   return {
     id: row.id,
     employeeId: row.employeeId ?? undefined,
     month: row.month,
     year: row.year,
-    totalPayroll: row.totalPayroll,
+    totalPayroll: Number(row.totalPayroll),
     status: row.status,
     employeeCount: row.employeeCount,
     employeeName: row.employeeName ?? undefined,
-    baseSalary: row.baseSalary ?? undefined,
-    totalOutput: row.totalOutput ?? undefined,
-    incentiveTotal: row.incentiveTotal ?? undefined,
-    allowanceTotal: row.allowanceTotal ?? undefined,
-    totalGaji: row.totalGaji ?? undefined,
+    baseSalary: row.baseSalary == null ? undefined : Number(row.baseSalary),
+    totalOutput: row.totalOutput == null ? undefined : Number(row.totalOutput),
+    incentiveTotal: row.incentiveTotal == null ? undefined : Number(row.incentiveTotal),
+    allowanceTotal: row.allowanceTotal == null ? undefined : Number(row.allowanceTotal),
+    totalGaji: row.totalGaji == null ? undefined : Number(row.totalGaji),
   };
 }
 

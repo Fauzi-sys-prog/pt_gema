@@ -28,6 +28,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const mapBackendUser = (user: any): User => {
     const roleMap: Record<string, string> = {
       OWNER: 'Owner', ADMIN: 'Admin', MANAGER: 'Manager', SPV: 'SPV',
+      ADMIN_PENAWARAN: 'Admin Penawaran',
       FINANCE_ACCOUNTING: 'Finance & Accounting',
       SALES_MARKETING: 'Sales & Marketing',
       OPERATIONAL_PRODUCTION: 'Operasional & Produksi',

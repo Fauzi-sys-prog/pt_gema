@@ -1,4 +1,9 @@
 import { Role } from "@prisma/client";
+import { serializeDecimals } from "../utils/decimal";
+
+function asNumbered<T>(row: unknown): T {
+  return serializeDecimals(row as T);
+}
 import { prisma } from "../prisma";
 import {
   invoiceDashboardDetailSelect,
@@ -79,7 +84,7 @@ export async function buildFinanceApprovalQueuePayload(role?: Role) {
     poRows,
     poDedicatedRows.map((row) => ({
       id: row.id,
-      payload: mapProcurementPurchaseOrderDashboardPayload(row),
+      payload: mapProcurementPurchaseOrderDashboardPayload(asNumbered(row)),
       updatedAt: row.updatedAt,
     })),
   );

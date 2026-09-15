@@ -66,22 +66,23 @@ function mapEmployee(row: {
   address: string | null;
   emergencyContact: string | null;
   emergencyPhone: string | null;
-  salary: number | null;
-  transportAllowance: number | null;
-  mealAllowancePerDay: number | null;
-  attendanceIncentive: number | null;
-  overtimeRateMultiplier: number | null;
-  bpjsHealthEmployeePercent: number | null;
-  jhtEmployeePercent: number | null;
-  jpEmployeePercent: number | null;
-  pph21Amount: number | null;
+  salary: Prisma.Decimal | number | null;
+  transportAllowance: Prisma.Decimal | number | null;
+  mealAllowancePerDay: Prisma.Decimal | number | null;
+  attendanceIncentive: Prisma.Decimal | number | null;
+  overtimeRateMultiplier: Prisma.Decimal | number | null;
+  bpjsHealthEmployeePercent: Prisma.Decimal | number | null;
+  jhtEmployeePercent: Prisma.Decimal | number | null;
+  jpEmployeePercent: Prisma.Decimal | number | null;
+  pph21Amount: Prisma.Decimal | number | null;
   status: string;
   bank: string | null;
   bankAccount: string | null;
   npwp: string | null;
+  ptkpStatus: string | null;
   bpjsKesehatan: string | null;
   bpjsKetenagakerjaan: string | null;
-  leaveQuota: number | null;
+  leaveQuota: Prisma.Decimal | number | null;
 }) {
   return {
     id: row.id,
@@ -108,22 +109,23 @@ function mapEmployee(row: {
     address: row.address ?? "",
     emergencyContact: row.emergencyContact ?? "",
     emergencyPhone: row.emergencyPhone ?? "",
-    salary: row.salary ?? 0,
-    transportAllowance: row.transportAllowance ?? undefined,
-    mealAllowancePerDay: row.mealAllowancePerDay ?? undefined,
-    attendanceIncentive: row.attendanceIncentive ?? undefined,
-    overtimeRateMultiplier: row.overtimeRateMultiplier ?? undefined,
-    bpjsHealthEmployeePercent: row.bpjsHealthEmployeePercent ?? undefined,
-    jhtEmployeePercent: row.jhtEmployeePercent ?? undefined,
-    jpEmployeePercent: row.jpEmployeePercent ?? undefined,
-    pph21Amount: row.pph21Amount ?? undefined,
+    salary: Number(row.salary ?? 0),
+    transportAllowance: row.transportAllowance == null ? undefined : Number(row.transportAllowance),
+    mealAllowancePerDay: row.mealAllowancePerDay == null ? undefined : Number(row.mealAllowancePerDay),
+    attendanceIncentive: row.attendanceIncentive == null ? undefined : Number(row.attendanceIncentive),
+    overtimeRateMultiplier: row.overtimeRateMultiplier == null ? undefined : Number(row.overtimeRateMultiplier),
+    bpjsHealthEmployeePercent: row.bpjsHealthEmployeePercent == null ? undefined : Number(row.bpjsHealthEmployeePercent),
+    jhtEmployeePercent: row.jhtEmployeePercent == null ? undefined : Number(row.jhtEmployeePercent),
+    jpEmployeePercent: row.jpEmployeePercent == null ? undefined : Number(row.jpEmployeePercent),
+    pph21Amount: row.pph21Amount == null ? undefined : Number(row.pph21Amount),
     status: row.status,
     bank: row.bank ?? undefined,
     bankAccount: row.bankAccount ?? undefined,
     npwp: row.npwp ?? undefined,
+    ptkpStatus: row.ptkpStatus ?? undefined,
     bpjsKesehatan: row.bpjsKesehatan ?? undefined,
     bpjsKetenagakerjaan: row.bpjsKetenagakerjaan ?? undefined,
-    leaveQuota: row.leaveQuota ?? undefined,
+    leaveQuota: row.leaveQuota == null ? undefined : Number(row.leaveQuota),
   };
 }
 
@@ -136,8 +138,8 @@ function mapAttendance(row: {
   status: string;
   checkIn: string | null;
   checkOut: string | null;
-  workHours: number | null;
-  overtime: number | null;
+  workHours: Prisma.Decimal | number | null;
+  overtime: Prisma.Decimal | number | null;
   location: string | null;
   notes: string | null;
 }) {
@@ -150,8 +152,8 @@ function mapAttendance(row: {
     status: row.status,
     checkIn: row.checkIn ?? undefined,
     checkOut: row.checkOut ?? undefined,
-    workHours: row.workHours ?? undefined,
-    overtime: row.overtime ?? undefined,
+    workHours: row.workHours == null ? undefined : Number(row.workHours),
+    overtime: row.overtime == null ? undefined : Number(row.overtime),
     location: row.location ?? undefined,
     notes: row.notes ?? undefined,
   };
@@ -196,6 +198,7 @@ function sanitizeEmployeePayload(id: string, payload: Record<string, unknown>) {
     bank: typeof payload.bank === "string" ? payload.bank : null,
     bankAccount: typeof payload.bankAccount === "string" ? payload.bankAccount : null,
     npwp: typeof payload.npwp === "string" ? payload.npwp : null,
+    ptkpStatus: typeof payload.ptkpStatus === "string" ? payload.ptkpStatus : null,
     bpjsKesehatan: typeof payload.bpjsKesehatan === "string" ? payload.bpjsKesehatan : null,
     bpjsKetenagakerjaan: typeof payload.bpjsKetenagakerjaan === "string" ? payload.bpjsKetenagakerjaan : null,
     leaveQuota: payload.leaveQuota == null ? null : Number(payload.leaveQuota || 0),

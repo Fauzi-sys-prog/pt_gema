@@ -5,6 +5,11 @@ import { authenticate } from "../middlewares/auth";
 import { AuthRequest } from "../types/auth";
 import { sendError } from "../utils/http";
 import {
+  assertFinancialYearsOpen,
+  FinancialYearClosedError,
+  financialYearsFromValue,
+} from "../middlewares/financialYearLock";
+import {
   canReadCoverage,
   canReadFinance,
   resolveActorSnapshot,
@@ -46,6 +51,7 @@ import {
   buildFinanceCashflowSummaryPayload,
   buildFinanceGeneralLedgerSummaryPayload,
   buildFinancePaymentSummaryPayload,
+  buildDecemberPph21Payload,
   buildFinancePayrollSummaryPayload,
   buildFinancePettyCashSummaryPayload,
   buildFinancePpnSummaryPayload,
@@ -335,6 +341,21 @@ dashboardRouter.get("/dashboard/finance-payroll-summary", authenticate, async (r
   }
 });
 
+dashboardRouter.post("/dashboard/finance-pph21-december", authenticate, async (req: AuthRequest, res: Response) => {
+  if (!canReadFinance(req.user?.role)) {
+    return sendError(res, 403, { code: "FORBIDDEN", message: "Forbidden", legacyError: "Forbidden" });
+  }
+  try {
+    const payload = await buildDecemberPph21Payload({
+      year: Number(req.body?.year),
+      employees: Array.isArray(req.body?.employees) ? req.body.employees : [],
+    });
+    return res.json(payload);
+  } catch {
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 dashboardRouter.get("/dashboard/finance-ppn-summary", authenticate, async (req: AuthRequest, res: Response) => {
   if (!canReadFinance(req.user?.role)) {
     return sendError(res, 403, { code: "FORBIDDEN", message: "Forbidden", legacyError: "Forbidden" });
@@ -474,6 +495,11 @@ dashboardRouter.post("/dashboard/finance-approval-action", authenticate, async (
       writeQuotationApprovalLog: (params) => writeQuotationApprovalLogSafe(params, db),
       writeAuditLog: async (action, documentType, documentId, metadata) =>
         writeFinanceApprovalAuditLog(req, action, documentType, documentId, metadata, actor.actorName, db),
+      assertYearOpen: async (payload) => {
+        const years = financialYearsFromValue(payload);
+        if (years.size === 0) return;
+        await prisma.$transaction((tx) => assertFinancialYearsOpen(tx, years));
+      },
     });
     const result = input.documentType === "QUOTATION"
       ? await prisma.$transaction((tx) => execute(tx))
@@ -481,6 +507,13 @@ dashboardRouter.post("/dashboard/finance-approval-action", authenticate, async (
 
     return res.json(result);
   } catch (error) {
+    if (error instanceof FinancialYearClosedError) {
+      return sendError(res, 423, {
+        code: "FISCAL_YEAR_CLOSED",
+        message: error.message,
+        legacyError: "Fiscal year is closed",
+      });
+    }
     if (error instanceof FinanceApprovalActionError) {
       return sendError(res, error.status, {
         code: error.code,

@@ -115,9 +115,11 @@ export default function PayrollProPage() {
       const approvedOvertimes = overtimeList.filter(
         r => r.employeeId === emp.id && r.status === 'Approved' && inPeriod(r.date)
       );
-      const overtimeHours = approvedOvertimes.reduce((s, r) => s + r.hours, 0);
+      // Role Sales: tidak ada lembur (kerja lewat jam 5 = insentif di petty cash gudang).
+      const isSales = /sales/i.test(String(emp.department || ""));
+      const overtimeHours = isSales ? 0 : approvedOvertimes.reduce((s, r) => s + r.hours, 0);
       const overtimeReferences = Array.from(new Set(approvedOvertimes.map(r => r.nomorSPK).filter(Boolean))) as string[];
-      const overtimePay = overtimeHours * (comp?.overtimeRate ?? 0) * (payrollPolicy?.overtimeRateMultiplier ?? 1);
+      const overtimePay = isSales ? 0 : overtimeHours * (comp?.overtimeRate ?? 0) * (payrollPolicy?.overtimeRateMultiplier ?? 1);
       const mealAllowance = attendanceDays * (comp?.mealAllowancePerDay || payrollPolicy?.mealAllowancePerDay || 25000);
 
       // Approved cuti di periode ini — hari yang di-cover cuti tidak kena potongan insentif
@@ -210,7 +212,7 @@ export default function PayrollProPage() {
     });
   }
 
-  function handleHitungPayroll() {
+  async function handleHitungPayroll() {
     if (isSubmitting) return;
     setIsSubmitting(true);
     try {
@@ -240,8 +242,39 @@ export default function PayrollProPage() {
         return;
       }
 
-      const slips = buildSlips(period, periodStart, periodEnd, requestedIds);
+      let slips = buildSlips(period, periodStart, periodEnd, requestedIds);
       if (slips.length === 0) { toast.error('Tidak ada karyawan yang dapat diproses'); return; }
+      // Desember: rekalkulasi PPh 21 setahun (berbasis realisasi YTD) via backend.
+      if (period.endsWith('-12')) {
+        try {
+          const { api } = await import('../../services/api');
+          const result = await api.request<{ rows: Array<{ employeeId: string; decemberPph21: number }> }>('/dashboard/finance-pph21-december', {
+            method: 'POST',
+            body: JSON.stringify({
+              year: createYear,
+              employees: slips.map(s => {
+                const emp = employeeList.find(e => e.id === s.employeeId);
+                return {
+                  employeeId: s.employeeId,
+                  decemberGross: s.grossIncome,
+                  deductibleMonthly: s.bpjsKetEmployee ?? 0,
+                  ptkpStatus: emp?.ptkpStatus ?? 'TK/0',
+                  hasNpwp: Boolean(emp?.npwp && String(emp.npwp).trim()),
+                };
+              }),
+            }),
+          });
+          const decMap = new Map((result.rows || []).map(r => [r.employeeId, r.decemberPph21]));
+          slips = slips.map(s => {
+            const next = decMap.get(s.employeeId);
+            if (next == null || Math.abs(next - s.pph21) < 0.005) return s;
+            const totalDeductions = s.totalDeductions + (next - s.pph21);
+            return { ...s, pph21: next, totalDeductions, takeHomePay: s.grossIncome - totalDeductions };
+          });
+        } catch {
+          toast.error('Gagal rekalkulasi PPh 21 Desember; memakai perhitungan bulanan');
+        }
+      }
       const runId = `RUN-${Date.now()}`;
       const runNumber = `PR-${createYear}${mm}-${String(payrollRunList.length + 1).padStart(3, '0')}`;
       const patchedSlips = slips.map(s => ({ ...s, payrollRunId: runId }));
@@ -447,6 +480,10 @@ export default function PayrollProPage() {
               <p className="text-lg font-bold text-gray-800 mt-1">{c.value}</p>
             </div>
           ))}
+        </div>
+
+        <div className="bg-blue-50 border border-blue-200 text-blue-800 text-xs rounded-xl px-4 py-3">
+          <strong>Keterangan PPh 21:</strong> dihitung otomatis dengan metode Pasal 17 (PTKP + tarif progresif; pengurang JHT &amp; JP; BPJS Kesehatan bukan pengurang). Isi PPh 21 manual di master karyawan untuk override. <span className="text-amber-700 font-semibold">Karyawan tanpa NPWP dikenakan +20%.</span>
         </div>
 
         <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">

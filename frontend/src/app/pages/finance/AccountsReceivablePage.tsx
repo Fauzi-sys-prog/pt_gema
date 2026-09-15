@@ -42,6 +42,9 @@ const COMPANY_BANK_ACCOUNTS = [
 
 const DEFAULT_COMPANY_ACCOUNT = COMPANY_BANK_ACCOUNTS[0].id;
 
+// Tarif PPN default saat membuat invoice baru. Ubah di satu tempat ini saja.
+const DEFAULT_PPN_PERCENT = 11;
+
 export default function AccountsReceivablePage() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -87,7 +90,7 @@ export default function AccountsReceivablePage() {
     projectId: '',
     perihal: '',
     items: [] as any[],
-    ppn: 11,
+    ppn: DEFAULT_PPN_PERCENT,
     pph: 0,
     diskon: 0,
     noKontrak: '',
@@ -150,7 +153,7 @@ export default function AccountsReceivablePage() {
     if (!invoice) return; // Wait for invoices to finish loading.
     setActiveTab('invoices');
     setSearchTerm(invoice.noInvoice || '');
-    if (['Approved', 'Sent', 'Partial Paid', 'Overdue'].includes(invoice.status)) {
+    if (['Approved', 'Sent', 'Partial Paid', 'Partial', 'Overdue'].includes(invoice.status)) {
       setSelectedInvoice(invoice);
       setPaymentForm(prev => ({
         ...prev,
@@ -188,7 +191,7 @@ export default function AccountsReceivablePage() {
           satuan: 'Lot',
           hargaSatuan: state.defaultAmount || 0
         }],
-        ppn: 11,
+        ppn: DEFAULT_PPN_PERCENT,
         pph: 0,
         diskon: 0,
         noKontrak: '',
@@ -555,7 +558,7 @@ export default function AccountsReceivablePage() {
       projectId: '',
       perihal: '',
       items: [],
-      ppn: 11,
+      ppn: DEFAULT_PPN_PERCENT,
       pph: 0,
       diskon: 0,
       noKontrak: '',
@@ -699,6 +702,7 @@ export default function AccountsReceivablePage() {
       'Rejected': { color: 'bg-rose-100 text-rose-700', icon: XCircle },
       'Sent': { color: 'bg-emerald-100 text-emerald-700', icon: CheckCircle },
       'Partial Paid': { color: 'bg-yellow-100 text-yellow-700', icon: Clock },
+      'Partial': { color: 'bg-yellow-100 text-yellow-700', icon: Clock },
       'Paid': { color: 'bg-green-100 text-green-700', icon: CheckCircle },
       'Overdue': { color: 'bg-red-100 text-red-700', icon: AlertCircle },
       'Cancelled': { color: 'bg-gray-100 text-gray-500', icon: Ban }
@@ -802,6 +806,7 @@ export default function AccountsReceivablePage() {
               <option value="Pending">Pending Approval</option>
               <option value="Sent">Sent</option>
               <option value="Partial Paid">Partial Paid</option>
+              <option value="Partial">Partial</option>
               <option value="Paid">Paid</option>
               <option value="Overdue">Overdue</option>
             </select>
@@ -978,7 +983,7 @@ export default function AccountsReceivablePage() {
                                 <Send className="w-4 h-4" />
                               </button>
                             )}
-                            {(invoice.status === 'Approved' || invoice.status === 'Sent' || invoice.status === 'Partial Paid' || invoice.status === 'Overdue') && (
+                            {(invoice.status === 'Approved' || invoice.status === 'Sent' || invoice.status === 'Partial Paid' || invoice.status === 'Partial' || invoice.status === 'Overdue') && (
                               <button
                                 onClick={() => {
                                   setSelectedInvoice(invoice);

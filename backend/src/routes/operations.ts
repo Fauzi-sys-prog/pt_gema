@@ -6,6 +6,11 @@ import { prisma } from "../prisma";
 import { authenticate } from "../middlewares/auth";
 import { AuthRequest } from "../types/auth";
 import { sendError } from "../utils/http";
+import { serializeDecimals } from "../utils/decimal";
+
+function asNumbered<T>(row: unknown): T {
+  return serializeDecimals(row as T);
+}
 import {
   ensureManualLhpProject,
   MANUAL_LHP_PROJECT_ID,
@@ -591,7 +596,7 @@ operationsRouter.post(
         >();
 
         for (const item of wo.requiresBom ? wo.bomItems : []) {
-          const requiredQty = Math.max(0, item.qty - item.completedQty);
+          const requiredQty = Math.max(0, Number(item.qty) - Number(item.completedQty));
 
           if (requiredQty <= 0) {
             continue;
@@ -671,7 +676,7 @@ operationsRouter.post(
               );
             }
 
-            const availableQty = inventory.onHandQty - inventory.reservedQty;
+            const availableQty = Number(inventory.onHandQty) - Number(inventory.reservedQty);
 
             throw new Error(
               `Stok '${inventory.name}' (${itemCode}) tidak cukup. ` +
@@ -719,7 +724,7 @@ operationsRouter.post(
             data: {
               payload: {
                 ...asObject(legacyWo.payload),
-                ...toLegacyWorkOrderPayloadFromRelational(updatedWorkOrder),
+                ...toLegacyWorkOrderPayloadFromRelational(asNumbered(updatedWorkOrder)),
                 workflowStatus: "MATERIAL_RESERVED",
               } as Prisma.InputJsonValue,
             },
@@ -939,7 +944,7 @@ operationsRouter.post(
           name: string;
           unit: string;
           location: string;
-          onHandQty: number;
+          onHandQty: Prisma.Decimal | number;
           metadata: Prisma.JsonValue | null;
         }> | null = null;
 
@@ -1055,7 +1060,7 @@ operationsRouter.post(
           woPayload = legacyWo?.payload
             ? asObject(legacyWo.payload)
             : relationalWo
-              ? toLegacyWorkOrderPayloadFromRelational(relationalWo)
+              ? toLegacyWorkOrderPayloadFromRelational(asNumbered(relationalWo))
               : {};
           woNumber =
             asString(woPayload.woNumber) ||
@@ -1086,12 +1091,12 @@ operationsRouter.post(
           }
 
           const targetQty =
-            relationalWo?.targetQty || asNumber(woPayload.targetQty, 0);
+            Number(relationalWo?.targetQty) || asNumber(woPayload.targetQty, 0);
           if (targetQty <= 0) {
             throw new Error(`WO ${woNumber}: targetQty harus lebih dari 0`);
           }
           const currentCompleted =
-            relationalWo?.completedQty ?? asNumber(woPayload.completedQty, 0);
+            relationalWo?.completedQty == null ? asNumber(woPayload.completedQty, 0) : Number(relationalWo.completedQty);
           if (currentCompleted + outputQty > targetQty) {
             throw new Error(
               `WO ${woNumber}: output melebihi sisa target (${Math.max(0, targetQty - currentCompleted)})`,
@@ -1238,8 +1243,9 @@ operationsRouter.post(
             const inventory = inventoryByCode.get(usage.kode);
             const legacy = legacyByCode.get(usage.kode);
             const available =
-              inventory?.onHandQty ??
-              (legacy ? asNumber(legacy.payload.stok, 0) : null);
+              inventory?.onHandQty == null
+                ? (legacy ? asNumber(legacy.payload.stok, 0) : null)
+                : Number(inventory.onHandQty);
             if (available == null) {
               throw new Error(
                 `Item ${usage.kode} tidak ditemukan di master stok`,
@@ -1256,8 +1262,9 @@ operationsRouter.post(
             const inventory = inventoryByCode.get(usage.kode) || null;
             const legacy = legacyByCode.get(usage.kode) || null;
             const before =
-              inventory?.onHandQty ??
-              (legacy ? asNumber(legacy.payload.stok, 0) : 0);
+              inventory?.onHandQty == null
+                ? (legacy ? asNumber(legacy.payload.stok, 0) : 0)
+                : Number(inventory.onHandQty);
             const after = before - usage.qty;
             if (legacy) {
               const nextStockPayload: Record<string, unknown> = {
@@ -1466,8 +1473,9 @@ operationsRouter.post(
             const inventory = inventoryByCode.get(receipt.kode) || null;
             const legacy = legacyByCode.get(receipt.kode) || null;
             const before =
-              inventory?.onHandQty ??
-              (legacy ? asNumber(legacy.payload.stok, 0) : 0);
+              inventory?.onHandQty == null
+                ? (legacy ? asNumber(legacy.payload.stok, 0) : 0)
+                : Number(inventory.onHandQty);
             const after = before + receipt.qty;
             const location =
               (inventory
@@ -1658,7 +1666,7 @@ operationsRouter.post(
 
         if (!isManualReport) {
           const targetQty =
-            relationalWo?.targetQty || asNumber(woPayload.targetQty, 0);
+            Number(relationalWo?.targetQty) || asNumber(woPayload.targetQty, 0);
           const denominator = targetQty;
           const bomRaw = relationalWo
             ? relationalWo.bomItems.map((item) => ({
@@ -1675,8 +1683,9 @@ operationsRouter.post(
               ? (woPayload.bom as Array<Record<string, unknown>>)
               : [];
           const nextCompleted =
-            (relationalWo?.completedQty ??
-              asNumber(woPayload.completedQty, 0)) + outputQty;
+            (relationalWo?.completedQty == null
+              ? asNumber(woPayload.completedQty, 0)
+              : Number(relationalWo.completedQty)) + outputQty;
           const nextBom = bomRaw.map((item) => {
             const itemName =
               asString(item.nama) || asString(item.materialName) || "";

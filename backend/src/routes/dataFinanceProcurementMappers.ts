@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { asTrimmedString } from "./dataPayloadUtils";
 
 export function mapProcurementPurchaseOrderToLegacyPayload(row: {
@@ -151,12 +152,12 @@ export function mapFinanceCustomerInvoiceToLegacyPayload(row: {
   customerName: string;
   projectName: string | null;
   perihal: string | null;
-  subtotal: number;
-  ppn: number;
-  pph: number;
-  totalAmount: number;
-  paidAmount: number;
-  outstandingAmount: number;
+  subtotal: Prisma.Decimal | number;
+  ppn: Prisma.Decimal | number;
+  pph: Prisma.Decimal | number;
+  totalAmount: Prisma.Decimal | number;
+  paidAmount: Prisma.Decimal | number;
+  outstandingAmount: Prisma.Decimal | number;
   status: string;
   noKontrak: string | null;
   noPO: string | null;
@@ -168,15 +169,15 @@ export function mapFinanceCustomerInvoiceToLegacyPayload(row: {
   items: Array<{
     id: string;
     description: string;
-    qty: number;
+    qty: Prisma.Decimal | number;
     unit: string;
-    unitPrice: number;
-    amount: number;
+    unitPrice: Prisma.Decimal | number;
+    amount: Prisma.Decimal | number;
   }>;
   payments: Array<{
     id: string;
     tanggal: Date;
-    nominal: number;
+    nominal: Prisma.Decimal | number;
     method: string;
     proofNo: string | null;
     bankName: string | null;
@@ -198,22 +199,22 @@ export function mapFinanceCustomerInvoiceToLegacyPayload(row: {
     items: row.items.map((item) => ({
       id: item.id,
       deskripsi: item.description,
-      qty: item.qty,
+      qty: Number(item.qty),
       satuan: item.unit,
-      hargaSatuan: item.unitPrice,
-      jumlah: item.amount,
+      hargaSatuan: Number(item.unitPrice),
+      jumlah: Number(item.amount),
     })),
-    subtotal: row.subtotal,
-    ppn: row.ppn,
-    pph: row.pph,
-    totalNominal: row.totalAmount,
-    paidAmount: row.paidAmount,
-    outstandingAmount: row.outstandingAmount,
+    subtotal: Number(row.subtotal),
+    ppn: Number(row.ppn),
+    pph: Number(row.pph),
+    totalNominal: Number(row.totalAmount),
+    paidAmount: Number(row.paidAmount),
+    outstandingAmount: Number(row.outstandingAmount),
     status: row.status,
     paymentHistory: row.payments.map((item) => ({
       id: item.id,
       tanggal: item.tanggal.toISOString().slice(0, 10),
-      nominal: item.nominal,
+      nominal: Number(item.nominal),
       metodeBayar: item.method,
       noBukti: item.proofNo ?? undefined,
       bankName: item.bankName ?? undefined,
@@ -245,9 +246,9 @@ export function mapFinanceVendorExpenseToLegacyPayload(row: {
   rabItemName: string | null;
   kategori: string | null;
   keterangan: string | null;
-  nominal: number;
-  ppn: number;
-  totalNominal: number;
+  nominal: Prisma.Decimal | number;
+  ppn: Prisma.Decimal | number;
+  totalNominal: Prisma.Decimal | number;
   hasKwitansi: boolean;
   kwitansiUrl: string | null;
   noKwitansi: string | null;
@@ -276,9 +277,9 @@ export function mapFinanceVendorExpenseToLegacyPayload(row: {
     rabItemName: row.rabItemName ?? undefined,
     kategori: row.kategori ?? "",
     keterangan: row.keterangan ?? "",
-    nominal: row.nominal,
-    ppn: row.ppn,
-    totalNominal: row.totalNominal,
+    nominal: Number(row.nominal),
+    ppn: Number(row.ppn),
+    totalNominal: Number(row.totalNominal),
     hasKwitansi: row.hasKwitansi,
     kwitansiUrl: row.kwitansiUrl ?? undefined,
     noKwitansi: row.noKwitansi ?? undefined,
@@ -305,10 +306,10 @@ export function mapFinanceVendorInvoiceToLegacyPayload(row: {
   number: string;
   noPO: string | null;
   supplierName: string;
-  totalAmount: number;
-  paidAmount: number;
-  outstandingAmount: number;
-  ppn: number;
+  totalAmount: Prisma.Decimal | number;
+  paidAmount: Prisma.Decimal | number;
+  outstandingAmount: Prisma.Decimal | number;
+  ppn: Prisma.Decimal | number;
   status: string;
   tanggal: Date | null;
   dueDate: Date | null;
@@ -322,7 +323,7 @@ export function mapFinanceVendorInvoiceToLegacyPayload(row: {
   payments?: Array<{
     id: string;
     tanggal: Date;
-    nominal: number;
+    nominal: Prisma.Decimal | number;
     metodeBayar: string | null;
     noBukti: string | null;
     bank: string | null;
@@ -346,11 +347,11 @@ export function mapFinanceVendorInvoiceToLegacyPayload(row: {
     supplier: row.supplierName,
     vendorName: row.supplierName,
     noPO: row.noPO ?? undefined,
-    totalAmount: row.totalAmount,
-    amount: row.totalAmount,
-    paidAmount: row.paidAmount,
-    outstandingAmount: row.outstandingAmount,
-    ppn: row.ppn,
+    totalAmount: Number(row.totalAmount),
+    amount: Number(row.totalAmount),
+    paidAmount: Number(row.paidAmount),
+    outstandingAmount: Number(row.outstandingAmount),
+    ppn: Number(row.ppn),
     status: row.status,
     tanggal: row.tanggal ? row.tanggal.toISOString().slice(0, 10) : undefined,
     jatuhTempo: row.dueDate
@@ -367,7 +368,7 @@ export function mapFinanceVendorInvoiceToLegacyPayload(row: {
     paymentHistory: (row.payments || []).map((payment) => ({
       id: payment.id,
       tanggal: payment.tanggal.toISOString().slice(0, 10),
-      nominal: payment.nominal,
+      nominal: Number(payment.nominal),
       metodeBayar: payment.metodeBayar ?? undefined,
       noBukti: payment.noBukti ?? undefined,
       bank: payment.bank ?? undefined,
@@ -409,14 +410,14 @@ export function mapFinanceWorkingExpenseSheetToLegacyPayload(row: {
   date: Date;
   noHal: string;
   revisi: string | null;
-  totalKas: number;
+  totalKas: Prisma.Decimal | number;
   status: string;
   createdBy: string | null;
   items: Array<{
     id: string;
     date: Date | null;
     description: string;
-    nominal: number;
+    nominal: Prisma.Decimal | number;
     hasNota: string | null;
     remark: string | null;
   }>;
@@ -430,14 +431,14 @@ export function mapFinanceWorkingExpenseSheetToLegacyPayload(row: {
     date: row.date.toISOString().slice(0, 10),
     noHal: row.noHal,
     revisi: row.revisi ?? "0",
-    totalKas: row.totalKas,
+    totalKas: Number(row.totalKas),
     status: row.status,
     createdBy: row.createdBy ?? undefined,
     items: row.items.map((item) => ({
       id: item.id,
       date: item.date ? item.date.toISOString().slice(0, 10) : "",
       description: item.description,
-      nominal: item.nominal,
+      nominal: Number(item.nominal),
       hasNota: item.hasNota ?? "",
       remark: item.remark ?? undefined,
     })),
@@ -451,7 +452,7 @@ export function mapFinancePettyCashTransactionToLegacyPayload(row: {
   date: Date;
   ref: string | null;
   description: string;
-  amount: number;
+  amount: Prisma.Decimal | number;
   accountCode: string | null;
   direction: string;
   projectName: string | null;
@@ -464,7 +465,7 @@ export function mapFinancePettyCashTransactionToLegacyPayload(row: {
     date: row.date.toISOString().slice(0, 10),
     ref: row.ref ?? undefined,
     description: row.description,
-    amount: row.amount,
+    amount: Number(row.amount),
     projectId: row.projectId ?? undefined,
     employeeId: row.employeeId ?? undefined,
     project: row.projectName ?? undefined,
@@ -483,9 +484,9 @@ export function mapFinanceBankReconciliationToLegacyPayload(row: {
   periodLabel: string | null;
   account: string | null;
   description: string | null;
-  debit: number;
-  credit: number;
-  balance: number;
+  debit: Prisma.Decimal | number;
+  credit: Prisma.Decimal | number;
+  balance: Prisma.Decimal | number;
   status: string;
   matchedId: string | null;
   note: string | null;
@@ -500,9 +501,9 @@ export function mapFinanceBankReconciliationToLegacyPayload(row: {
     periodLabel: row.periodLabel ?? undefined,
     account: row.account ?? undefined,
     description: row.description ?? "",
-    debit: row.debit,
-    credit: row.credit,
-    balance: row.balance,
+    debit: Number(row.debit),
+    credit: Number(row.credit),
+    balance: Number(row.balance),
     status: "Posted",
     note: row.note ?? undefined,
   };
@@ -514,7 +515,7 @@ export function mapHrKasbonToLegacyPayload(row: {
   projectId: string | null;
   employeeName: string | null;
   date: Date;
-  amount: number;
+  amount: Prisma.Decimal | number;
   status: string;
   approved: boolean;
   createdBy: string | null;
@@ -526,7 +527,7 @@ export function mapHrKasbonToLegacyPayload(row: {
     projectId: row.projectId ?? undefined,
     employeeName: row.employeeName ?? undefined,
     date: row.date.toISOString().slice(0, 10),
-    amount: row.amount,
+    amount: Number(row.amount),
     status: row.status,
     approved: row.approved,
     createdBy: row.createdBy ?? undefined,

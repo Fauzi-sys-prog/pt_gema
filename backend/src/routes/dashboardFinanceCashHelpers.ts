@@ -71,7 +71,7 @@ export function buildFinancePaymentRegistryDetail(
     0
   );
   const outboundRows = expenseRows.filter((r) =>
-    ["APPROVED", "PAID", "PENDING APPROVAL", "REJECTED"].includes(
+    ["APPROVED", "PAID", "PENDING APPROVAL"].includes(
       String(readString(r, "status") || "").toUpperCase()
     )
   );
@@ -79,7 +79,7 @@ export function buildFinancePaymentRegistryDetail(
     (sum, r) => sum + (readNumber(r, "totalNominal") || readNumber(r, "nominal")),
     0
   );
-  const outboundRejectedTotal = outboundRows
+  const outboundRejectedTotal = expenseRows
     .filter((r) => String(readString(r, "status") || "").toUpperCase() === "REJECTED")
     .reduce((sum, r) => sum + (readNumber(r, "totalNominal") || readNumber(r, "nominal")), 0);
 
@@ -250,6 +250,25 @@ export function buildFinanceReconciliationCheck(input: {
     };
   })();
 
+  // Cross-check independen: hitung ulang paidIn/paidOut langsung dari baris,
+  // lalu bandingkan dengan ringkasan. Ini bisa gagal (bukan tautologi).
+  const recomputedPaidIn = invoiceRows.reduce((sum, r) => {
+    const paymentDate =
+      readString(r, "tanggalBayar") ||
+      readString(r, "paidAt") ||
+      readString(r, "tanggal") ||
+      readString(r, "date");
+    if (!isOnOrAfterStart(paymentDate)) return sum;
+    return sum + readNumber(r, "paidAmount");
+  }, 0);
+  const recomputedPaidOut = expenseRows
+    .filter((r) => String(readString(r, "status") || "").toUpperCase() === "PAID")
+    .reduce(
+      (sum, r) => sum + (readNumber(r, "totalNominal") || readNumber(r, "nominal")),
+      0
+    );
+  const recomputedNet = recomputedPaidIn - recomputedPaidOut;
+
   return {
     checks: {
       paymentRegistry: {
@@ -259,14 +278,20 @@ export function buildFinanceReconciliationCheck(input: {
         },
         summary: paymentSummary,
         detail: paymentRegistryDetail,
-        isConsistentSource: true,
+        isConsistentSource:
+          paymentRegistryDetail.inboundCount <= invoiceRows.length &&
+          paymentRegistryDetail.outboundCount <= expenseRows.length,
         isNetCashConsistent:
-          Math.abs(paymentSummary.netCashRealized - (paymentSummary.paidIn - paymentSummary.paidOut)) < 0.0001,
+          Math.abs(paymentSummary.netCashRealized - recomputedNet) < 0.0001,
       },
       pettyCash: {
         source: "finance-petty-cash-transactions (dedicated)",
         summary: pettyCashSummary,
-        isConsistentSource: pettyRows.length >= 0,
+        isConsistentSource: pettyCashRows.every(
+          (row) =>
+            Number.isFinite(readNumber(row.payload, "amount")) &&
+            readNumber(row.payload, "amount") >= 0
+        ),
       },
     },
     recordCounts: {

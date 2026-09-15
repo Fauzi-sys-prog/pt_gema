@@ -1,4 +1,12 @@
 import { prisma } from "../prisma";
+import { computeDecemberPph21, computeMonthlyPph21 } from "../utils/pph21";
+import { computeMonthlyPph21TER } from "../utils/terRates";
+import {
+  jakartaMonthIndex,
+  jakartaMonthKey,
+  jakartaMonthLabel,
+  jakartaYear,
+} from "../utils/jakartaDate";
 import {
   asRecord,
   invoiceDashboardSelect,
@@ -413,7 +421,7 @@ export async function buildFinanceCashflowSummaryPayload() {
  */
 export async function buildExecutiveDashboardSummaryPayload() {
   const now = new Date();
-  const currentYear = now.getFullYear();
+  const currentYear = jakartaYear(now);
   const firstYear = currentYear - 5;
   const start = new Date(firstYear, 0, 1);
 
@@ -454,10 +462,10 @@ export async function buildExecutiveDashboardSummaryPayload() {
 
   for (const invoice of invoices) {
     if (!isInvoiceIncluded(invoice.status)) continue;
-    const row = byYear.get(invoice.tanggal.getFullYear());
+    const row = byYear.get(jakartaYear(invoice.tanggal));
     if (row) row.revenue += Number(invoice.totalAmount || 0);
-    if (invoice.tanggal.getFullYear() === currentYear) {
-      monthly[invoice.tanggal.getMonth()].revenue += Number(invoice.totalAmount || 0);
+    if (jakartaYear(invoice.tanggal) === currentYear) {
+      monthly[jakartaMonthIndex(invoice.tanggal)].revenue += Number(invoice.totalAmount || 0);
       const name = invoice.customerName?.trim() || "Tanpa Customer";
       customers.set(name, (customers.get(name) || 0) + Number(invoice.totalAmount || 0));
     }
@@ -465,10 +473,10 @@ export async function buildExecutiveDashboardSummaryPayload() {
 
   for (const expense of expenses) {
     if (!isExpenseIncluded(expense.status)) continue;
-    const row = byYear.get(expense.tanggal.getFullYear());
+    const row = byYear.get(jakartaYear(expense.tanggal));
     if (row) row.expense += Number(expense.totalNominal || 0);
-    if (expense.tanggal.getFullYear() === currentYear) {
-      monthly[expense.tanggal.getMonth()].expense += Number(expense.totalNominal || 0);
+    if (jakartaYear(expense.tanggal) === currentYear) {
+      monthly[jakartaMonthIndex(expense.tanggal)].expense += Number(expense.totalNominal || 0);
     }
   }
 
@@ -476,7 +484,7 @@ export async function buildExecutiveDashboardSummaryPayload() {
     const payload = asRecord(project.payload);
     const rawDate = readString(payload, "startDate") || readString(payload, "endDate");
     const date = parseDate(rawDate);
-    const row = date ? byYear.get(date.getFullYear()) : undefined;
+    const row = date ? byYear.get(jakartaYear(date)) : undefined;
     if (row) row.projects += 1;
   }
 
@@ -559,34 +567,53 @@ export async function buildFinanceCashflowPageSummaryPayload(params: {
     month: row.month || "",
     year: row.year || 0,
     employeeName: row.employeeName || "All Employees",
-    totalPayroll: row.totalPayroll || 0,
+    totalPayroll: Number(row.totalPayroll) || 0,
     status: row.status || "Pending",
   }));
 
   const normalizedVendorInv = vendorInvRows.map((row) => ({
     status: String(readString(row, "status") || "").toUpperCase(),
     paidAmount: readNumber(row, "paidAmount"),
+    paymentDate:
+      readString(row, "paidAt") ||
+      readString(row, "tanggalBayar") ||
+      readString(row, "paymentDate") ||
+      readString(row, "date") ||
+      readString(row, "tanggal") ||
+      "",
   }));
 
+  const NON_CASH_INVOICE_STATUSES = ["CANCELLED", "REJECTED", "DRAFT"];
+  const PAYROLL_CASH_STATUSES = ["PAID", "DISBURSED", "COMPLETED"];
+
   const inflow = normalizedInvoices
-    .filter((inv) => inv.status === "PAID")
+    .filter(
+      (inv) =>
+        inv.paidAmount > 0 && !NON_CASH_INVOICE_STATUSES.includes(inv.status),
+    )
     .reduce((sum, inv) => sum + (inv.paidAmount || inv.totalBayar), 0);
-  const outflowPurchases = normalizedPos
+  const commitments = normalizedPos
     .filter((po) => po.status === "COMPLETED" || po.status === "RECEIVED")
     .reduce((sum, po) => sum + po.total, 0);
-  const outflowPayroll = normalizedPayrolls.reduce((sum, p) => sum + p.totalPayroll, 0);
-  const totalOutflow = outflowPurchases + outflowPayroll;
-  const netCashflow = inflow - totalOutflow;
+  const outflowPayroll = normalizedPayrolls
+    .filter((p) =>
+      PAYROLL_CASH_STATUSES.includes(String(p.status).toUpperCase()),
+    )
+    .reduce((sum, p) => sum + p.totalPayroll, 0);
   const outflowOther = normalizedVendorInv
     .filter((v) => v.status === "PAID" || v.status === "PARTIAL")
     .reduce((sum, v) => sum + v.paidAmount, 0);
+  // Arus kas keluar = kas yang benar-benar keluar (pembayaran vendor + payroll).
+  // PO RECEIVED/COMPLETED adalah komitmen, bukan arus kas, dan tidak dihitung
+  // dua kali bersama pembayaran vendor.
+  const totalOutflow = outflowOther + outflowPayroll;
+  const netCashflow = inflow - totalOutflow;
+  const outflowPurchases = commitments;
 
   const monthKeys: string[] = [];
   const monthMap = new Map<string, { key: string; month: string; inflow: number; outflow: number }>();
-  const monthLabel = (date: Date) =>
-    date.toLocaleDateString("id-ID", { month: "short" }).replace(".", "");
-  const keyFor = (date: Date) =>
-    `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+  const monthLabel = (date: Date) => jakartaMonthLabel(date);
+  const keyFor = (date: Date) => jakartaMonthKey(date);
   const ensure = (date: Date) => {
     const key = keyFor(date);
     if (!monthMap.has(key)) {
@@ -597,7 +624,7 @@ export async function buildFinanceCashflowPageSummaryPayload(params: {
   };
 
   normalizedInvoices
-    .filter((inv) => inv.status === "PAID")
+    .filter((inv) => inv.paidAmount > 0 && !NON_CASH_INVOICE_STATUSES.includes(inv.status))
     .forEach((inv) => {
       const date = parseDate(inv.paymentDate);
       if (!date) return;
@@ -605,16 +632,16 @@ export async function buildFinanceCashflowPageSummaryPayload(params: {
       row.inflow += inv.paidAmount || inv.totalBayar;
     });
 
-  normalizedPos
-    .filter((po) => po.status === "COMPLETED" || po.status === "RECEIVED")
-    .forEach((po) => {
-      const date = parseDate(po.tanggal);
+  normalizedVendorInv
+    .filter((v) => v.status === "PAID" || v.status === "PARTIAL")
+    .forEach((v) => {
+      const date = parseDate(v.paymentDate);
       if (!date) return;
       const row = ensure(date);
-      row.outflow += po.total;
+      row.outflow += v.paidAmount;
     });
 
-  normalizedPayrolls.forEach((row) => {
+  normalizedPayrolls.filter((p) => PAYROLL_CASH_STATUSES.includes(String(p.status).toUpperCase())).forEach((row) => {
     const date = parsePayrollDate(row.month, row.year || 0);
     if (!date) return;
     const entry = ensure(date);
@@ -627,9 +654,8 @@ export async function buildFinanceCashflowPageSummaryPayload(params: {
     .slice(-6);
 
   const pieData = [
-    { name: "Material Purchases", value: outflowPurchases, color: "#3b82f6" },
-    { name: "Payroll/Labor", value: outflowPayroll, color: "#10b981" },
     { name: "Vendor/Other", value: outflowOther, color: "#f59e0b" },
+    { name: "Payroll/Labor", value: outflowPayroll, color: "#10b981" },
   ].filter((item) => item.value > 0);
 
   const txRows: Array<{
@@ -642,7 +668,7 @@ export async function buildFinanceCashflowPageSummaryPayload(params: {
   }> = [];
 
   normalizedInvoices
-    .filter((inv) => inv.status === "PAID")
+    .filter((inv) => inv.paidAmount > 0 && !NON_CASH_INVOICE_STATUSES.includes(inv.status))
     .forEach((inv) => {
       const date = parseDate(inv.paymentDate);
       if (!date) return;
@@ -656,22 +682,22 @@ export async function buildFinanceCashflowPageSummaryPayload(params: {
       });
     });
 
-  normalizedPos
-    .filter((po) => po.status === "COMPLETED" || po.status === "RECEIVED")
-    .forEach((po) => {
-      const date = parseDate(po.tanggal);
+  normalizedVendorInv
+    .filter((v) => v.status === "PAID" || v.status === "PARTIAL")
+    .forEach((v) => {
+      const date = parseDate(v.paymentDate);
       if (!date) return;
       txRows.push({
         date: date.toISOString(),
-        category: "Purchase / PO",
-        entity: po.supplier,
-        amount: po.total,
+        category: "Vendor Payment",
+        entity: "Vendor",
+        amount: v.paidAmount,
         direction: "OUT",
-        status: po.status,
+        status: v.status,
       });
     });
 
-  normalizedPayrolls.forEach((row) => {
+  normalizedPayrolls.filter((p) => PAYROLL_CASH_STATUSES.includes(String(p.status).toUpperCase())).forEach((row) => {
     const date = parsePayrollDate(row.month, row.year || 0);
     if (!date) return;
     txRows.push({
@@ -693,6 +719,7 @@ export async function buildFinanceCashflowPageSummaryPayload(params: {
     stats: {
       inflow,
       outflowPurchases,
+      commitments,
       outflowPayroll,
       totalOutflow,
       netCashflow,
@@ -1452,7 +1479,7 @@ export async function buildFinanceProjectPlSummaryPayload(params: {
 
     const laborCost = attendances
       .filter((att) => att.projectId === id)
-      .reduce((sum, att) => sum + (att.workHours ?? 0) * 25000, 0);
+      .reduce((sum, att) => sum + Number(att.workHours ?? 0) * 25000, 0);
 
     const overheadCost = 0;
     const externalCost = vendorInvoiceCost + vendorExpenseCost;
@@ -1564,7 +1591,7 @@ export async function buildFinanceYearEndSummaryPayload(params: {
     const ppn = readNumber(item, "ppn");
     return sum + (ppn > 0 ? total / (1 + ppn / 100) : total);
   }, 0);
-  const totalLabor = payrolls.reduce((sum, item) => sum + (item.totalPayroll || 0), 0);
+  const totalLabor = payrolls.reduce((sum, item) => sum + (Number(item.totalPayroll) || 0), 0);
   // PO is commitment, not actual HPP. Actual material cost comes from Stock Out.
   const totalMaterial = 0;
 
@@ -1585,14 +1612,14 @@ export async function buildFinanceYearEndSummaryPayload(params: {
   for (const inv of invoiceRows) {
     const date = parseDate(readString(inv, "tanggal") || readString(inv, "date"));
     if (!date) continue;
-    monthly[date.getMonth()].rev +=
+    monthly[jakartaMonthIndex(date)].rev +=
       readNumber(inv, "totalBayar") || readNumber(inv, "subtotal") || readNumber(inv, "totalAmount");
   }
 
   for (const payroll of payrolls) {
     const date = parsePayrollDate(payroll.month, payroll.year);
     if (!date) continue;
-    monthly[date.getMonth()].outflow += payroll.totalPayroll || 0;
+    monthly[jakartaMonthIndex(date)].outflow += Number(payroll.totalPayroll) || 0;
   }
 
   for (const vendor of vendorInvRows) {
@@ -1606,7 +1633,7 @@ export async function buildFinanceYearEndSummaryPayload(params: {
         readString(vendor, "dueDate")
     );
     if (!date) continue;
-    monthly[date.getMonth()].outflow += readNumber(vendor, "paidAmount");
+    monthly[jakartaMonthIndex(date)].outflow += readNumber(vendor, "paidAmount");
   }
 
   for (const row of monthly) {
@@ -1646,7 +1673,81 @@ export async function buildFinanceYearEndSummaryPayload(params: {
   };
 }
 
-export async function buildFinancePayrollSummaryPayload() {
+async function loadPayrollYtdMap(
+  year: number,
+): Promise<Map<string, { ytdGross: number; ytdPph21: number }>> {
+  const rows = await prisma.appEntity.findMany({
+    where: { resource: "hr-payroll-runs" },
+    select: { payload: true },
+  });
+  const map = new Map<string, { ytdGross: number; ytdPph21: number }>();
+  for (const row of rows) {
+    const payload = row.payload as { slips?: unknown } | null;
+    const slips = Array.isArray(payload?.slips) ? payload!.slips : [];
+    for (const raw of slips) {
+      if (!raw || typeof raw !== "object") continue;
+      const slip = raw as Record<string, unknown>;
+      const period = String(slip.period ?? "");
+      if (!period.startsWith(`${year}-`)) continue;
+      const month = Number(period.slice(5, 7));
+      if (!Number.isFinite(month) || month < 1 || month > 11) continue;
+      const employeeId = String(slip.employeeId ?? "");
+      if (!employeeId) continue;
+      const entry = map.get(employeeId) ?? { ytdGross: 0, ytdPph21: 0 };
+      entry.ytdGross += Number(slip.grossIncome ?? 0) || 0;
+      entry.ytdPph21 += Number(slip.pph21 ?? 0) || 0;
+      map.set(employeeId, entry);
+    }
+  }
+  return map;
+}
+
+export async function buildDecemberPph21Payload(input: {
+  year: number;
+  employees: Array<{
+    employeeId: string;
+    decemberGross: number;
+    deductibleMonthly?: number;
+    ptkpStatus?: unknown;
+    hasNpwp?: boolean;
+  }>;
+}) {
+  const year = Number.isFinite(input.year)
+    ? Math.trunc(input.year)
+    : new Date().getFullYear();
+  const ytdMap = await loadPayrollYtdMap(year);
+  const rows = (Array.isArray(input.employees) ? input.employees : []).map(
+    (emp) => {
+      const ytd = ytdMap.get(emp.employeeId) ?? { ytdGross: 0, ytdPph21: 0 };
+      const decemberPph21 = computeDecemberPph21({
+        ytdGross: ytd.ytdGross,
+        ytdPph21: ytd.ytdPph21,
+        decemberGross: Number(emp.decemberGross) || 0,
+        jhtMonthly: Number(emp.deductibleMonthly) || 0,
+        jpMonthly: 0,
+        ptkpStatus: emp.ptkpStatus,
+        hasNpwp: emp.hasNpwp,
+      });
+      return {
+        employeeId: emp.employeeId,
+        ytdGross: ytd.ytdGross,
+        ytdPph21: ytd.ytdPph21,
+        decemberPph21,
+      };
+    },
+  );
+  return { year, rows };
+}
+
+export async function buildFinancePayrollSummaryPayload(params?: {
+  year?: number;
+  month?: number;
+}) {
+  const now = new Date();
+  const targetYear = params?.year ?? jakartaYear(now);
+  const targetMonth = params?.month ?? jakartaMonthIndex(now) + 1;
+  const isDecember = targetMonth === 12;
+  const ytdMap = isDecember ? await loadPayrollYtdMap(targetYear) : null;
   const [employees, attendances, kasbons] = await Promise.all([
     prisma.employeeRecord.findMany({
       select: {
@@ -1665,6 +1766,8 @@ export async function buildFinancePayrollSummaryPayload() {
         jhtEmployeePercent: true,
         jpEmployeePercent: true,
         pph21Amount: true,
+        ptkpStatus: true,
+        npwp: true,
         updatedAt: true,
       },
       orderBy: { updatedAt: "desc" },
@@ -1694,8 +1797,10 @@ export async function buildFinancePayrollSummaryPayload() {
   const payrollRows = employees.map((emp, idx) => {
     const employeeId = emp.id || `EMP-${idx + 1}`;
     const empAttendance = attendances.filter((item) => item.employeeId === employeeId);
-    const totalHours = empAttendance.reduce((sum, item) => sum + (item.workHours ?? 0), 0);
-    const totalOvertime = empAttendance.reduce((sum, item) => sum + (item.overtime ?? 0), 0);
+    const totalHours = empAttendance.reduce((sum, item) => sum + Number(item.workHours ?? 0), 0);
+    // Role Sales: tidak ada lembur (kerja lewat jam 5 = insentif di petty cash gudang).
+    const isSales = /sales/i.test(String(emp.department || ""));
+    const totalOvertime = isSales ? 0 : empAttendance.reduce((sum, item) => sum + Number(item.overtime ?? 0), 0);
     const presentCount = empAttendance.filter((item) => {
       const status = String(item.status || "").toUpperCase();
       return status === "PRESENT" || status === "H" || status === "HADIR" || status === "MASUK";
@@ -1729,30 +1834,71 @@ export async function buildFinancePayrollSummaryPayload() {
       })
       .reduce((sum, item) => sum + Number(item.amount || 0), 0);
 
-    const baseSalary = emp.salary ?? 0;
-    const transportAllowance = emp.transportAllowance ?? 0;
-    const mealAllowanceRate = emp.mealAllowancePerDay ?? 38_000;
-    const attendanceIncentive = emp.attendanceIncentive ?? 0;
-    const overtimeRateMultiplier = emp.overtimeRateMultiplier ?? 1.5;
-    const bpjsHealthEmployeePercent = emp.bpjsHealthEmployeePercent ?? 0;
-    const jhtEmployeePercent = emp.jhtEmployeePercent ?? 0;
-    const jpEmployeePercent = emp.jpEmployeePercent ?? 0;
-    const pph21Amount = emp.pph21Amount ?? 0;
+    const baseSalary = Number(emp.salary ?? 0);
+    const transportAllowance = Number(emp.transportAllowance ?? 0);
+    const mealAllowanceRate = Number(emp.mealAllowancePerDay ?? 38_000);
+    const attendanceIncentive = Number(emp.attendanceIncentive ?? 0);
+    const overtimeRateMultiplier = Number(emp.overtimeRateMultiplier ?? 1.5);
+    const bpjsHealthEmployeePercent = Number(emp.bpjsHealthEmployeePercent ?? 0);
+    const jhtEmployeePercent = Number(emp.jhtEmployeePercent ?? 0);
+    const jpEmployeePercent = Number(emp.jpEmployeePercent ?? 0);
+    const manualPph21 = Number(emp.pph21Amount ?? 0);
     const hourlyRate = baseSalary > 0 ? baseSalary / 173 : 0;
-    const overtimePay = totalOvertime * hourlyRate * overtimeRateMultiplier;
+    const overtimePay = isSales ? 0 : totalOvertime * hourlyRate * overtimeRateMultiplier;
     const mealAllowance = presentCount * mealAllowanceRate;
     const bpjsHealthDeduction = baseSalary * (bpjsHealthEmployeePercent / 100);
     const jhtDeduction = baseSalary * (jhtEmployeePercent / 100);
     const jpDeduction = baseSalary * (jpEmployeePercent / 100);
-    const statutoryDeduction =
-      bpjsHealthDeduction + jhtDeduction + jpDeduction + pph21Amount;
-    const totalDeductions = totalKasbon + statutoryDeduction;
     const grossSalary =
       baseSalary +
       transportAllowance +
       mealAllowance +
       attendanceIncentive +
       overtimePay;
+    // PPh 21: input manual (pph21Amount) jadi override bila diisi; selain itu
+    // dihitung otomatis Pasal 17 (pengurang JHT+JP; BPJS Kesehatan bukan pengurang).
+    const hasNpwp = Boolean(String(emp.npwp ?? "").trim());
+    const ytd = isDecember ? ytdMap?.get(employeeId) : undefined;
+    // Metode TER (PP 58/2023) hanya untuk Jan–Nov; Desember tetap Pasal 17.
+    // Selama tabel TER belum diisi, pph21Ter = null dan otomatis fallback Pasal 17.
+    const terEnabled = process.env.PPH21_METHOD === "ter";
+    const pph21Ter =
+      !isDecember && terEnabled
+        ? computeMonthlyPph21TER({
+            grossMonthly: grossSalary,
+            ptkpStatus: emp.ptkpStatus,
+            hasNpwp,
+          })
+        : null;
+    const pph21Auto = isDecember
+      ? computeDecemberPph21({
+          ytdGross: ytd?.ytdGross ?? 0,
+          ytdPph21: ytd?.ytdPph21 ?? 0,
+          decemberGross: grossSalary,
+          jhtMonthly: jhtDeduction,
+          jpMonthly: jpDeduction,
+          ptkpStatus: emp.ptkpStatus,
+          hasNpwp,
+        })
+      : pph21Ter ??
+        computeMonthlyPph21({
+          grossMonthly: grossSalary,
+          jhtMonthly: jhtDeduction,
+          jpMonthly: jpDeduction,
+          ptkpStatus: emp.ptkpStatus,
+          hasNpwp,
+        });
+    const pph21Amount = manualPph21 > 0 ? manualPph21 : pph21Auto;
+    const pph21Source = manualPph21 > 0 ? "manual" : "auto";
+    const pph21Method = isDecember
+      ? "december-recalc"
+      : pph21Ter != null
+        ? "ter"
+        : "monthly";
+    const pph21NoNpwpSurcharge = manualPph21 <= 0 && !hasNpwp;
+    const statutoryDeduction =
+      bpjsHealthDeduction + jhtDeduction + jpDeduction + pph21Amount;
+    const totalDeductions = totalKasbon + statutoryDeduction;
     const netSalary = grossSalary - totalDeductions;
 
     return {
@@ -1784,6 +1930,12 @@ export async function buildFinancePayrollSummaryPayload() {
       jhtEmployeePercent,
       jpEmployeePercent,
       pph21Amount,
+      pph21Auto,
+      pph21Source,
+      pph21Method,
+      pph21NoNpwpSurcharge,
+      hasNpwp,
+      ptkpStatus: emp.ptkpStatus ?? "TK/0",
       bpjsHealthDeduction,
       jhtDeduction,
       jpDeduction,

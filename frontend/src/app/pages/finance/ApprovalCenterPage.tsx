@@ -691,7 +691,7 @@ export default function ApprovalCenterPage() {
                 <div className="bg-slate-50 rounded-xl p-4">
                   <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Total Tagihan</p>
                   <p className="text-xl font-black text-rose-600 italic">Rp {(apDetailTarget.totalAmount || 0).toLocaleString('id-ID')}</p>
-                  {(apDetailTarget.ppn || 0) > 0 && <p className="text-[9px] text-slate-400 mt-1">Sudah termasuk PPN {apDetailTarget.ppn}%</p>}
+                  {(apDetailTarget.ppn || 0) > 0 && <p className="text-[9px] text-slate-400 mt-1">Sudah termasuk PPN Rp {(apDetailTarget.ppn || 0).toLocaleString('id-ID')}</p>}
                 </div>
                 <div className="bg-slate-50 rounded-xl p-4">
                   <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Jatuh Tempo</p>

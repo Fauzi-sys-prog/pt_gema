@@ -33,13 +33,34 @@ import {
   type Project,
   type StockItem,
 } from "../../contexts/AppContext";
-import { toast } from 'sonner';
-import { useEscapeKey } from '../../hooks/useEscapeKey';
+import { toast } from "sonner";
+import { useEscapeKey } from "../../hooks/useEscapeKey";
 
-interface TeknisiRow { nama: string; keterangan: string; qty: number; }
-const DEMO_MODE_ENABLED = import.meta.env.DEV || import.meta.env.VITE_DEMO_MODE === 'true';
-const emptyTeknisiRow = (): TeknisiRow => ({ nama: '', keterangan: '', qty: 1 });
-const PRODUCTION_UNITS = ['Pcs', 'Unit', 'Set', 'Sack', 'Kg', 'Ton', 'Liter', 'M', 'M²', 'Job', 'Lot'];
+interface TeknisiRow {
+  nama: string;
+  keterangan: string;
+  qty: number;
+}
+const DEMO_MODE_ENABLED =
+  import.meta.env.DEV || import.meta.env.VITE_DEMO_MODE === "true";
+const emptyTeknisiRow = (): TeknisiRow => ({
+  nama: "",
+  keterangan: "",
+  qty: 1,
+});
+const PRODUCTION_UNITS = [
+  "Pcs",
+  "Unit",
+  "Set",
+  "Sack",
+  "Kg",
+  "Ton",
+  "Liter",
+  "M",
+  "M²",
+  "Job",
+  "Lot",
+];
 const woDefaults = (woCount = 0) => ({
   woNumber: `WO-${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, "0")}-${String(woCount + 1).padStart(4, "0")}`,
   projectId: "",
@@ -53,7 +74,9 @@ const woDefaults = (woCount = 0) => ({
   jamKeluar: "17:00",
   priority: "Normal" as WorkOrder["priority"],
   startDate: new Date().toISOString().split("T")[0],
-  deadline: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
+  deadline: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+    .toISOString()
+    .split("T")[0],
   leadTechnician: "",
   teknisiRows: [emptyTeknisiRow()] as TeknisiRow[],
   teknisiInput: "",
@@ -65,6 +88,7 @@ export default function ProductionDashboard() {
   const {
     workOrderList,
     updateWorkOrder,
+    startWorkOrder,
     addWorkOrder,
     deleteWorkOrder,
     stockItemList,
@@ -76,16 +100,12 @@ export default function ProductionDashboard() {
   const location = useLocation();
   const navigate = useNavigate();
 
-  const [selectedWO, setSelectedWO] =
-    useState<WorkOrder | null>(null);
+  const [selectedWO, setSelectedWO] = useState<WorkOrder | null>(null);
   const [showBOM, setShowBOM] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [showAddItemModal, setShowAddItemModal] =
-    useState(false);
+  const [showAddItemModal, setShowAddItemModal] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
-  const [expandedWO, setExpandedWO] = useState<string | null>(
-    null,
-  );
+  const [expandedWO, setExpandedWO] = useState<string | null>(null);
 
   // Form State for new WO
   const [formData, setFormData] = useState(() => woDefaults(0));
@@ -95,13 +115,10 @@ export default function ProductionDashboard() {
     { condition: showCreateModal, close: () => setShowCreateModal(false) },
   ]);
 
-
   useEffect(() => {
     if (location.state && (location.state as any).createWO) {
       const state = location.state as any;
-      const project = projectList.find(
-        (p) => p.id === state.projectId,
-      );
+      const project = projectList.find((p) => p.id === state.projectId);
 
       setFormData((prev) => ({
         ...prev,
@@ -141,43 +158,17 @@ export default function ProductionDashboard() {
     }
   };
 
-  const checkStockAvailability = (bom: any[]) => {
-    if (!bom || bom.length === 0) return false;
-    return bom.every((item) => {
-      const stockItem = stockItemList.find(
-        (s) => s.kode === item.kode,
-      );
-      return stockItem && stockItem.stok >= item.qty;
-    });
-  };
-
-  const handleStartProduction = (wo: WorkOrder) => {
-    if (!wo.bom || wo.bom.length === 0) {
-      toast.error("BOM belum ditentukan untuk Work Order ini.");
-      return;
-    }
-
-    const isStockAvailable = checkStockAvailability(wo.bom);
-    if (!isStockAvailable) {
-      toast.error(
-        "Stok tidak mencukupi untuk memulai produksi. Silakan cek inventory.",
-      );
-      return;
-    }
-
-    updateWorkOrder(wo.id, { status: "In Progress" });
-    toast.success(
-      `Produksi dimulai untuk ${wo.woNumber}. Catat pemakaian aktual dan output melalui LHP.`,
-    );
-    setSelectedWO(null);
-    setShowBOM(false);
-  };
-
   const handleCreateWO = (e: React.FormEvent) => {
     e.preventDefault();
-    const filledRows = formData.teknisiRows.filter(r => r.nama.trim());
-    if (!formData.itemToProduce || filledRows.length === 0 || Number(formData.targetQty) <= 0) {
-      toast.error("Item pekerjaan, target hasil produksi, dan minimal 1 teknisi wajib diisi.");
+    const filledRows = formData.teknisiRows.filter((r) => r.nama.trim());
+    if (
+      !formData.itemToProduce ||
+      filledRows.length === 0 ||
+      Number(formData.targetQty) <= 0
+    ) {
+      toast.error(
+        "Item pekerjaan, target hasil produksi, dan minimal 1 teknisi wajib diisi.",
+      );
       return;
     }
 
@@ -197,7 +188,7 @@ export default function ProductionDashboard() {
       startDate: formData.startDate,
       deadline: formData.deadline,
       leadTechnician: filledRows[0].nama,
-      teknisi: filledRows.map(r => r.nama),
+      teknisi: filledRows.map((r) => r.nama),
       teknisiRows: filledRows,
       jenisSPK: formData.jenisSPK,
       jamMasuk: formData.jamMasuk,
@@ -242,39 +233,70 @@ export default function ProductionDashboard() {
   };
 
   const handleSpkSelect = (spkId: string) => {
-    if (!spkId) { setFormData(prev => ({ ...prev, spkId: "" })); return; }
-    const allSpk = projectList.flatMap(p => (p.spkList || []).map((s: any) => ({ ...s, projectId: p.id, projectName: p.namaProject })));
+    if (!spkId) {
+      setFormData((prev) => ({ ...prev, spkId: "" }));
+      return;
+    }
+    const allSpk = projectList.flatMap((p) =>
+      (p.spkList || []).map((s: any) => ({
+        ...s,
+        projectId: p.id,
+        projectName: p.namaProject,
+      })),
+    );
     const spk = allSpk.find((s: any) => s.id === spkId);
     if (!spk) return;
     const rows: TeknisiRow[] = spk.teknisiRows?.length
       ? spk.teknisiRows
-      : (Array.isArray(spk.teknisi) ? spk.teknisi : (spk.teknisi || '').split(',').map((n: string) => n.trim()).filter(Boolean))
-          .map((n: string) => ({ nama: n, keterangan: spk.pekerjaan || '', qty: 1 }));
-    setFormData(prev => ({
-      ...prev,
-      spkId,
-      nomorSPK: spk.noSPK || spk.nomorSPK || prev.nomorSPK || '',
-      itemToProduce: spk.pekerjaan || prev.itemToProduce,
-      jenisSPK: spk.jenisSPK || prev.jenisSPK,
-      jamMasuk: spk.jamMasuk || prev.jamMasuk,
-      jamKeluar: spk.jamKeluar || prev.jamKeluar,
-      teknisiRows: rows.length ? rows : [emptyTeknisiRow()],
-      targetQty: Number(spk.targetQty) > 0 ? Number(spk.targetQty) : prev.targetQty,
-      targetUnit: spk.targetUnit || spk.satuan || prev.targetUnit,
-    } as any));
+      : (Array.isArray(spk.teknisi)
+          ? spk.teknisi
+          : (spk.teknisi || "")
+              .split(",")
+              .map((n: string) => n.trim())
+              .filter(Boolean)
+        ).map((n: string) => ({
+          nama: n,
+          keterangan: spk.pekerjaan || "",
+          qty: 1,
+        }));
+    setFormData(
+      (prev) =>
+        ({
+          ...prev,
+          spkId,
+          nomorSPK: spk.noSPK || spk.nomorSPK || prev.nomorSPK || "",
+          itemToProduce: spk.pekerjaan || prev.itemToProduce,
+          jenisSPK: spk.jenisSPK || prev.jenisSPK,
+          jamMasuk: spk.jamMasuk || prev.jamMasuk,
+          jamKeluar: spk.jamKeluar || prev.jamKeluar,
+          teknisiRows: rows.length ? rows : [emptyTeknisiRow()],
+          targetQty:
+            Number(spk.targetQty) > 0 ? Number(spk.targetQty) : prev.targetQty,
+          targetUnit: spk.targetUnit || spk.satuan || prev.targetUnit,
+        }) as any,
+    );
   };
 
   const updateTeknisiRow = (i: number, patch: Partial<TeknisiRow>) =>
-    setFormData(prev => ({ ...prev, teknisiRows: prev.teknisiRows.map((r, idx) => idx === i ? { ...r, ...patch } : r) }));
+    setFormData((prev) => ({
+      ...prev,
+      teknisiRows: prev.teknisiRows.map((r, idx) =>
+        idx === i ? { ...r, ...patch } : r,
+      ),
+    }));
   const addTeknisiRow = () =>
-    setFormData(prev => ({ ...prev, teknisiRows: [...prev.teknisiRows, emptyTeknisiRow()] }));
+    setFormData((prev) => ({
+      ...prev,
+      teknisiRows: [...prev.teknisiRows, emptyTeknisiRow()],
+    }));
   const removeTeknisiRow = (i: number) =>
-    setFormData(prev => ({ ...prev, teknisiRows: prev.teknisiRows.filter((_, idx) => idx !== i) }));
+    setFormData((prev) => ({
+      ...prev,
+      teknisiRows: prev.teknisiRows.filter((_, idx) => idx !== i),
+    }));
 
   const handleAddMaterialToBOM = (item: StockItem) => {
-    const existing = formData.bom.find(
-      (b) => b.kode === item.kode,
-    );
+    const existing = formData.bom.find((b) => b.kode === item.kode);
     if (existing) {
       setFormData({
         ...formData,
@@ -302,9 +324,7 @@ export default function ProductionDashboard() {
   const handleAddMaterialToSelectedWO = (item: StockItem) => {
     if (!selectedWO) return;
     const currentBOM = selectedWO.bom || [];
-    const existing = currentBOM.find(
-      (b) => b.kode === item.kode,
-    );
+    const existing = currentBOM.find((b) => b.kode === item.kode);
     let newBOM;
     if (existing) {
       newBOM = currentBOM.map((b) =>
@@ -329,12 +349,8 @@ export default function ProductionDashboard() {
 
   const filteredMaterials = stockItemList.filter(
     (item) =>
-      item.nama
-        .toLowerCase()
-        .includes(searchTerm.toLowerCase()) ||
-      item.kode
-        .toLowerCase()
-        .includes(searchTerm.toLowerCase()),
+      item.nama.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      item.kode.toLowerCase().includes(searchTerm.toLowerCase()),
   );
 
   const toggleExpand = (id: string) => {
@@ -371,8 +387,7 @@ export default function ProductionDashboard() {
                 Verification Bill of Materials (BOM)
               </h1>
               <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">
-                {selectedWO.woNumber} -{" "}
-                {selectedWO.itemToProduce}
+                {selectedWO.woNumber} - {selectedWO.itemToProduce}
               </p>
             </div>
           </div>
@@ -405,8 +420,7 @@ export default function ProductionDashboard() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50">
-                  {selectedWO.bom &&
-                  selectedWO.bom.length > 0 ? (
+                  {selectedWO.bom && selectedWO.bom.length > 0 ? (
                     selectedWO.bom.map((item, idx) => {
                       const stockItem = stockItemList.find(
                         (s) => s.kode === item.kode,
@@ -434,15 +448,10 @@ export default function ProductionDashboard() {
                               value={item.qty}
                               step="0.01"
                               onChange={(e) => {
-                                const newQty =
-                                  parseFloat(e.target.value) ||
-                                  0;
-                                const newBOM =
-                                  selectedWO.bom?.map((b, i) =>
-                                    i === idx
-                                      ? { ...b, qty: newQty }
-                                      : b,
-                                  );
+                                const newQty = parseFloat(e.target.value) || 0;
+                                const newBOM = selectedWO.bom?.map((b, i) =>
+                                  i === idx ? { ...b, qty: newQty } : b,
+                                );
                                 updateWorkOrder(selectedWO.id, {
                                   bom: newBOM,
                                 });
@@ -482,26 +491,19 @@ export default function ProductionDashboard() {
                     })
                   ) : (
                     <tr>
-                      <td
-                        colSpan={4}
-                        className="px-6 py-20 text-center"
-                      >
+                      <td colSpan={4} className="px-6 py-20 text-center">
                         <div className="flex flex-col items-center gap-3">
                           <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center text-slate-300">
                             <Package size={32} />
                           </div>
                           <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">
-                            TIDAK ADA ITEM BOM UNTUK WORK ORDER
-                            INI.
+                            TIDAK ADA ITEM BOM UNTUK WORK ORDER INI.
                           </p>
                           <button
-                            onClick={() =>
-                              setShowAddItemModal(true)
-                            }
+                            onClick={() => setShowAddItemModal(true)}
                             className="text-blue-600 text-[10px] font-black uppercase hover:underline"
                           >
-                            + Klik disini untuk menambahkan
-                            material manual
+                            + Klik disini untuk menambahkan material manual
                           </button>
                         </div>
                       </td>
@@ -520,12 +522,12 @@ export default function ProductionDashboard() {
                   Sinkronisasi Real-time Inventory
                 </h4>
                 <p className="text-xs text-blue-700/70 mt-1 leading-relaxed font-medium">
-                  Saat "Mulai Produksi" diklik, sistem hanya
-                  memvalidasi BOM dan ketersediaan stok.
-                  Pengurangan stok aktual dilakukan saat material
-                  benar-benar dicatat pada LHP, lalu tercatat
-                  sebagai pengeluaran produksi di Kartu Stok.
-                </p>
+                  Saat "Mulai Produksi" diklik, sistem akan memvalidasi
+                  ketersediaan material dan mereservasi kebutuhan BOM untuk Work
+                  Order ini. Stok fisik belum berkurang. Pengurangan stok aktual
+                  dilakukan saat pemakaian material dicatat melalui LHP dan
+                  tercatat di Kartu Stok.
+                </p>{" "}
               </div>
             </div>
           </div>
@@ -540,9 +542,7 @@ export default function ProductionDashboard() {
                   <span className="text-slate-400 font-bold uppercase text-[10px]">
                     Item Produksi
                   </span>
-                  <span className="font-black">
-                    {selectedWO.itemToProduce}
-                  </span>
+                  <span className="font-black">{selectedWO.itemToProduce}</span>
                 </div>
                 <div className="flex justify-between items-center text-sm">
                   <span className="text-slate-400 font-bold uppercase text-[10px]">
@@ -555,25 +555,13 @@ export default function ProductionDashboard() {
               </div>
 
               <button
-                onClick={() =>
-                  handleStartProduction(selectedWO)
-                }
-                disabled={
-                  !checkStockAvailability(selectedWO.bom || [])
-                }
+                onClick={() => handleStartProduction(selectedWO)}
+
                 className="w-full py-4 bg-blue-600 text-white rounded-2xl text-sm font-black hover:bg-blue-700 shadow-lg shadow-blue-900/40 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:grayscale disabled:cursor-not-allowed"
               >
                 <Play size={18} fill="currentColor" />
-                MULAI PRODUKSI SEKARANG
+                MULAI & RESERVASI MATERIALw
               </button>
-              {!checkStockAvailability(
-                selectedWO.bom || [],
-              ) && (
-                <p className="text-[10px] text-rose-400 font-bold uppercase mt-4 text-center leading-relaxed">
-                  TOMBOL TERKUNCI: HARAP PENUHI KEBUTUHAN
-                  MATERIAL DI GUDANG TERLEBIH DAHULU.
-                </p>
-              )}
             </div>
           </div>
         </div>
@@ -603,9 +591,7 @@ export default function ProductionDashboard() {
                     type="text"
                     placeholder="Search material code or name..."
                     value={searchTerm}
-                    onChange={(e) =>
-                      setSearchTerm(e.target.value)
-                    }
+                    onChange={(e) => setSearchTerm(e.target.value)}
                     className="w-full pl-10 pr-4 py-3 bg-slate-50 border-2 border-slate-100 rounded-xl text-sm font-bold outline-none focus:border-blue-500 transition-colors"
                   />
                 </div>
@@ -615,8 +601,7 @@ export default function ProductionDashboard() {
                   <button
                     key={item.id}
                     onClick={() => {
-                      if (selectedWO)
-                        handleAddMaterialToSelectedWO(item);
+                      if (selectedWO) handleAddMaterialToSelectedWO(item);
                       else handleAddMaterialToBOM(item);
                     }}
                     className="w-full p-4 flex items-center justify-between bg-white border border-slate-100 rounded-2xl hover:border-blue-500 hover:bg-blue-50/30 transition-all group text-left"
@@ -626,8 +611,7 @@ export default function ProductionDashboard() {
                         {item.nama}
                       </span>
                       <span className="text-[10px] text-slate-400 font-bold uppercase">
-                        {item.kode} • Stok: {item.stok}{" "}
-                        {item.satuan}
+                        {item.kode} • Stok: {item.stok} {item.satuan}
                       </span>
                     </div>
                     <Plus
@@ -665,9 +649,7 @@ export default function ProductionDashboard() {
             <button
               onClick={() => {
                 if (
-                  window.confirm(
-                    "Ingin mereset data demo ke kondisi awal?",
-                  )
+                  window.confirm("Ingin mereset data demo ke kondisi awal?")
                 ) {
                   resetAllData();
                 }
@@ -735,10 +717,7 @@ export default function ProductionDashboard() {
             key={i}
             className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm"
           >
-            <stat.icon
-              size={20}
-              className={`${stat.color} mb-3`}
-            />
+            <stat.icon size={20} className={`${stat.color} mb-3`} />
             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
               {stat.label}
             </p>
@@ -752,10 +731,7 @@ export default function ProductionDashboard() {
       <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
         <div className="p-6 border-b border-slate-50 flex items-center justify-between">
           <h2 className="text-sm font-black text-slate-900 uppercase tracking-widest flex items-center gap-2">
-            <ClipboardList
-              size={18}
-              className="text-blue-600"
-            />
+            <ClipboardList size={18} className="text-blue-600" />
             Live Production Floor
           </h2>
           <div className="flex items-center gap-2">
@@ -823,8 +799,7 @@ export default function ProductionDashboard() {
                       <div className="max-w-[180px]">
                         <div className="flex justify-between items-end mb-1.5">
                           <span className="text-[10px] font-black text-slate-500 uppercase">
-                            {calculateBOMProgress(wo)}% BOM
-                            Progress
+                            {calculateBOMProgress(wo)}% BOM Progress
                           </span>
                           <span className="text-[10px] font-bold text-slate-400 uppercase">
                             DL: {wo.deadline}
@@ -868,11 +843,15 @@ export default function ProductionDashboard() {
                           <button
                             onClick={() => {
                               if ((wo.completedQty || 0) < wo.targetQty) {
-                                toast.error(`Output ${wo.woNumber} belum mencapai target ${wo.targetQty}.`);
+                                toast.error(
+                                  `Output ${wo.woNumber} belum mencapai target ${wo.targetQty}.`,
+                                );
                                 return;
                               }
                               updateWorkOrder(wo.id, { status: "QC" });
-                              toast.success(`${wo.woNumber} dikirim ke antrian QC.`);
+                              toast.success(
+                                `${wo.woNumber} dikirim ke antrian QC.`,
+                              );
                             }}
                             className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500 text-white rounded-lg text-[10px] font-black uppercase hover:bg-amber-600 transition-all shadow-md shadow-amber-100"
                           >
@@ -891,10 +870,18 @@ export default function ProductionDashboard() {
                             <Layers size={16} />
                           </button>
                         )}
-                        {wo.status === "QC" && <span className="px-3 py-1.5 text-[9px] font-black uppercase text-amber-700 bg-amber-50 rounded-lg">Menunggu QC</span>}
+                        {wo.status === "QC" && (
+                          <span className="px-3 py-1.5 text-[9px] font-black uppercase text-amber-700 bg-amber-50 rounded-lg">
+                            Menunggu QC
+                          </span>
+                        )}
                         {wo.status === "In Progress" && (
                           <button
-                            onClick={() => navigate("/produksi/report", { state: { woId: wo.id } })}
+                            onClick={() =>
+                              navigate("/produksi/report", {
+                                state: { woId: wo.id },
+                              })
+                            }
                             className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all"
                             title="Input LHP"
                           >
@@ -918,10 +905,7 @@ export default function ProductionDashboard() {
                       >
                         <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm">
                           <h4 className="text-xs font-black text-slate-900 uppercase tracking-widest mb-4 flex items-center gap-2 italic">
-                            <Layers
-                              size={16}
-                              className="text-blue-600"
-                            />{" "}
+                            <Layers size={16} className="text-blue-600" />{" "}
                             Issued BOM
                           </h4>
                           {wo.bom && wo.bom.length > 0 ? (
@@ -988,22 +972,25 @@ export default function ProductionDashboard() {
               </button>
             </div>
 
-            <form
-              onSubmit={handleCreateWO}
-              className="p-8 space-y-5"
-            >
+            <form onSubmit={handleCreateWO} className="p-8 space-y-5">
               {/* Reference Project */}
               <div>
-                <label className="block text-[10px] font-black text-slate-400 uppercase mb-2">Reference Project</label>
+                <label className="block text-[10px] font-black text-slate-400 uppercase mb-2">
+                  Reference Project
+                </label>
                 <select
                   value={formData.projectId}
                   onChange={(e) => handleProjectSelect(e.target.value)}
                   className="w-full px-4 py-3 bg-white border-2 border-slate-100 rounded-xl text-sm font-black text-black"
                 >
                   <option value="">-- Select Project --</option>
-                  <option value="INTERNAL">⚙️ INTERNAL PRODUKSI (Tanpa Project)</option>
+                  <option value="INTERNAL">
+                    ⚙️ INTERNAL PRODUKSI (Tanpa Project)
+                  </option>
                   {projectList.map((p) => (
-                    <option key={p.id} value={p.id}>{p.namaProject}</option>
+                    <option key={p.id} value={p.id}>
+                      {p.namaProject}
+                    </option>
                   ))}
                 </select>
               </div>
@@ -1011,7 +998,10 @@ export default function ProductionDashboard() {
               {/* SPK — auto-fill */}
               <div>
                 <label className="block text-[10px] font-black text-slate-400 uppercase mb-2">
-                  No. SPK <span className="text-slate-300 normal-case font-medium">(opsional — auto-fill data)</span>
+                  No. SPK{" "}
+                  <span className="text-slate-300 normal-case font-medium">
+                    (opsional — auto-fill data)
+                  </span>
                 </label>
                 <select
                   value={formData.spkId}
@@ -1020,25 +1010,46 @@ export default function ProductionDashboard() {
                 >
                   <option value="">— Tanpa SPK —</option>
                   {projectList
-                    .filter(p => !formData.projectId || p.id === formData.projectId || formData.projectId === "INTERNAL")
-                    .flatMap(p => (p.spkList || []).filter((s: any) => s.status === 'Approved' || s.status === 'Active').map((s: any) => (
-                      <option key={s.id} value={s.id}>
-                        {s.noSPK} — {s.pekerjaan} {s.jenisSPK && s.jenisSPK !== 'Biasa' ? `[${s.jenisSPK}]` : ''}
-                      </option>
-                    )))}
+                    .filter(
+                      (p) =>
+                        !formData.projectId ||
+                        p.id === formData.projectId ||
+                        formData.projectId === "INTERNAL",
+                    )
+                    .flatMap((p) =>
+                      (p.spkList || [])
+                        .filter(
+                          (s: any) =>
+                            s.status === "Approved" || s.status === "Active",
+                        )
+                        .map((s: any) => (
+                          <option key={s.id} value={s.id}>
+                            {s.noSPK} — {s.pekerjaan}{" "}
+                            {s.jenisSPK && s.jenisSPK !== "Biasa"
+                              ? `[${s.jenisSPK}]`
+                              : ""}
+                          </option>
+                        )),
+                    )}
                 </select>
                 {formData.spkId && (
-                  <p className="text-[10px] text-emerald-600 font-black mt-1.5 uppercase tracking-wide">✅ Data otomatis diisi dari SPK</p>
+                  <p className="text-[10px] text-emerald-600 font-black mt-1.5 uppercase tracking-wide">
+                    ✅ Data otomatis diisi dari SPK
+                  </p>
                 )}
               </div>
 
               {/* Item / Pekerjaan */}
               <div>
-                <label className="block text-[10px] font-black text-slate-400 uppercase mb-2">Item / Pekerjaan</label>
+                <label className="block text-[10px] font-black text-slate-400 uppercase mb-2">
+                  Item / Pekerjaan
+                </label>
                 <input
                   type="text"
                   value={formData.itemToProduce}
-                  onChange={(e) => setFormData({ ...formData, itemToProduce: e.target.value })}
+                  onChange={(e) =>
+                    setFormData({ ...formData, itemToProduce: e.target.value })
+                  }
                   placeholder="Contoh: REPAIR BOILER NO.2"
                   className="w-full px-4 py-3 bg-white border-2 border-slate-100 rounded-xl text-sm font-black text-black placeholder:text-slate-300"
                   required
@@ -1048,28 +1059,46 @@ export default function ProductionDashboard() {
               {/* Target hasil produksi dipisahkan dari QTY teknisi */}
               <div className="grid grid-cols-[1fr_8rem] gap-3">
                 <div>
-                  <label className="block text-[10px] font-black text-slate-400 uppercase mb-2">Target Hasil Produksi</label>
+                  <label className="block text-[10px] font-black text-slate-400 uppercase mb-2">
+                    Target Hasil Produksi
+                  </label>
                   <input
                     type="number"
                     min={1}
                     value={formData.targetQty}
-                    onChange={(e) => setFormData({ ...formData, targetQty: Math.max(1, Number(e.target.value) || 1) })}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        targetQty: Math.max(1, Number(e.target.value) || 1),
+                      })
+                    }
                     className="w-full px-4 py-3 bg-white border-2 border-slate-100 rounded-xl text-sm font-black text-black"
                     required
                   />
                 </div>
                 <div>
-                  <label className="block text-[10px] font-black text-slate-400 uppercase mb-2">Satuan</label>
+                  <label className="block text-[10px] font-black text-slate-400 uppercase mb-2">
+                    Satuan
+                  </label>
                   <select
                     value={formData.targetUnit}
-                    onChange={(e) => setFormData({ ...formData, targetUnit: e.target.value })}
+                    onChange={(e) =>
+                      setFormData({ ...formData, targetUnit: e.target.value })
+                    }
                     className="w-full px-3 py-3 bg-white border-2 border-slate-100 rounded-xl text-sm font-black text-black"
                   >
-                    {PRODUCTION_UNITS.map(unit => <option key={unit} value={unit}>{unit}</option>)}
+                    {PRODUCTION_UNITS.map((unit) => (
+                      <option key={unit} value={unit}>
+                        {unit}
+                      </option>
+                    ))}
                   </select>
                 </div>
               </div>
-              <p className="text-[10px] text-slate-400 -mt-3">QTY pada tabel teknisi hanya menunjukkan jumlah personel/penugasan, bukan target output.</p>
+              <p className="text-[10px] text-slate-400 -mt-3">
+                QTY pada tabel teknisi hanya menunjukkan jumlah
+                personel/penugasan, bukan target output.
+              </p>
 
               {/* Jam Masuk + Jam Keluar */}
               <div className="grid grid-cols-2 gap-4">
@@ -1080,7 +1109,9 @@ export default function ProductionDashboard() {
                   <input
                     type="time"
                     value={formData.jamMasuk}
-                    onChange={(e) => setFormData({ ...formData, jamMasuk: e.target.value })}
+                    onChange={(e) =>
+                      setFormData({ ...formData, jamMasuk: e.target.value })
+                    }
                     className="w-full px-4 py-3 bg-white border-2 border-slate-100 rounded-xl text-sm font-black text-black"
                   />
                 </div>
@@ -1091,7 +1122,9 @@ export default function ProductionDashboard() {
                   <input
                     type="time"
                     value={formData.jamKeluar}
-                    onChange={(e) => setFormData({ ...formData, jamKeluar: e.target.value })}
+                    onChange={(e) =>
+                      setFormData({ ...formData, jamKeluar: e.target.value })
+                    }
                     className="w-full px-4 py-3 bg-white border-2 border-slate-100 rounded-xl text-sm font-black text-black"
                   />
                 </div>
@@ -1103,36 +1136,71 @@ export default function ProductionDashboard() {
                   <label className="text-[10px] font-black text-slate-400 uppercase flex items-center gap-1.5">
                     <Users size={11} /> Daftar Teknisi
                   </label>
-                  <button type="button" onClick={addTeknisiRow}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 text-white rounded-xl text-[10px] font-black hover:bg-slate-700 transition-colors">
+                  <button
+                    type="button"
+                    onClick={addTeknisiRow}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 text-white rounded-xl text-[10px] font-black hover:bg-slate-700 transition-colors"
+                  >
                     <Plus size={12} /> Tambah
                   </button>
                 </div>
                 <div className="grid grid-cols-[1.5rem_1fr_1fr_4.5rem_1.5rem] gap-2 mb-1 px-0.5">
-                  <span className="text-[9px] font-black text-slate-400 uppercase text-center">No</span>
-                  <span className="text-[9px] font-black text-slate-400 uppercase">Nama</span>
-                  <span className="text-[9px] font-black text-slate-400 uppercase">Keterangan</span>
-                  <span className="text-[9px] font-black text-slate-400 uppercase text-center">QTY</span>
+                  <span className="text-[9px] font-black text-slate-400 uppercase text-center">
+                    No
+                  </span>
+                  <span className="text-[9px] font-black text-slate-400 uppercase">
+                    Nama
+                  </span>
+                  <span className="text-[9px] font-black text-slate-400 uppercase">
+                    Keterangan
+                  </span>
+                  <span className="text-[9px] font-black text-slate-400 uppercase text-center">
+                    QTY
+                  </span>
                   <span />
                 </div>
                 <div className="space-y-2">
                   {(formData.teknisiRows || []).map((row, i) => (
-                    <div key={i} className="grid grid-cols-[1.5rem_1fr_1fr_4.5rem_1.5rem] gap-2 items-center">
-                      <span className="text-[10px] font-black text-slate-400 text-center">{i + 1}</span>
-                      <input type="text" value={row.nama}
-                        onChange={(e) => updateTeknisiRow(i, { nama: e.target.value })}
+                    <div
+                      key={i}
+                      className="grid grid-cols-[1.5rem_1fr_1fr_4.5rem_1.5rem] gap-2 items-center"
+                    >
+                      <span className="text-[10px] font-black text-slate-400 text-center">
+                        {i + 1}
+                      </span>
+                      <input
+                        type="text"
+                        value={row.nama}
+                        onChange={(e) =>
+                          updateTeknisiRow(i, { nama: e.target.value })
+                        }
                         placeholder="Nama..."
-                        className="px-3 py-2.5 bg-white border-2 border-slate-100 rounded-xl text-xs font-black text-black uppercase placeholder:text-slate-300 focus:border-blue-400 outline-none" />
-                      <input type="text" value={row.keterangan}
-                        onChange={(e) => updateTeknisiRow(i, { keterangan: e.target.value })}
+                        className="px-3 py-2.5 bg-white border-2 border-slate-100 rounded-xl text-xs font-black text-black uppercase placeholder:text-slate-300 focus:border-blue-400 outline-none"
+                      />
+                      <input
+                        type="text"
+                        value={row.keterangan}
+                        onChange={(e) =>
+                          updateTeknisiRow(i, { keterangan: e.target.value })
+                        }
                         placeholder="Keterangan..."
-                        className="px-3 py-2.5 bg-white border-2 border-slate-100 rounded-xl text-xs font-bold text-black placeholder:text-slate-300 focus:border-blue-400 outline-none" />
-                      <input type="number" min={1} value={row.qty}
-                        onChange={(e) => updateTeknisiRow(i, { qty: Number(e.target.value) })}
-                        className="px-3 py-2.5 bg-white border-2 border-slate-100 rounded-xl text-xs font-black text-black text-center focus:border-blue-400 outline-none" />
-                      <button type="button" onClick={() => removeTeknisiRow(i)}
+                        className="px-3 py-2.5 bg-white border-2 border-slate-100 rounded-xl text-xs font-bold text-black placeholder:text-slate-300 focus:border-blue-400 outline-none"
+                      />
+                      <input
+                        type="number"
+                        min={1}
+                        value={row.qty}
+                        onChange={(e) =>
+                          updateTeknisiRow(i, { qty: Number(e.target.value) })
+                        }
+                        className="px-3 py-2.5 bg-white border-2 border-slate-100 rounded-xl text-xs font-black text-black text-center focus:border-blue-400 outline-none"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => removeTeknisiRow(i)}
                         disabled={(formData.teknisiRows || []).length === 1}
-                        className="flex items-center justify-center text-slate-300 hover:text-rose-500 transition-colors disabled:opacity-20">
+                        className="flex items-center justify-center text-slate-300 hover:text-rose-500 transition-colors disabled:opacity-20"
+                      >
                         <X size={14} />
                       </button>
                     </div>
@@ -1143,21 +1211,29 @@ export default function ProductionDashboard() {
               {/* Start Date + Deadline */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-[10px] font-black text-slate-400 uppercase mb-2">Tanggal Mulai</label>
+                  <label className="block text-[10px] font-black text-slate-400 uppercase mb-2">
+                    Tanggal Mulai
+                  </label>
                   <input
                     type="date"
                     value={formData.startDate}
-                    onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
+                    onChange={(e) =>
+                      setFormData({ ...formData, startDate: e.target.value })
+                    }
                     className="w-full px-4 py-3 bg-white border-2 border-slate-100 rounded-xl text-sm font-bold text-black"
                     required
                   />
                 </div>
                 <div>
-                  <label className="block text-[10px] font-black text-slate-400 uppercase mb-2">Deadline</label>
+                  <label className="block text-[10px] font-black text-slate-400 uppercase mb-2">
+                    Deadline
+                  </label>
                   <input
                     type="date"
                     value={formData.deadline}
-                    onChange={(e) => setFormData({ ...formData, deadline: e.target.value })}
+                    onChange={(e) =>
+                      setFormData({ ...formData, deadline: e.target.value })
+                    }
                     className="w-full px-4 py-3 bg-white border-2 border-slate-100 rounded-xl text-sm font-bold text-black"
                     required
                   />

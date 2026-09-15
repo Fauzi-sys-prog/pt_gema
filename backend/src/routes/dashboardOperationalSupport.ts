@@ -169,7 +169,7 @@ export async function buildOperationalSummaryPayload(params: {
 
   let totalManHours = 0;
   for (const row of attendances) {
-    totalManHours += row.workHours ?? 0;
+    totalManHours += Number(row.workHours ?? 0);
   }
 
   const pendingPurchaseOrders = purchaseOrders.filter((row) => {
@@ -598,7 +598,7 @@ export async function buildHrSummaryPayload() {
   let totalWorkHours = 0;
   for (const row of attendances) {
     if (row.date === today) todayAttendance += 1;
-    totalWorkHours += row.workHours ?? 0;
+    totalWorkHours += Number(row.workHours ?? 0);
   }
 
   return {

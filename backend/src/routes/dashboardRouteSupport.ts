@@ -78,6 +78,10 @@ export function readNumber(payload: Record<string, unknown>, key: string): numbe
     const parsed = Number(value);
     if (Number.isFinite(parsed)) return parsed;
   }
+  if (value && typeof (value as { toNumber?: unknown }).toNumber === "function") {
+    const parsed = (value as { toNumber: () => number }).toNumber();
+    if (Number.isFinite(parsed)) return parsed;
+  }
   return 0;
 }
 
@@ -360,23 +364,23 @@ export function mapProcurementPurchaseOrderDashboardPayload(row: {
   supplierContact: string | null;
   attention: string | null;
   notes: string | null;
-  ppnRate: number;
+  ppnRate: Prisma.Decimal | number;
   topDays: number;
   ref: string | null;
   poCode: string | null;
   deliveryDate: Date | null;
   signatoryName: string | null;
-  totalAmount: number;
+  totalAmount: Prisma.Decimal | number;
   status: string;
   items: Array<{
     id: string;
     itemCode: string | null;
     itemName: string;
-    qty: number;
+    qty: Prisma.Decimal | number;
     unit: string;
-    unitPrice: number;
-    total: number;
-    qtyReceived: number;
+    unitPrice: Prisma.Decimal | number;
+    total: Prisma.Decimal | number;
+    qtyReceived: Prisma.Decimal | number;
     source: string | null;
     sourceRef: string | null;
   }>;
@@ -396,16 +400,16 @@ export function mapProcurementPurchaseOrderDashboardPayload(row: {
     supplierContact: row.supplierContact ?? "",
     attention: row.attention ?? "",
     notes: row.notes ?? "",
-    ppn: row.ppnRate,
-    ppnRate: row.ppnRate,
+    ppn: Number(row.ppnRate),
+    ppnRate: Number(row.ppnRate),
     top: row.topDays,
     ref: row.ref ?? "",
     po: row.poCode ?? "",
     deliveryDate: row.deliveryDate ? row.deliveryDate.toISOString().slice(0, 10) : undefined,
     signatoryName: row.signatoryName ?? "",
-    total: row.totalAmount,
-    totalAmount: row.totalAmount,
-    grandTotal: row.totalAmount,
+    total: Number(row.totalAmount),
+    totalAmount: Number(row.totalAmount),
+    grandTotal: Number(row.totalAmount),
     status: row.status,
     items: row.items.map((item) => ({
       id: item.id,
@@ -414,12 +418,12 @@ export function mapProcurementPurchaseOrderDashboardPayload(row: {
       itemKode: item.itemCode ?? "",
       nama: item.itemName,
       itemName: item.itemName,
-      qty: item.qty,
+      qty: Number(item.qty),
       unit: item.unit,
-      unitPrice: item.unitPrice,
-      harga: item.unitPrice,
-      total: item.total,
-      qtyReceived: item.qtyReceived,
+      unitPrice: Number(item.unitPrice),
+      harga: Number(item.unitPrice),
+      total: Number(item.total),
+      qtyReceived: Number(item.qtyReceived),
       source: item.source ?? undefined,
       sourceRef: item.sourceRef ?? undefined,
     })),
@@ -481,11 +485,11 @@ export function mapProcurementReceivingDashboardPayload(row: {
     id: string;
     itemCode: string | null;
     itemName: string;
-    qtyOrdered: number;
-    qtyReceived: number;
-    qtyGood: number;
-    qtyDamaged: number;
-    qtyPreviouslyReceived: number;
+    qtyOrdered: Prisma.Decimal | number;
+    qtyReceived: Prisma.Decimal | number;
+    qtyGood: Prisma.Decimal | number;
+    qtyDamaged: Prisma.Decimal | number;
+    qtyPreviouslyReceived: Prisma.Decimal | number;
     unit: string;
     condition: string | null;
     batchNo: string | null;
@@ -517,18 +521,18 @@ export function mapProcurementReceivingDashboardPayload(row: {
       itemKode: item.itemCode ?? "",
       itemCode: item.itemCode ?? "",
       itemName: item.itemName,
-      qtyOrdered: item.qtyOrdered,
-      qtyReceived: item.qtyReceived,
-      qtyGood: item.qtyGood,
-      qtyDamaged: item.qtyDamaged,
-      qtyPreviouslyReceived: item.qtyPreviouslyReceived,
+      qtyOrdered: Number(item.qtyOrdered),
+      qtyReceived: Number(item.qtyReceived),
+      qtyGood: Number(item.qtyGood),
+      qtyDamaged: Number(item.qtyDamaged),
+      qtyPreviouslyReceived: Number(item.qtyPreviouslyReceived),
       unit: item.unit,
       condition: item.condition ?? undefined,
       batchNo: item.batchNo ?? "",
       expiryDate: item.expiryDate ? item.expiryDate.toISOString().slice(0, 10) : undefined,
       photoUrl: item.photoUrl ?? undefined,
       notes: item.notes ?? "",
-      qty: item.qtyReceived,
+      qty: Number(item.qtyReceived),
     })),
   };
 }

@@ -456,7 +456,7 @@ export default function AccountsPayablePage() {
                 <div className="bg-slate-50 rounded-2xl p-4">
                   <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Total Tagihan</p>
                   <p className="text-2xl font-black text-rose-600 italic leading-none">{formatIDR(detailInvoice.totalAmount)}</p>
-                  {(detailInvoice.ppn || 0) > 0 && <p className="text-[9px] text-slate-400 mt-1.5">Sudah termasuk PPN {detailInvoice.ppn}%</p>}
+                  {(detailInvoice.ppn || 0) > 0 && <p className="text-[9px] text-slate-400 mt-1.5">Sudah termasuk PPN Rp {(detailInvoice.ppn || 0).toLocaleString('id-ID')}</p>}
                 </div>
                 <div className="bg-slate-50 rounded-2xl p-4">
                   <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Outstanding</p>

@@ -1,5 +1,10 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../prisma";
+import { serializeDecimals } from "../utils/decimal";
+
+function asNumbered<T>(row: unknown): T {
+  return serializeDecimals(row as T);
+}
 import {
   asRecord,
   readString,
@@ -192,7 +197,7 @@ export async function loadDashboardWorkflowRows(resource: string): Promise<Finan
       appRows,
       materialRequestRows.map((row) => ({
         id: row.id,
-        payload: mapProductionMaterialRequestDashboardPayload(row),
+        payload: mapProductionMaterialRequestDashboardPayload(asNumbered(row)),
         updatedAt: row.updatedAt,
       }))
     );
@@ -241,7 +246,7 @@ export async function loadDashboardWorkflowRows(resource: string): Promise<Finan
       appRows,
       rows.map((row) => ({
         id: row.id,
-        payload: mapDashboardLogisticsSuratJalanPayload(row),
+        payload: mapDashboardLogisticsSuratJalanPayload(asNumbered(row)),
         updatedAt: row.updatedAt,
       }))
     );
@@ -283,7 +288,7 @@ export async function loadDashboardWorkflowRows(resource: string): Promise<Finan
       appRows,
       rows.map((row) => ({
         id: row.id,
-        payload: mapDashboardProofOfDeliveryPayload(row),
+        payload: mapDashboardProofOfDeliveryPayload(asNumbered(row)),
         updatedAt: row.updatedAt,
       }))
     );
@@ -342,7 +347,7 @@ export async function loadDashboardWorkflowRows(resource: string): Promise<Finan
       appRows,
       inventoryRows.map((row) => ({
         id: row.id,
-        payload: mapInventoryItemDashboardPayload(row),
+        payload: mapInventoryItemDashboardPayload(asNumbered(row)),
         updatedAt: row.updatedAt,
       }))
     );
@@ -378,7 +383,7 @@ export async function loadDashboardWorkflowRows(resource: string): Promise<Finan
       appRows,
       inventoryRows.map((row) => ({
         id: row.id,
-        payload: mapInventoryMovementDashboardPayload(row),
+        payload: mapInventoryMovementDashboardPayload(asNumbered(row)),
         updatedAt: row.updatedAt,
       }))
     );
@@ -417,7 +422,7 @@ export async function loadDashboardWorkflowRows(resource: string): Promise<Finan
       appRows,
       inventoryRows.map((row) => ({
         id: row.id,
-        payload: mapInventoryStockInDashboardPayload(row),
+        payload: mapInventoryStockInDashboardPayload(asNumbered(row)),
         updatedAt: row.updatedAt,
       }))
     );
@@ -455,7 +460,7 @@ export async function loadDashboardWorkflowRows(resource: string): Promise<Finan
       appRows,
       inventoryRows.map((row) => ({
         id: row.id,
-        payload: mapInventoryStockOutDashboardPayload(row),
+        payload: mapInventoryStockOutDashboardPayload(asNumbered(row)),
         updatedAt: row.updatedAt,
       }))
     );
@@ -493,7 +498,7 @@ export async function loadDashboardWorkflowRows(resource: string): Promise<Finan
       appRows,
       inventoryRows.map((row) => ({
         id: row.id,
-        payload: mapInventoryStockOpnameDashboardPayload(row),
+        payload: mapInventoryStockOpnameDashboardPayload(asNumbered(row)),
         updatedAt: row.updatedAt,
       }))
     );
@@ -614,7 +619,7 @@ export async function findFinanceResourceDoc(
     });
     if (materialRequest) {
       const appPayload = appRow ? asRecord(appRow.payload) : {};
-      const dedicatedPayload = asRecord(mapProductionMaterialRequestDashboardPayload(materialRequest));
+      const dedicatedPayload = asRecord(mapProductionMaterialRequestDashboardPayload(asNumbered(materialRequest)));
       return {
         source: "dedicated",
         payload: { ...dedicatedPayload, ...appPayload },

@@ -73,11 +73,11 @@ salesAnalyticsRouter.get("/sales/analytics", authenticate, async (req: AuthReque
       if (!isRevenueStatus(invoice.status)) continue;
       const date = new Date(invoice.tanggal);
       if (Number.isNaN(date.getTime())) continue;
-      uniqueRevenue.set(invoice.noInvoice, { number: invoice.noInvoice, date, subtotal: invoice.subtotal });
+      uniqueRevenue.set(invoice.noInvoice, { number: invoice.noInvoice, date, subtotal: Number(invoice.subtotal) });
     }
     for (const invoice of financeInvoices) {
       if (!isRevenueStatus(invoice.status)) continue;
-      uniqueRevenue.set(invoice.number, { number: invoice.number, date: invoice.tanggal, subtotal: invoice.subtotal });
+      uniqueRevenue.set(invoice.number, { number: invoice.number, date: invoice.tanggal, subtotal: Number(invoice.subtotal) });
     }
 
     const currentMonthly = new Array<number>(12).fill(0);
@@ -93,16 +93,16 @@ salesAnalyticsRouter.get("/sales/analytics", authenticate, async (req: AuthReque
     let annualTarget = 0;
     for (const target of targets) {
       if (target.month && target.month >= 1 && target.month <= 12) {
-        monthlyTargets[target.month - 1] += target.targetAmount;
+        monthlyTargets[target.month - 1] += Number(target.targetAmount);
       } else {
-        annualTarget += target.targetAmount;
+        annualTarget += Number(target.targetAmount);
       }
     }
     if (annualTarget === 0) annualTarget = monthlyTargets.reduce((sum, value) => sum + value, 0);
 
     const activeStatuses = new Set(["PLANNING", "PENDING", "IN PROGRESS", "ON PROGRESS"]);
     const activeProjects = projects.filter((project) => activeStatuses.has(String(project.status || "").toUpperCase()));
-    const pipelineValue = activeProjects.reduce((sum, project) => sum + (project.nilaiKontrak || 0), 0);
+    const pipelineValue = activeProjects.reduce((sum, project) => sum + Number(project.nilaiKontrak || 0), 0);
 
     return res.json({
       currentYear,

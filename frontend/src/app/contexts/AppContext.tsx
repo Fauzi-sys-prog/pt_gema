@@ -75,6 +75,7 @@ const backendRoleToLabel: Record<string, string> = {
   HSE: "HSE",
   MANAGER: "Manager",
   SPV: "Supervisor",
+  ADMIN_PENAWARAN: "Admin Penawaran",
 };
 
 const roleLabelToBackend: Record<string, string> = Object.fromEntries(
@@ -1038,6 +1039,7 @@ export interface Employee {
   bank?: string;
   bankAccount?: string;
   npwp?: string;
+  ptkpStatus?: string;
   bpjsKesehatan?: string;
   bpjsKetenagakerjaan?: string;
   leaveQuota?: number;
@@ -1081,6 +1083,7 @@ export interface Asset {
   projectName?: string;
   rentedTo?: string;
   notes?: string;
+  spesifikasi?: string;
 }
 
 export interface PettyCashEntry {
@@ -2072,33 +2075,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({
     "invoiceList",
     [],
   );
-  const [stockItemList, setStockItemList] = useStoredState<StockItem[]>(
-    "stockItemList",
-    [
-      {
-        id: "s1",
-        kode: "GTP-MTR-PIP-001",
-        nama: "Pipa Galvanis 2 Inch",
-        stok: 120,
-        satuan: "Batang",
-        kategori: "Piping",
-        minStock: 20,
-        hargaSatuan: 450000,
-        lokasi: "Gudang A",
-      },
-      {
-        id: "s2",
-        kode: "GTP-MTR-VAL-002",
-        nama: "Valve 2 Inch",
-        stok: 5,
-        satuan: "Pcs",
-        kategori: "Fitting",
-        minStock: 10,
-        hargaSatuan: 1200000,
-        lokasi: "Gudang B",
-      },
-    ],
-  );
+  // Inventory balance is authoritative from the backend.
+  // Do not restore stock quantities from localStorage/demo data.
+  const [stockItemList, setStockItemList] = React.useState<StockItem[]>([]);
   const [employeeList, setEmployeeList] = useStoredState<Employee[]>(
     "employeeList",
     [],
@@ -2144,40 +2123,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({
     "stockOutList",
     [],
   );
-  const [stockMovementList, setStockMovementList] = useStoredState<
+  // Inventory movements are authoritative from the backend ledger.
+  // Do not restore movement history from localStorage/demo data.
+  const [stockMovementList, setStockMovementList] = React.useState<
     StockMovement[]
-  >("stockMovementList", [
-    {
-      id: "MOV-SEED-001",
-      tanggal: "2026-01-01",
-      type: "IN",
-      refNo: "OB-2026-001",
-      refType: "Opening Balance",
-      itemKode: "GTP-MTR-PIP-001",
-      itemNama: "Pipa Galvanis 2 Inch",
-      qty: 120,
-      unit: "Batang",
-      lokasi: "Gudang A",
-      stockBefore: 0,
-      stockAfter: 120,
-      createdBy: "System",
-    },
-    {
-      id: "MOV-SEED-002",
-      tanggal: "2026-01-01",
-      type: "IN",
-      refNo: "OB-2026-001",
-      refType: "Opening Balance",
-      itemKode: "GTP-MTR-VAL-002",
-      itemNama: "Valve 2 Inch",
-      qty: 5,
-      unit: "Pcs",
-      lokasi: "Gudang B",
-      stockBefore: 0,
-      stockAfter: 5,
-      createdBy: "System",
-    },
-  ]);
+  >([]);
   const [receivingList, setReceivingList] = useStoredState<Receiving[]>(
     "receivingList",
     [],
@@ -3367,6 +3317,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({
             error,
           );
           setClosedYearsList(previous);
+          toast.error(
+            "Gagal menyimpan tutup buku. Tahun buku belum terkunci.",
+          );
         }
       });
   };
@@ -3480,17 +3433,26 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({
     const req = topUpRequestList.find((r) => r.id === id);
     if (!req) return;
     if (localStorage.getItem("authToken")) {
-      const result = await api.request<{
-        request: TopUpRequest;
-        entry: PettyCashEntry;
-      }>(`/finance/petty-cash-topups/${id}/approve`, {
-        method: "POST",
-        body: JSON.stringify({ approverName }),
-      });
-      setTopUpRequestList((prev) =>
-        prev.map((r) => (r.id === id ? result.request : r)),
-      );
-      setPettyCashList((prev) => [...prev, result.entry]);
+      try {
+        const result = await api.request<{
+          request: TopUpRequest;
+          entry: PettyCashEntry;
+        }>(`/finance/petty-cash-topups/${id}/approve`, {
+          method: "POST",
+          body: JSON.stringify({ approverName }),
+        });
+        setTopUpRequestList((prev) =>
+          prev.map((r) => (r.id === id ? result.request : r)),
+        );
+        setPettyCashList((prev) => [...prev, result.entry]);
+      } catch (error) {
+        toast.error(
+          `Approval top-up kas kecil gagal: ${
+            error instanceof Error ? error.message : "Error"
+          }`,
+        );
+        return;
+      }
     } else {
       const approved = {
         ...req,
@@ -3516,10 +3478,24 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({
     setTopUpRequestList((prev) =>
       prev.map((r) => (r.id === id ? rejected : r)),
     );
-    void persistHrAlias("/finance-petty-cash-topups", rejected).catch(() => {
-      setTopUpRequestList(previousRequests);
-      toast.error("Penolakan top-up kas kecil gagal disimpan");
-    });
+    if (!localStorage.getItem("authToken")) return;
+    api
+      .request<{ request: TopUpRequest }>(
+        `/finance/petty-cash-topups/${encodeURIComponent(id)}/reject`,
+        {
+          method: "POST",
+          body: JSON.stringify({ reason }),
+        },
+      )
+      .then((result) => {
+        setTopUpRequestList((prev) =>
+          prev.map((r) => (r.id === id ? result.request : r)),
+        );
+      })
+      .catch(() => {
+        setTopUpRequestList(previousRequests);
+        toast.error("Penolakan top-up kas kecil gagal disimpan");
+      });
   };
 
   const addPettyCashGudangEntry = async (entry: Omit<PettyCashEntry, "id">) => {

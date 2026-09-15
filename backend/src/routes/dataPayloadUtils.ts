@@ -14,6 +14,10 @@ export function toFiniteNumber(value: unknown, fallback = 0): number {
     const parsed = Number(value);
     if (Number.isFinite(parsed)) return parsed;
   }
+  if (value && typeof (value as { toNumber?: unknown }).toNumber === "function") {
+    const parsed = (value as { toNumber: () => number }).toNumber();
+    if (Number.isFinite(parsed)) return parsed;
+  }
   return fallback;
 }
 

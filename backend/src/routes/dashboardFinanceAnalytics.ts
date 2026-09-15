@@ -1,4 +1,5 @@
 import { readNumber, readString } from "./dashboardRouteSupport";
+import { jakartaMonthIndex } from "../utils/jakartaDate";
 
 function parseDate(value: string | null): Date | null {
   if (!value) return null;
@@ -227,7 +228,7 @@ export function buildFinanceGeneralLedgerSummary(
     .map((m, i) => {
       const monthEntries = journalEntries.filter((e) => {
         const d = parseDate(e.date);
-        return !!d && d.getMonth() === i;
+        return !!d && jakartaMonthIndex(d) === i;
       });
       const totalIncome = monthEntries.reduce((sum, e) => sum + e.debit, 0);
       const totalExpense = monthEntries.reduce((sum, e) => sum + e.credit, 0);
@@ -243,7 +244,7 @@ export function buildFinanceGeneralLedgerSummary(
   const income = journalEntries.reduce((sum, e) => sum + e.debit, 0);
   const expense = journalEntries.reduce((sum, e) => sum + e.credit, 0);
   const net = income - expense;
-  const health = income > 0 ? Math.max(0, Math.min(100, (net / income) * 100 + 50)) : 100;
+  const health = income > 0 ? Math.max(0, Math.min(100, (net / income) * 100 + 50)) : 0;
   const receivable = invoiceRows
     .filter((row) => (readString(row, "status") || "").toUpperCase() !== "PAID")
     .reduce((sum, row) => {
@@ -259,14 +260,19 @@ export function buildFinanceGeneralLedgerSummary(
       );
       return sum + outstanding;
     }, 0);
-  const payable = poRows.reduce(
-    (sum, row) =>
-      sum +
-      (readNumber(row, "total") ||
+  const payable = poRows
+    .filter((row) => {
+      const status = String(readString(row, "status") || "").toUpperCase();
+      return !["DRAFT", "REJECTED", "CANCELLED"].includes(status);
+    })
+    .reduce((sum, row) => {
+      const total =
+        readNumber(row, "total") ||
         readNumber(row, "totalAmount") ||
-        readNumber(row, "grandTotal")),
-    0
-  );
+        readNumber(row, "grandTotal");
+      const paid = readNumber(row, "paidAmount");
+      return sum + Math.max(0, total - paid);
+    }, 0);
 
   return {
     journalEntries,
@@ -288,7 +294,7 @@ export function buildFinancePpnSummary(
 ) {
   const keluaran = invoiceRows.map((row, idx) => {
     const dpp = readNumber(row, "subtotal") || readNumber(row, "dpp") || readNumber(row, "totalBayar");
-    const ppn = readNumber(row, "ppn") || dpp * 0.11;
+    const ppn = readNumber(row, "ppn");
     return {
       id: readString(row, "id") || `OUT-${idx + 1}`,
       noInvoice: readString(row, "noInvoice") || "-",
@@ -305,7 +311,7 @@ export function buildFinancePpnSummary(
       readNumber(row, "dpp") ||
       readNumber(row, "totalAmount") ||
       readNumber(row, "grandTotal");
-    const ppn = readNumber(row, "ppn") || dpp * 0.11;
+    const ppn = readNumber(row, "ppn");
     return {
       id: readString(row, "id") || `IN-${idx + 1}`,
       noInvoiceVendor: readString(row, "noInvoiceVendor") || "-",

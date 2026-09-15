@@ -1,4 +1,5 @@
 import { randomUUID } from "crypto";
+import { Prisma } from "@prisma/client";
 import { prisma } from "../prisma";
 import { assertFinancialYearsOpen, financialYearsFromValue } from "../middlewares/financialYearLock";
 
@@ -8,8 +9,31 @@ type VendorPayment = { tanggal?: string | Date; nominal: number; metodeBayar?: s
 const asDate = (v?: string | Date) => v instanceof Date ? v : new Date(v || Date.now());
 const amount = (v: number) => Number.isFinite(v) && v > 0 ? v : 0;
 
+// Pembayaran invoice adalah read-modify-write pada paidAmount. Jalankan pada
+// isolation Serializable dan ulangi saat terjadi serialization failure (P2034)
+// supaya dua pembayaran bersamaan tidak saling menimpa (lost update).
+async function serializableTransaction<T>(
+  work: (tx: Prisma.TransactionClient) => Promise<T>,
+): Promise<T> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await prisma.$transaction(work, {
+        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+      });
+    } catch (error) {
+      if (
+        !(error instanceof Prisma.PrismaClientKnownRequestError) ||
+        error.code !== "P2034" ||
+        attempt >= 2
+      ) {
+        throw error;
+      }
+    }
+  }
+}
+
 export async function receiveCustomerInvoicePayment(invoiceId: string, payment: CustomerPayment, actor?: { userId?: string; role?: string }) {
-  return prisma.$transaction(async (tx) => {
+  return serializableTransaction(async (tx) => {
     const invoice = await tx.financeCustomerInvoice.findUnique({ where: { id: invoiceId } });
     if (!invoice) throw new Error("Invoice tidak ditemukan");
     const arPayable = ["Approved", "Unpaid", "Partially Paid", "Partial", "Overdue", "Sent"];
@@ -27,8 +51,8 @@ export async function receiveCustomerInvoicePayment(invoiceId: string, payment: 
       const duplicate = await tx.financeCustomerInvoicePayment.findFirst({ where: { invoiceId, proofNo: proof } });
       if (duplicate) return invoice;
     }
-    const newPaid = invoice.paidAmount + nominal;
-    if (newPaid > invoice.totalAmount) throw new Error("Pembayaran melebihi total invoice");
+    const newPaid = Number(invoice.paidAmount) + nominal;
+    if (newPaid > Number(invoice.totalAmount)) throw new Error("Pembayaran melebihi total invoice");
     const arPaymentId = randomUUID();
     await tx.financeCustomerInvoicePayment.create({ data: { id: arPaymentId, invoiceId, tanggal: asDate(payment.tanggal), nominal, method: payment.method || "Transfer", proofNo: proof, bankName: payment.bankName, remark: payment.remark, createdBy: payment.createdBy, paidAt: new Date() } });
     if ((payment.method || "Transfer").toLowerCase() !== "cash") {
@@ -48,7 +72,7 @@ export async function receiveCustomerInvoicePayment(invoiceId: string, payment: 
         sourceId: arPaymentId,
       } });
     }
-    const outstanding = invoice.totalAmount - newPaid;
+    const outstanding = Number(invoice.totalAmount) - newPaid;
     const status = outstanding <= 0 ? "Paid" : "Partial";
     const updated = await tx.financeCustomerInvoice.update({ where: { id: invoiceId }, data: { paidAmount: newPaid, outstandingAmount: outstanding, status, tanggalBayar: outstanding <= 0 ? new Date() : invoice.tanggalBayar } });
     await tx.auditLogEntry.create({ data: { id: randomUUID(), timestamp: new Date(), action: "FINANCE_PAYMENT", domain: "finance", actorUserId: actor?.userId || null, actorRole: actor?.role || null, userId: actor?.userId || null, module: "Finance", details: `Customer invoice payment ${invoiceId}`, status: "Success", resource: "customer-invoices", entityId: invoiceId, operation: "payment", metadata: JSON.stringify({ nominal, proofNo: proof }) } });
@@ -57,7 +81,7 @@ export async function receiveCustomerInvoicePayment(invoiceId: string, payment: 
 }
 
 export async function payVendorInvoice(invoiceId: string, payment: VendorPayment, actor?: { userId?: string; role?: string }) {
-  return prisma.$transaction(async (tx) => {
+  return serializableTransaction(async (tx) => {
     const invoice = await tx.financeVendorInvoice.findUnique({ where: { id: invoiceId } });
     if (!invoice) throw new Error("Vendor invoice tidak ditemukan");
     const payable = ["Approved", "Unpaid", "Partially Paid", "Partial", "Overdue"];
@@ -75,8 +99,8 @@ export async function payVendorInvoice(invoiceId: string, payment: VendorPayment
       const duplicate = await tx.financeVendorInvoicePayment.findFirst({ where: { vendorInvoiceId: invoiceId, noBukti: proof } });
       if (duplicate) return invoice;
     }
-    const newPaid = invoice.paidAmount + nominal;
-    if (newPaid > invoice.totalAmount) throw new Error("Pembayaran melebihi total invoice vendor");
+    const newPaid = Number(invoice.paidAmount) + nominal;
+    if (newPaid > Number(invoice.totalAmount)) throw new Error("Pembayaran melebihi total invoice vendor");
     const apPaymentId = randomUUID();
     await tx.financeVendorInvoicePayment.create({ data: { id: apPaymentId, vendorInvoiceId: invoiceId, tanggal: asDate(payment.tanggal), nominal, metodeBayar: payment.metodeBayar || "Transfer", noBukti: proof, bank: payment.bank, noRekening: payment.noRekening, keterangan: payment.keterangan } });
     if ((payment.metodeBayar || "Transfer").toLowerCase() !== "cash") {
@@ -96,8 +120,8 @@ export async function payVendorInvoice(invoiceId: string, payment: VendorPayment
         sourceId: apPaymentId,
       } });
     }
-    const outstanding = invoice.totalAmount - newPaid;
-    const updated = await tx.financeVendorInvoice.update({ where: { id: invoiceId }, data: { paidAmount: newPaid, outstandingAmount: outstanding, status: outstanding <= 0 ? "Paid" : "Partially Paid" } });
+    const outstanding = Number(invoice.totalAmount) - newPaid;
+    const updated = await tx.financeVendorInvoice.update({ where: { id: invoiceId }, data: { paidAmount: newPaid, outstandingAmount: outstanding, status: outstanding <= 0 ? "Paid" : "Partial" } });
     await tx.auditLogEntry.create({ data: { id: randomUUID(), timestamp: new Date(), action: "FINANCE_PAYMENT", domain: "finance", actorUserId: actor?.userId || null, actorRole: actor?.role || null, userId: actor?.userId || null, module: "Finance", details: `Vendor invoice payment ${invoiceId}`, status: "Success", resource: "vendor-invoices", entityId: invoiceId, operation: "payment", metadata: JSON.stringify({ nominal, proofNo: proof }) } });
     return updated;
   });

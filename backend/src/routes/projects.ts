@@ -290,6 +290,10 @@ function readNumber(
     const parsed = Number(value);
     return Number.isFinite(parsed) ? parsed : null;
   }
+  if (value && typeof (value as { toNumber?: unknown }).toNumber === "function") {
+    const parsed = (value as { toNumber: () => number }).toNumber();
+    if (Number.isFinite(parsed)) return parsed;
+  }
   return null;
 }
 
@@ -488,8 +492,8 @@ type ProjectReadRow = {
   customerName: string | null;
   status: string | null;
   approvalStatus: string | null;
-  nilaiKontrak: number | null;
-  progress: number | null;
+  nilaiKontrak: Prisma.Decimal | number | null;
+  progress: Prisma.Decimal | number | null;
   payload: Prisma.JsonValue;
   updatedAt: Date;
 };
@@ -523,13 +527,14 @@ function hydrateProjectPayload(row: ProjectReadRow): Record<string, unknown> {
     status: row.status ?? readString(payload, "status") ?? undefined,
     approvalStatus:
       row.approvalStatus ?? readString(payload, "approvalStatus") ?? "Pending",
-    nilaiKontrak:
+    nilaiKontrak: Number(
       row.nilaiKontrak ??
-      readNumber(payload, "nilaiKontrak") ??
-      readNumber(payload, "contractValue") ??
-      readNumber(payload, "totalContractValue") ??
-      0,
-    progress: row.progress ?? readNumber(payload, "progress") ?? 0,
+        readNumber(payload, "nilaiKontrak") ??
+        readNumber(payload, "contractValue") ??
+        readNumber(payload, "totalContractValue") ??
+        0,
+    ),
+    progress: Number(row.progress ?? readNumber(payload, "progress") ?? 0),
   };
 }
 
@@ -1978,7 +1983,7 @@ projectsRouter.patch(
                   !["Completed", "Selesai", "Done", "Complete"].includes(
                     wo.status,
                   ) ||
-                  (wo.targetQty > 0 && wo.completedQty < wo.targetQty),
+                  (Number(wo.targetQty) > 0 && Number(wo.completedQty) < Number(wo.targetQty)),
               )
             ) {
               throw new ProjectCompletionError(

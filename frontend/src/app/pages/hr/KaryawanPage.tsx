@@ -30,7 +30,7 @@ export default function KaryawanPage() {
     salary: 0,
     status: 'Active',
     leaveQuota: 12,
-    bank: '', bankAccount: '', npwp: '', bpjsKesehatan: '', bpjsKetenagakerjaan: '',
+    bank: '', bankAccount: '', npwp: '', ptkpStatus: 'TK/0', bpjsKesehatan: '', bpjsKetenagakerjaan: '',
     jatahKasbonAmount: 0, potonganPerKasbon: 0,
   });
 
@@ -86,7 +86,7 @@ export default function KaryawanPage() {
       emergencyPhone: '',
       salary: 0,
       status: 'Active', leaveQuota: 12,
-      bank: '', bankAccount: '', npwp: '', bpjsKesehatan: '', bpjsKetenagakerjaan: '',
+      bank: '', bankAccount: '', npwp: '', ptkpStatus: 'TK/0', bpjsKesehatan: '', bpjsKetenagakerjaan: '',
       jatahKasbonAmount: 0, potonganPerKasbon: 0,
     });
     setCompForm({ ...defaultComp });
@@ -510,6 +510,7 @@ export default function KaryawanPage() {
                   <div><label className="block text-gray-700 mb-2">Bank Payroll</label><input type="text" value={formData.bank || ''} onChange={e => setFormData({ ...formData, bank: e.target.value })} className="w-full px-4 py-2 border border-gray-300 rounded-lg" placeholder="BCA / Mandiri / BNI" /></div>
                   <div><label className="block text-gray-700 mb-2">Nomor Rekening</label><input type="text" value={formData.bankAccount || ''} onChange={e => setFormData({ ...formData, bankAccount: e.target.value })} className="w-full px-4 py-2 border border-gray-300 rounded-lg" /></div>
                   <div><label className="block text-gray-700 mb-2">NPWP</label><input type="text" value={formData.npwp || ''} onChange={e => setFormData({ ...formData, npwp: e.target.value })} className="w-full px-4 py-2 border border-gray-300 rounded-lg" /></div>
+                  <div><label className="block text-gray-700 mb-2">Status PTKP (PPh 21)</label><select value={formData.ptkpStatus || 'TK/0'} onChange={e => setFormData({ ...formData, ptkpStatus: e.target.value })} className="w-full px-4 py-2 border border-gray-300 rounded-lg">{['TK/0','TK/1','TK/2','TK/3','K/0','K/1','K/2','K/3'].map(v => <option key={v} value={v}>{v}</option>)}</select><p className="text-xs text-gray-500 mt-1">PPh 21 dihitung otomatis (Pasal 17). Isi PPh 21 manual di detail untuk override. <span className="text-amber-600">Tanpa NPWP: dikenakan +20%.</span></p></div>
                   <div><label className="block text-gray-700 mb-2">No. BPJS Kesehatan</label><input type="text" value={formData.bpjsKesehatan || ''} onChange={e => setFormData({ ...formData, bpjsKesehatan: e.target.value })} className="w-full px-4 py-2 border border-gray-300 rounded-lg" /></div>
                   <div><label className="block text-gray-700 mb-2">No. BPJS Ketenagakerjaan</label><input type="text" value={formData.bpjsKetenagakerjaan || ''} onChange={e => setFormData({ ...formData, bpjsKetenagakerjaan: e.target.value })} className="w-full px-4 py-2 border border-gray-300 rounded-lg" /></div>
                   <div><label className="block text-gray-700 mb-2">Kuota Cuti / Tahun</label><input type="number" min="0" value={formData.leaveQuota ?? 12} onChange={e => setFormData({ ...formData, leaveQuota: Number(e.target.value) })} className="w-full px-4 py-2 border border-gray-300 rounded-lg" /></div>
@@ -705,7 +706,7 @@ export default function KaryawanPage() {
               </div>
 
               {/* Bank & Government ID */}
-              {(selectedEmployee.bank || selectedEmployee.npwp || selectedEmployee.bpjsKesehatan) && (
+              {(selectedEmployee.bank || selectedEmployee.npwp || selectedEmployee.ptkpStatus || selectedEmployee.bpjsKesehatan) && (
                 <div>
                   <h3 className="text-gray-900 mb-4">Data Bank & Pemerintah</h3>
                   <div className="grid grid-cols-2 gap-6">
@@ -725,6 +726,12 @@ export default function KaryawanPage() {
                       <div>
                         <div className="text-gray-600 mb-1">NPWP</div>
                         <div className="text-gray-900">{selectedEmployee.npwp}</div>
+                      </div>
+                    )}
+                    {selectedEmployee.ptkpStatus && (
+                      <div>
+                        <div className="text-gray-600 mb-1">Status PTKP</div>
+                        <div className="text-gray-900">{selectedEmployee.ptkpStatus}</div>
                       </div>
                     )}
                     {selectedEmployee.bpjsKesehatan && (

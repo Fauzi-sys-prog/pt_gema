@@ -63,6 +63,9 @@ type ExecuteFinanceApprovalActionParams = {
     documentId: string,
     metadata?: Record<string, unknown>,
   ) => Promise<void>;
+  // Menolak approval/verifikasi dokumen yang periodenya berada di tahun buku
+  // yang sudah ditutup (mencegah bypass year-lock via approval center).
+  assertYearOpen: (payload: Record<string, unknown>) => Promise<void>;
 };
 
 export class FinanceApprovalActionError extends Error {
@@ -130,6 +133,7 @@ export async function executeFinanceApprovalAction(
     syncProjectFromQuotation,
     writeQuotationApprovalLog,
     writeAuditLog,
+    assertYearOpen,
   } = params;
 
   if (!canReadFinanceApprovalQueue(role)) {
@@ -151,6 +155,24 @@ export async function executeFinanceApprovalAction(
     const current = await findFinanceResourceDoc("purchase-orders", documentId);
     if (!current) {
       approvalError(404, "NOT_FOUND", "Purchase Order tidak ditemukan", "Purchase Order tidak ditemukan");
+    }
+
+    await assertYearOpen(current.payload);
+
+    const currentStatus = String(current.payload.status || "Draft").toUpperCase();
+    if (!["SENT", "PENDING"].includes(currentStatus)) {
+      approvalError(
+        400,
+        "STATUS_INVALID",
+        `PO hanya dapat diproses dari status Sent/Pending (sekarang ${currentStatus})`,
+        "PO hanya dapat diproses dari status Sent/Pending",
+      );
+    }
+    if (action === "REJECT") {
+      ensureReasonProvided(reason, {
+        code: "REJECT_REASON_REQUIRED",
+        message: "Reject PO membutuhkan alasan minimal 5 karakter",
+      });
     }
 
     const { total, nextStatus, updatedPayload } = buildPurchaseOrderApprovalPayload({
@@ -198,7 +220,19 @@ export async function executeFinanceApprovalAction(
       approvalError(404, "NOT_FOUND", "Invoice tidak ditemukan", "Invoice tidak ditemukan");
     }
 
-    const { updatedPayload } = buildInvoiceVerificationPayload({
+    await assertYearOpen(current.payload);
+
+    const currentStatus = String(current.payload.status || "Unpaid").toUpperCase();
+    if (currentStatus !== "UNPAID") {
+      approvalError(
+        400,
+        "STATUS_INVALID",
+        `Invoice hanya dapat diverifikasi saat status Unpaid (sekarang ${currentStatus})`,
+        "Invoice hanya dapat diverifikasi saat status Unpaid",
+      );
+    }
+
+    const { updatedPayload, nextStatus } = buildInvoiceVerificationPayload({
       documentId,
       payload: current.payload,
       actor,
@@ -206,7 +240,7 @@ export async function executeFinanceApprovalAction(
 
     await updateFinanceResourceDoc("invoices", documentId, current.source, updatedPayload);
     await writeAuditLog("INVOICE_VERIFY", "INVOICE", documentId);
-    return { ok: true, documentType, documentId, status: "PAID" };
+    return { ok: true, documentType, documentId, status: nextStatus };
   }
 
   if (documentType === "QUOTATION") {

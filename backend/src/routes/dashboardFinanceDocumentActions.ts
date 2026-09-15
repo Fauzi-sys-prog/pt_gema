@@ -1,5 +1,6 @@
 import { DashboardActorSnapshot } from "./dashboardQuotationWorkflow";
 import { readNumber, readString } from "./dashboardRouteSupport";
+import { jakartaDateString } from "../utils/jakartaDate";
 
 export function buildPurchaseOrderApprovalPayload(params: {
   documentId: string;
@@ -41,21 +42,28 @@ export function buildInvoiceVerificationPayload(params: {
   actor: DashboardActorSnapshot;
   paidDate?: string;
 }) {
-  const { documentId, payload, actor, paidDate = new Date().toISOString().slice(0, 10) } = params;
+  const { documentId, payload, actor, paidDate = jakartaDateString(new Date()) } = params;
   const totalBayar =
     readNumber(payload, "totalBayar") ||
     readNumber(payload, "totalAmount") ||
     readNumber(payload, "subtotal");
+  // Verifikasi TIDAK boleh mengarang pelunasan: hormati pembayaran yang sudah
+  // tercatat, jangan timpa paidAmount/outstanding dengan total penuh.
+  const paidAmount = Math.min(Math.max(0, readNumber(payload, "paidAmount")), totalBayar);
+  const outstandingAmount = Math.max(0, totalBayar - paidAmount);
+  const fullyPaid = totalBayar > 0 && outstandingAmount <= 0;
+  const nextStatus = fullyPaid ? "PAID" : paidAmount > 0 ? "Partial" : "Approved";
 
   return {
     totalBayar,
+    nextStatus,
     updatedPayload: {
       ...payload,
       id: readString(payload, "id") || documentId,
-      status: "PAID",
-      paidAmount: totalBayar,
-      outstandingAmount: 0,
-      tanggalBayar: paidDate,
+      status: nextStatus,
+      paidAmount,
+      outstandingAmount,
+      tanggalBayar: fullyPaid ? readString(payload, "tanggalBayar") || paidDate : payload.tanggalBayar,
       verifiedBy: actor.actorName,
       verifiedByUserId: actor.actorUserId,
       verifiedByRole: actor.actorRole,

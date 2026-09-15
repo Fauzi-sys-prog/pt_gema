@@ -50,6 +50,7 @@ const QUOTATION_WRITE_ROLES: Role[] = [
   "ADMIN",
   "MANAGER",
   "SALES",
+  "ADMIN_PENAWARAN",
 ];
 
 const QUOTATION_READ_ROLES: Role[] = [
@@ -141,6 +142,10 @@ function readNumber(payload: Record<string, unknown>, key: string): number | nul
   if (typeof value === "string" && value.trim()) {
     const parsed = Number(value);
     return Number.isFinite(parsed) ? parsed : null;
+  }
+  if (value && typeof (value as { toNumber?: unknown }).toNumber === "function") {
+    const parsed = (value as { toNumber: () => number }).toNumber();
+    if (Number.isFinite(parsed)) return parsed;
   }
   return null;
 }
@@ -269,7 +274,7 @@ type QuotationReadRow = {
   status: string | null;
   kepada: string | null;
   perihal: string | null;
-  grandTotal: number | null;
+  grandTotal: Prisma.Decimal | number | null;
   dataCollectionId: string | null;
   payload: Prisma.JsonValue;
 };
@@ -297,7 +302,7 @@ function hydrateQuotationPayload(row: QuotationReadRow): QuotationPayload {
     status: row.status ?? readString(payload, "status") ?? undefined,
     kepada: row.kepada ?? readString(payload, "kepada") ?? undefined,
     perihal: row.perihal ?? readString(payload, "perihal") ?? undefined,
-    grandTotal: row.grandTotal ?? readNumber(payload, "grandTotal") ?? undefined,
+    grandTotal: row.grandTotal == null ? (readNumber(payload, "grandTotal") ?? undefined) : Number(row.grandTotal),
     dataCollectionId:
       row.dataCollectionId ?? readString(payload, "dataCollectionId") ?? undefined,
   });

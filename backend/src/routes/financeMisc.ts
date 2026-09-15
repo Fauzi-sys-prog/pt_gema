@@ -8,6 +8,7 @@ import { AuthRequest } from "../types/auth";
 import { sendError } from "../utils/http";
 import { hasRoleAccess } from "../utils/roles";
 import { assertFinancialYearsOpen, FinancialYearClosedError, financialYearsFromValue, lockFinancialYearTransactions } from "../middlewares/financialYearLock";
+import { jakartaDateString } from "../utils/jakartaDate";
 
 export const financeMiscRouter = Router();
 
@@ -98,14 +99,15 @@ function toFiniteNumber(value: unknown, fallback = 0): number {
     const parsed = Number(normalized);
     return Number.isFinite(parsed) ? parsed : fallback;
   }
+  if (value && typeof (value as { toNumber?: unknown }).toNumber === "function") {
+    const parsed = (value as { toNumber: () => number }).toNumber();
+    if (Number.isFinite(parsed)) return parsed;
+  }
   return fallback;
 }
 
 function inventoryDateString(value: string | Date | null | undefined): string {
-  if (!value) return new Date().toISOString().slice(0, 10);
-  if (value instanceof Date) return value.toISOString().slice(0, 10);
-  const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? String(value) : parsed.toISOString().slice(0, 10);
+  return jakartaDateString(value);
 }
 
 function parsePettySource(source?: string | null) {
@@ -130,14 +132,14 @@ function mapWorkingExpenseSheet(row: {
   date: Date;
   noHal: string;
   revisi: string | null;
-  totalKas: number;
+  totalKas: Prisma.Decimal | number;
   status: string;
   createdBy: string | null;
   items: Array<{
     id: string;
     date: Date | null;
     description: string;
-    nominal: number;
+    nominal: Prisma.Decimal | number;
     hasNota: string | null;
     remark: string | null;
   }>;
@@ -151,14 +153,14 @@ function mapWorkingExpenseSheet(row: {
     date: row.date.toISOString().slice(0, 10),
     noHal: row.noHal,
     revisi: row.revisi ?? "0",
-    totalKas: row.totalKas,
+    totalKas: Number(row.totalKas),
     status: row.status,
     createdBy: row.createdBy ?? undefined,
     items: row.items.map((item) => ({
       id: item.id,
       date: item.date ? item.date.toISOString().slice(0, 10) : "",
       description: item.description,
-      nominal: item.nominal,
+      nominal: Number(item.nominal),
       hasNota: item.hasNota ?? "",
       remark: item.remark ?? undefined,
     })),
@@ -172,7 +174,7 @@ function mapPettyCashTransaction(row: {
   date: Date;
   ref: string | null;
   description: string;
-  amount: number;
+  amount: Prisma.Decimal | number;
   accountCode: string | null;
   direction: string;
   projectName: string | null;
@@ -185,7 +187,7 @@ function mapPettyCashTransaction(row: {
     date: row.date.toISOString().slice(0, 10),
     ref: row.ref ?? undefined,
     description: row.description,
-    amount: row.amount,
+    amount: Number(row.amount),
     projectId: row.projectId ?? undefined,
     employeeId: row.employeeId ?? undefined,
     project: row.projectName ?? undefined,
@@ -204,9 +206,9 @@ function mapBankReconciliation(row: {
   periodLabel: string | null;
   account: string | null;
   description: string | null;
-  debit: number;
-  credit: number;
-  balance: number;
+  debit: Prisma.Decimal | number;
+  credit: Prisma.Decimal | number;
+  balance: Prisma.Decimal | number;
   status: string;
   note: string | null;
 }) {
@@ -220,9 +222,9 @@ function mapBankReconciliation(row: {
     periodLabel: row.periodLabel ?? undefined,
     account: row.account ?? undefined,
     description: row.description ?? "",
-    debit: row.debit,
-    credit: row.credit,
-    balance: row.balance,
+    debit: Number(row.debit),
+    credit: Number(row.credit),
+    balance: Number(row.balance),
     status: row.status,
     note: row.note ?? undefined,
   };
@@ -242,9 +244,9 @@ async function recalculateBankBalances(db: FinanceDb, account: string | null | u
   let runningBalance = 0;
   for (const row of rows) {
     runningBalance = isOpeningBalance(row.periodLabel)
-      ? row.balance
-      : runningBalance + row.debit - row.credit;
-    if (row.balance !== runningBalance) {
+      ? Number(row.balance)
+      : runningBalance + Number(row.debit) - Number(row.credit);
+    if (Number(row.balance) !== runningBalance) {
       await db.financeBankReconciliation.update({
         where: { id: row.id },
         data: { balance: runningBalance },
@@ -259,7 +261,7 @@ function mapKasbon(row: {
   projectId: string | null;
   employeeName: string | null;
   date: Date;
-  amount: number;
+  amount: Prisma.Decimal | number;
   status: string;
   approved: boolean;
   createdBy: string | null;
@@ -271,7 +273,7 @@ function mapKasbon(row: {
     projectId: row.projectId ?? undefined,
     employeeName: row.employeeName ?? undefined,
     date: row.date.toISOString().slice(0, 10),
-    amount: row.amount,
+    amount: Number(row.amount),
     status: row.status,
     approved: row.approved,
     createdBy: row.createdBy ?? undefined,
@@ -405,7 +407,7 @@ async function createResource(resource: FinanceMiscResource, payload: Record<str
           date: new Date(inventoryDateString(asTrimmedString(payload.date))),
           noHal: asTrimmedString(payload.noHal) || String(payload.id),
           revisi: asTrimmedString(payload.revisi) || undefined,
-          totalKas: toFiniteNumber(payload.totalKas, 0),
+          totalKas: Math.max(0, toFiniteNumber(payload.totalKas, 0)),
           status: asTrimmedString(payload.status) || "Draft",
           createdBy: asTrimmedString(payload.createdBy) || undefined,
           items: {
@@ -416,7 +418,7 @@ async function createResource(resource: FinanceMiscResource, payload: Record<str
                   id: asTrimmedString(item.id) || `${String(payload.id)}-ITEM-${String(index + 1).padStart(3, "0")}`,
                   date: asTrimmedString(item.date) ? new Date(String(item.date)) : undefined,
                   description: asTrimmedString(item.description) || "",
-                  nominal: toFiniteNumber(item.nominal, 0),
+                  nominal: Math.max(0, toFiniteNumber(item.nominal, 0)),
                   hasNota: asTrimmedString(item.hasNota) || undefined,
                   remark: asTrimmedString(item.remark) || undefined,
                 };
@@ -437,7 +439,7 @@ async function createResource(resource: FinanceMiscResource, payload: Record<str
           date: new Date(inventoryDateString(asTrimmedString(payload.date))),
           ref: asTrimmedString(payload.ref) || undefined,
           description: asTrimmedString(payload.description) || String(payload.id),
-          amount: toFiniteNumber(payload.amount, 0),
+          amount: Math.max(0, toFiniteNumber(payload.amount, 0)),
           accountCode: meta.accountCode || "00000",
           direction: meta.direction,
           projectName: asTrimmedString(payload.project) || undefined,
@@ -491,7 +493,7 @@ async function createResource(resource: FinanceMiscResource, payload: Record<str
           projectId: asTrimmedString(payload.projectId) || undefined,
           employeeName: asTrimmedString(payload.employeeName) || undefined,
           date: new Date(inventoryDateString(asTrimmedString(payload.date))),
-          amount: toFiniteNumber(payload.amount, 0),
+          amount: Math.max(0, toFiniteNumber(payload.amount, 0)),
           status: asTrimmedString(payload.status) || "Pending",
           approved: Boolean(payload.approved),
           createdBy: asTrimmedString(payload.createdBy) || undefined,
@@ -505,58 +507,60 @@ async function createResource(resource: FinanceMiscResource, payload: Record<str
 async function updateResource(resource: FinanceMiscResource, id: string, updates: Record<string, unknown>, db: FinanceDb = prisma) {
   switch (resource) {
     case "working-expense-sheets": {
-      await db.financeWorkingExpenseSheet.update({
-        where: { id },
-        data: {
-          projectId: asTrimmedString(updates.projectId) || null,
-          client: asTrimmedString(updates.client) || null,
-          projectName: asTrimmedString(updates.project) || asTrimmedString(updates.projectName) || null,
-          location: asTrimmedString(updates.location) || null,
-          date: new Date(inventoryDateString(asTrimmedString(updates.date))),
-          noHal: asTrimmedString(updates.noHal) || id,
-          revisi: asTrimmedString(updates.revisi) || null,
-          totalKas: toFiniteNumber(updates.totalKas, 0),
-          status: asTrimmedString(updates.status) || "Draft",
-          createdBy: asTrimmedString(updates.createdBy) || null,
-          items: {
-            deleteMany: {},
-            create: (Array.isArray(updates.items) ? updates.items : [])
-              .map((raw, index) => {
-                const item = asRecord(raw);
-                return {
-                  id: asTrimmedString(item.id) || `${id}-ITEM-${String(index + 1).padStart(3, "0")}`,
-                  date: asTrimmedString(item.date) ? new Date(String(item.date)) : undefined,
-                  description: asTrimmedString(item.description) || "",
-                  nominal: toFiniteNumber(item.nominal, 0),
-                  hasNota: asTrimmedString(item.hasNota) || undefined,
-                  remark: asTrimmedString(item.remark) || undefined,
-                };
-              })
-              .filter((item) => item.description),
-          },
-        },
-      });
+      // PATCH parsial tidak boleh menghapus items atau men-zero-kan totalKas.
+      const data: Prisma.FinanceWorkingExpenseSheetUncheckedUpdateInput = {};
+      if (updates.projectId !== undefined) data.projectId = asTrimmedString(updates.projectId) || null;
+      if (updates.client !== undefined) data.client = asTrimmedString(updates.client) || null;
+      if (updates.project !== undefined || updates.projectName !== undefined)
+        data.projectName = asTrimmedString(updates.project) || asTrimmedString(updates.projectName) || null;
+      if (updates.location !== undefined) data.location = asTrimmedString(updates.location) || null;
+      if (updates.date !== undefined) data.date = new Date(inventoryDateString(asTrimmedString(updates.date)));
+      if (updates.noHal !== undefined) data.noHal = asTrimmedString(updates.noHal) || id;
+      if (updates.revisi !== undefined) data.revisi = asTrimmedString(updates.revisi) || null;
+      if (updates.totalKas !== undefined) data.totalKas = Math.max(0, toFiniteNumber(updates.totalKas, 0));
+      if (updates.status !== undefined) data.status = asTrimmedString(updates.status) || "Draft";
+      if (updates.createdBy !== undefined) data.createdBy = asTrimmedString(updates.createdBy) || null;
+      if (Array.isArray(updates.items)) {
+        data.items = {
+          deleteMany: {},
+          create: updates.items
+            .map((raw, index) => {
+              const item = asRecord(raw);
+              return {
+                id: asTrimmedString(item.id) || `${id}-ITEM-${String(index + 1).padStart(3, "0")}`,
+                date: asTrimmedString(item.date) ? new Date(String(item.date)) : undefined,
+                description: asTrimmedString(item.description) || "",
+                nominal: Math.max(0, toFiniteNumber(item.nominal, 0)),
+                hasNota: asTrimmedString(item.hasNota) || undefined,
+                remark: asTrimmedString(item.remark) || undefined,
+              };
+            })
+            .filter((item) => item.description),
+        };
+      }
+      await db.financeWorkingExpenseSheet.update({ where: { id }, data });
       return getResource(resource, id, db);
     }
     case "petty-cash-transactions": {
-      const meta = parsePettySource(asTrimmedString(updates.source));
-      await db.financePettyCashTransaction.update({
-        where: { id },
-        data: {
-          projectId: asTrimmedString(updates.projectId) || null,
-          employeeId: asTrimmedString(updates.employeeId) || null,
-          date: new Date(inventoryDateString(asTrimmedString(updates.date))),
-          ref: asTrimmedString(updates.ref) || null,
-          description: asTrimmedString(updates.description) || id,
-          amount: toFiniteNumber(updates.amount, 0),
-          accountCode: meta.accountCode || "00000",
-          direction: meta.direction,
-          projectName: asTrimmedString(updates.project) || null,
-          adminName: asTrimmedString(updates.admin) || null,
-          transactionType: asTrimmedString(updates.type) || "PETTY",
-          sourceKind: meta.kind || "transaction",
-        },
-      });
+      // PATCH parsial: hanya ubah field yang dikirim; jangan zero-kan amount
+      // atau balik direction/accountCode.
+      const data: Prisma.FinancePettyCashTransactionUncheckedUpdateInput = {};
+      if (updates.projectId !== undefined) data.projectId = asTrimmedString(updates.projectId) || null;
+      if (updates.employeeId !== undefined) data.employeeId = asTrimmedString(updates.employeeId) || null;
+      if (updates.date !== undefined) data.date = new Date(inventoryDateString(asTrimmedString(updates.date)));
+      if (updates.ref !== undefined) data.ref = asTrimmedString(updates.ref) || null;
+      if (updates.description !== undefined) data.description = asTrimmedString(updates.description) || id;
+      if (updates.amount !== undefined) data.amount = Math.max(0, toFiniteNumber(updates.amount, 0));
+      if (updates.source !== undefined) {
+        const meta = parsePettySource(asTrimmedString(updates.source));
+        data.accountCode = meta.accountCode || "00000";
+        data.direction = meta.direction;
+        data.sourceKind = meta.kind || "transaction";
+      }
+      if (updates.project !== undefined) data.projectName = asTrimmedString(updates.project) || null;
+      if (updates.admin !== undefined) data.adminName = asTrimmedString(updates.admin) || null;
+      if (updates.type !== undefined) data.transactionType = asTrimmedString(updates.type) || "PETTY";
+      await db.financePettyCashTransaction.update({ where: { id }, data });
       return getResource(resource, id, db);
     }
     case "bank-reconciliations": {
@@ -599,19 +603,17 @@ async function updateResource(resource: FinanceMiscResource, id: string, updates
       return getResource(resource, id, db);
     }
     case "kasbons": {
-      await db.hrKasbon.update({
-        where: { id },
-        data: {
-          employeeId: asTrimmedString(updates.employeeId) || null,
-          projectId: asTrimmedString(updates.projectId) || null,
-          employeeName: asTrimmedString(updates.employeeName) || null,
-          date: new Date(inventoryDateString(asTrimmedString(updates.date))),
-          amount: toFiniteNumber(updates.amount, 0),
-          status: asTrimmedString(updates.status) || "Pending",
-          approved: Boolean(updates.approved),
-          createdBy: asTrimmedString(updates.createdBy) || null,
-        },
-      });
+      // PATCH parsial: jangan zero-kan amount atau reset status/approved.
+      const data: Prisma.HrKasbonUncheckedUpdateInput = {};
+      if (updates.employeeId !== undefined) data.employeeId = asTrimmedString(updates.employeeId) || null;
+      if (updates.projectId !== undefined) data.projectId = asTrimmedString(updates.projectId) || null;
+      if (updates.employeeName !== undefined) data.employeeName = asTrimmedString(updates.employeeName) || null;
+      if (updates.date !== undefined) data.date = new Date(inventoryDateString(asTrimmedString(updates.date)));
+      if (updates.amount !== undefined) data.amount = Math.max(0, toFiniteNumber(updates.amount, 0));
+      if (updates.status !== undefined) data.status = asTrimmedString(updates.status) || "Pending";
+      if (updates.approved !== undefined) data.approved = Boolean(updates.approved);
+      if (updates.createdBy !== undefined) data.createdBy = asTrimmedString(updates.createdBy) || null;
+      await db.hrKasbon.update({ where: { id }, data });
       return getResource(resource, id, db);
     }
   }
@@ -632,10 +634,9 @@ async function deleteResource(resource: FinanceMiscResource, id: string, db: Fin
       return;
     }
     case "closed-years":
-      await db.appEntity.delete({
-        where: { resource_entityId: { resource: "finance-closed-years", entityId: id } },
-      });
-      return;
+      // Tahun buku yang sudah ditutup tidak boleh dihapus/dibuka lewat API;
+      // pembukaan kunci harus lewat prosedur khusus, bukan DELETE biasa.
+      throw new Error("CLOSED_YEAR_DELETE_DISABLED");
     case "kasbons":
       await db.hrKasbon.delete({ where: { id } });
       return;
@@ -753,6 +754,14 @@ function registerRoutes(resource: FinanceMiscResource) {
       return res.status(204).send();
     } catch (err) {
       if (sendFinancialYearError(res, err)) return;
+      if (err instanceof Error && err.message === "CLOSED_YEAR_DELETE_DISABLED") {
+        return sendError(res, 409, {
+          code: "CLOSED_YEAR_DELETE_DISABLED",
+          message:
+            "Tahun buku yang sudah ditutup tidak dapat dihapus. Buka kunci lewat prosedur pembukaan tahun buku.",
+          legacyError: "Closed fiscal year cannot be deleted",
+        });
+      }
       if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2025") {
         return sendError(res, 404, { code: "NOT_FOUND", message: "Not found", legacyError: "Not found" });
       }
@@ -771,12 +780,16 @@ function registerRoutes(resource: FinanceMiscResource) {
     }
 
     try {
-      const existing = await listResource(resource);
       const incomingIds = new Set(parsed.data.map((item) => item.id));
-      const removedRows = existing.filter((item) => !incomingIds.has(String((item as { id: string }).id)));
-      await runFinanceTransaction(resource, [...parsed.data, ...removedRows], async (tx) => {
+      await runFinanceTransaction(resource, parsed.data, async (tx) => {
         const currentRows = await listResource(resource, tx);
         const existingIds = new Set(currentRows.map((item) => String((item as { id: string }).id)));
+        const removedRows = currentRows.filter(
+          (item) => !incomingIds.has(String((item as { id: string }).id)),
+        );
+        // Lock sudah diambil runFinanceTransaction; baris yang akan dihapus
+        // dibaca di dalam transaksi sehingga tahun bukunya tidak stale.
+        await assertFinancialYearsOpen(tx, yearsFromRows(removedRows));
         for (const item of parsed.data) {
           await assertOptionalRefs(resource, item, tx);
           if (existingIds.has(item.id)) await updateResource(resource, item.id, item, tx);
@@ -790,6 +803,14 @@ function registerRoutes(resource: FinanceMiscResource) {
       return res.json({ message: "Bulk upsert completed", count: parsed.data.length });
     } catch (err) {
       if (sendFinancialYearError(res, err)) return;
+      if (err instanceof Error && err.message === "CLOSED_YEAR_DELETE_DISABLED") {
+        return sendError(res, 409, {
+          code: "CLOSED_YEAR_DELETE_DISABLED",
+          message:
+            "Tahun buku yang sudah ditutup tidak dapat dihapus. Buka kunci lewat prosedur pembukaan tahun buku.",
+          legacyError: "Closed fiscal year cannot be deleted",
+        });
+      }
       if (err instanceof Error && err.message.includes("tidak ditemukan")) {
         return sendError(res, 400, { code: "PAYLOAD_VALIDATION_ERROR", message: err.message, legacyError: err.message });
       }

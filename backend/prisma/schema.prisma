@@ -25,6 +25,7 @@ enum Role {
   SUPPLY_CHAIN
   WAREHOUSE
   OPERATIONS
+  ADMIN_PENAWARAN
 }
 
 model User {
@@ -81,12 +82,12 @@ model Quotation {
   customerId             String?
   kepada                 String?
   perihal                String?
-  totalSelling           Float?
-  discount               Float?
-  ppnPercent             Float?
-  ppnAmount              Float?
-  grandTotal             Float?
-  grandTotalWithTax      Float?
+  totalSelling           Decimal?               @db.Decimal(18, 2)
+  discount               Decimal?               @db.Decimal(18, 2)
+  ppnPercent             Decimal?               @db.Decimal(18, 4)
+  ppnAmount              Decimal?               @db.Decimal(18, 2)
+  grandTotal             Decimal?               @db.Decimal(18, 2)
+  grandTotalWithTax      Decimal?               @db.Decimal(18, 2)
   internalApprovalStatus String?
   internalApprovedBy     String?
   internalApprovedAt     DateTime?
@@ -122,7 +123,7 @@ model QuotationSection {
   position    Int             @default(0)
   name        String
   label       String?
-  subtotal    Float           @default(0)
+  subtotal    Decimal         @default(0) @db.Decimal(18, 2)
   payload     Json
   quotation   Quotation       @relation(fields: [quotationId], references: [id], onDelete: Cascade, onUpdate: Cascade)
   items       QuotationItem[]
@@ -138,11 +139,11 @@ model QuotationItem {
   position       Int              @default(0)
   description    String
   subDescription String?
-  qty            Float            @default(0)
+  qty            Decimal          @default(0) @db.Decimal(18, 4)
   unit           String?
-  sellingPerUnit Float            @default(0)
-  discount       Float            @default(0)
-  totalSelling   Float            @default(0)
+  sellingPerUnit Decimal          @default(0) @db.Decimal(18, 2)
+  discount       Decimal          @default(0) @db.Decimal(18, 2)
+  totalSelling   Decimal          @default(0) @db.Decimal(18, 2)
   payload        Json
   section        QuotationSection @relation(fields: [sectionId], references: [id], onDelete: Cascade, onUpdate: Cascade)
   createdAt      DateTime         @default(now())
@@ -158,7 +159,7 @@ model QuotationRevision {
   trigger     String?
   reason      String?
   revisedBy   String?
-  grandTotal  Float?
+  grandTotal  Decimal?  @db.Decimal(18, 2)
   snapshot    Json
   quotation   Quotation @relation(fields: [quotationId], references: [id], onDelete: Cascade, onUpdate: Cascade)
   createdAt   DateTime  @default(now())
@@ -171,7 +172,7 @@ model SalesTarget {
   id            String   @id @default(uuid())
   year          Int
   month         Int?
-  targetAmount  Float
+  targetAmount  Decimal  @db.Decimal(18, 2)
   targetType    String   @default("REVENUE")
   department    String?
   salespersonId String?
@@ -224,16 +225,16 @@ model DataCollectionMaterial {
   productName      String
   category         String?
   supplier         String?
-  density          Float?
-  thickness        Float?
-  surface          Float?
-  volume           Float?
-  weightInstalled  Float?
-  qtyInstalled     Float?
+  density          Decimal?       @db.Decimal(18, 4)
+  thickness        Decimal?       @db.Decimal(18, 4)
+  surface          Decimal?       @db.Decimal(18, 4)
+  volume           Decimal?       @db.Decimal(18, 4)
+  weightInstalled  Decimal?       @db.Decimal(18, 4)
+  qtyInstalled     Decimal?       @db.Decimal(18, 4)
   unitInstalled    String?
-  reservePercent   Float?
-  unitSize         Float?
-  qtyDelivery      Float?
+  reservePercent   Decimal?       @db.Decimal(18, 4)
+  unitSize         Decimal?       @db.Decimal(18, 4)
+  qtyDelivery      Decimal?       @db.Decimal(18, 4)
   unitDelivery     String?
   notes            String?
   payload          Json
@@ -252,8 +253,8 @@ model DataCollectionManpower {
   position         Int            @default(0)
   jobPosition      String
   assignedPerson   String?
-  quantity         Float?
-  duration         Float?
+  quantity         Decimal?       @db.Decimal(18, 4)
+  duration         Decimal?       @db.Decimal(18, 4)
   notes            String?
   payload          Json
   dataCollection   DataCollection @relation(fields: [dataCollectionId], references: [id], onDelete: Cascade, onUpdate: Cascade)
@@ -271,7 +272,7 @@ model DataCollectionSchedule {
   activity         String
   startDate        String?
   endDate          String?
-  duration         Float?
+  duration         Decimal?       @db.Decimal(18, 4)
   status           String?
   dependencies     Json?
   payload          Json
@@ -289,7 +290,7 @@ model DataCollectionConsumable {
   position         Int            @default(0)
   itemName         String
   category         String?
-  quantity         Float?
+  quantity         Decimal?       @db.Decimal(18, 4)
   unit             String?
   payload          Json
   dataCollection   DataCollection @relation(fields: [dataCollectionId], references: [id], onDelete: Cascade, onUpdate: Cascade)
@@ -306,9 +307,9 @@ model DataCollectionEquipment {
   dataCollectionId String
   position         Int            @default(0)
   equipmentName    String
-  quantity         Float?
+  quantity         Decimal?       @db.Decimal(18, 4)
   unit             String?
-  duration         Float?
+  duration         Decimal?       @db.Decimal(18, 4)
   supplier         String?
   payload          Json
   dataCollection   DataCollection @relation(fields: [dataCollectionId], references: [id], onDelete: Cascade, onUpdate: Cascade)
@@ -329,8 +330,8 @@ model ProjectRecord {
   customerName                         String?
   status                               String?
   approvalStatus                       String?
-  nilaiKontrak                         Float?
-  progress                             Float?
+  nilaiKontrak                         Decimal?                              @db.Decimal(18, 2)
+  progress                             Decimal?                              @db.Decimal(18, 4)
   payload                              Json
   quotation                            Quotation?                            @relation(fields: [quotationId], references: [id], onDelete: SetNull, onUpdate: Cascade)
   customer                             CustomerRecord?                       @relation(fields: [customerId], references: [id], onDelete: SetNull, onUpdate: Cascade)
@@ -467,22 +468,23 @@ model EmployeeRecord {
   address                      String?
   emergencyContact             String?
   emergencyPhone               String?
-  salary                       Float?
-  transportAllowance           Float?
-  mealAllowancePerDay          Float?
-  attendanceIncentive          Float?
-  overtimeRateMultiplier       Float?
-  bpjsHealthEmployeePercent    Float?
-  jhtEmployeePercent           Float?
-  jpEmployeePercent            Float?
-  pph21Amount                  Float?
+  salary                       Decimal?                            @db.Decimal(18, 2)
+  transportAllowance           Decimal?                            @db.Decimal(18, 2)
+  mealAllowancePerDay          Decimal?                            @db.Decimal(18, 2)
+  attendanceIncentive          Decimal?                            @db.Decimal(18, 2)
+  overtimeRateMultiplier       Decimal?                            @db.Decimal(18, 4)
+  bpjsHealthEmployeePercent    Decimal?                            @db.Decimal(18, 4)
+  jhtEmployeePercent           Decimal?                            @db.Decimal(18, 4)
+  jpEmployeePercent            Decimal?                            @db.Decimal(18, 4)
+  pph21Amount                  Decimal?                            @db.Decimal(18, 2)
+  ptkpStatus                   String?
   status                       String
   bank                         String?
   bankAccount                  String?
   npwp                         String?
   bpjsKesehatan                String?
   bpjsKetenagakerjaan          String?
-  leaveQuota                   Float?
+  leaveQuota                   Decimal?                            @db.Decimal(18, 4)
   attendances                  AttendanceRecord[]
   payrolls                     PayrollRecord[]
   kasbons                      KasbonRecord[]
@@ -509,8 +511,8 @@ model AttendanceRecord {
   status       String
   checkIn      String?
   checkOut     String?
-  workHours    Float?
-  overtime     Float?
+  workHours    Decimal?       @db.Decimal(18, 4)
+  overtime     Decimal?       @db.Decimal(18, 4)
   location     String?
   notes        String?
   employee     EmployeeRecord @relation(fields: [employeeId], references: [id], onDelete: Restrict, onUpdate: Cascade)
@@ -584,11 +586,11 @@ model InventoryItem {
   category          String
   unit              String
   location          String
-  minStock          Float                      @default(0)
-  onHandQty         Float                      @default(0)
-  reservedQty       Float                      @default(0)
-  onOrderQty        Float                      @default(0)
-  unitPrice         Float?
+  minStock          Decimal                    @default(0) @db.Decimal(18, 4)
+  onHandQty         Decimal                    @default(0) @db.Decimal(18, 4)
+  reservedQty       Decimal                    @default(0) @db.Decimal(18, 4)
+  onOrderQty        Decimal                    @default(0) @db.Decimal(18, 4)
+  unitPrice         Decimal?                   @db.Decimal(18, 2)
   supplierName      String?
   status            String?
   lastStockUpdateAt DateTime?
@@ -639,7 +641,7 @@ model InventoryStockInItem {
   inventoryItemId String?
   itemCode        String
   itemName        String
-  qty             Float
+  qty             Decimal          @db.Decimal(18, 4)
   unit            String
   batchNo         String?
   expiryDate      DateTime?
@@ -684,7 +686,7 @@ model InventoryStockOutItem {
   inventoryItemId String?
   itemCode        String
   itemName        String
-  qty             Float
+  qty             Decimal           @db.Decimal(18, 4)
   unit            String
   batchNo         String?
   notes           String?
@@ -705,11 +707,11 @@ model InventoryStockMovement {
   inventoryItemId String?
   itemCode        String
   itemName        String
-  qty             Float
+  qty             Decimal               @db.Decimal(18, 4)
   unit            String
   location        String
-  stockBefore     Float
-  stockAfter      Float
+  stockBefore     Decimal               @db.Decimal(18, 4)
+  stockAfter      Decimal               @db.Decimal(18, 4)
   batchNo         String?
   expiryDate      DateTime?
   supplierName    String?
@@ -764,9 +766,9 @@ model InventoryStockOpnameItem {
   inventoryItemId String?
   itemCode        String
   itemName        String
-  systemQty       Float
-  physicalQty     Float
-  differenceQty   Float
+  systemQty       Decimal              @db.Decimal(18, 4)
+  physicalQty     Decimal              @db.Decimal(18, 4)
+  differenceQty   Decimal              @db.Decimal(18, 4)
   notes           String?
   stockOpname     InventoryStockOpname @relation(fields: [stockOpnameId], references: [id], onDelete: Cascade, onUpdate: Cascade)
   inventoryItem   InventoryItem?       @relation(fields: [inventoryItemId], references: [id], onDelete: SetNull, onUpdate: Cascade)
@@ -787,11 +789,11 @@ model InvoiceRecord {
   customerName        String?
   alamat              String
   noPO                String
-  subtotal            Float
-  ppn                 Float
-  totalBayar          Float
-  paidAmount          Float                             @default(0)
-  outstandingAmount   Float                             @default(0)
+  subtotal            Decimal                           @db.Decimal(18, 2)
+  ppn                 Decimal                           @db.Decimal(18, 2)
+  totalBayar          Decimal                           @db.Decimal(18, 2)
+  paidAmount          Decimal                           @default(0) @db.Decimal(18, 2)
+  outstandingAmount   Decimal                           @default(0) @db.Decimal(18, 2)
   status              String
   projectName         String?
   noFakturPajak       String?
@@ -817,10 +819,10 @@ model InvoiceItem {
   id          String        @id @default(uuid())
   invoiceId   String
   deskripsi   String
-  qty         Float
+  qty         Decimal       @db.Decimal(18, 4)
   unit        String
-  hargaSatuan Float
-  total       Float
+  hargaSatuan Decimal       @db.Decimal(18, 2)
+  total       Decimal       @db.Decimal(18, 2)
   sourceRef   String?
   batchNo     String?
   invoice     InvoiceRecord @relation(fields: [invoiceId], references: [id], onDelete: Cascade, onUpdate: Cascade)
@@ -859,13 +861,13 @@ model ProcurementPurchaseOrder {
   supplierContact String?
   attention       String?
   notes           String?
-  ppnRate         Float                          @default(0)
+  ppnRate         Decimal                        @default(0) @db.Decimal(18, 4)
   topDays         Int                            @default(0)
   ref             String?
   poCode          String?
   deliveryDate    DateTime?
   signatoryName   String?
-  totalAmount     Float                          @default(0)
+  totalAmount     Decimal                        @default(0) @db.Decimal(18, 2)
   status          String
   project         ProjectRecord?                 @relation(fields: [projectId], references: [id], onDelete: SetNull, onUpdate: Cascade)
   vendor          VendorRecord?                  @relation(fields: [vendorId], references: [id], onDelete: SetNull, onUpdate: Cascade)
@@ -886,11 +888,11 @@ model ProcurementPurchaseOrderItem {
   purchaseOrderId String
   itemCode        String?
   itemName        String
-  qty             Float                    @default(0)
+  qty             Decimal                  @default(0) @db.Decimal(18, 4)
   unit            String
-  unitPrice       Float                    @default(0)
-  total           Float                    @default(0)
-  qtyReceived     Float                    @default(0)
+  unitPrice       Decimal                  @default(0) @db.Decimal(18, 2)
+  total           Decimal                  @default(0) @db.Decimal(18, 2)
+  qtyReceived     Decimal                  @default(0) @db.Decimal(18, 4)
   source          String?
   sourceRef       String?
   purchaseOrder   ProcurementPurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade, onUpdate: Cascade)
@@ -945,11 +947,11 @@ model ProcurementReceivingItem {
   receivingId           String
   itemCode              String?
   itemName              String
-  qtyOrdered            Float                @default(0)
-  qtyReceived           Float                @default(0)
-  qtyGood               Float                @default(0)
-  qtyDamaged            Float                @default(0)
-  qtyPreviouslyReceived Float                @default(0)
+  qtyOrdered            Decimal              @default(0) @db.Decimal(18, 4)
+  qtyReceived           Decimal              @default(0) @db.Decimal(18, 4)
+  qtyGood               Decimal              @default(0) @db.Decimal(18, 4)
+  qtyDamaged            Decimal              @default(0) @db.Decimal(18, 4)
+  qtyPreviouslyReceived Decimal              @default(0) @db.Decimal(18, 4)
   unit                  String
   condition             String?
   batchNo               String?
@@ -1039,8 +1041,8 @@ model ProductionWorkOrder {
   projectId                 String
   projectName               String
   itemToProduce             String
-  targetQty                 Float
-  completedQty              Float                                 @default(0)
+  targetQty                 Decimal                               @db.Decimal(18, 4)
+  completedQty              Decimal                               @default(0) @db.Decimal(18, 4)
   status                    String
   priority                  String
   deadline                  DateTime?
@@ -1075,10 +1077,10 @@ model ProductionWorkOrderBom {
   itemCode         String?
   itemName         String
   unit             String
-  qty              Float
-  completedQty     Float               @default(0)
+  qty              Decimal             @db.Decimal(18, 4)
+  completedQty     Decimal             @default(0) @db.Decimal(18, 4)
   needsProcurement Boolean             @default(false)
-  stockAvailable   Float?
+  stockAvailable   Decimal?            @db.Decimal(18, 4)
   workOrder        ProductionWorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Cascade, onUpdate: Cascade)
 
   @@index([workOrderId])
@@ -1092,9 +1094,9 @@ model ProductionExecutionReport {
   photoAssetId   String?
   tanggal        DateTime
   shift          String?
-  outputQty      Float                                @default(0)
-  rejectQty      Float                                @default(0)
-  efficiency     Float?
+  outputQty      Decimal                              @default(0) @db.Decimal(18, 4)
+  rejectQty      Decimal                              @default(0) @db.Decimal(18, 4)
+  efficiency     Decimal?                             @db.Decimal(18, 4)
   notes          String?
   workerName     String?
   activity       String?
@@ -1142,7 +1144,7 @@ model ProductionTrackerEntry {
   workOrderId    String?
   customer       String?
   itemType       String
-  qty            Float                @default(0)
+  qty            Decimal              @default(0) @db.Decimal(18, 4)
   startDate      DateTime?
   finishDate     DateTime?
   status         String
@@ -1168,9 +1170,9 @@ model ProductionQcInspection {
   tanggal        DateTime
   batchNo        String?
   itemName       String
-  qtyInspected   Float                             @default(0)
-  qtyPassed      Float                             @default(0)
-  qtyRejected    Float                             @default(0)
+  qtyInspected   Decimal                           @default(0) @db.Decimal(18, 4)
+  qtyPassed      Decimal                           @default(0) @db.Decimal(18, 4)
+  qtyRejected    Decimal                           @default(0) @db.Decimal(18, 4)
   inspectorName  String
   status         String
   notes          String?
@@ -1281,7 +1283,7 @@ model ProductionMaterialRequestItem {
   materialRequestId String
   itemCode          String?
   itemName          String
-  qty               Float
+  qty               Decimal                   @db.Decimal(18, 4)
   unit              String
   materialRequest   ProductionMaterialRequest @relation(fields: [materialRequestId], references: [id], onDelete: Cascade, onUpdate: Cascade)
 
@@ -1333,7 +1335,7 @@ model LogisticsSuratJalanItem {
   suratJalanId String
   itemKode     String?
   namaItem     String
-  jumlah       Float
+  jumlah       Decimal             @db.Decimal(18, 4)
   satuan       String
   batchNo      String?
   keterangan   String?
@@ -1377,7 +1379,7 @@ model LogisticsProofOfDeliveryItem {
   proofOfDeliveryId String
   itemKode          String?
   namaItem          String
-  jumlah            Float
+  jumlah            Decimal                  @db.Decimal(18, 4)
   satuan            String
   batchNo           String?
   keterangan        String?
@@ -1568,14 +1570,15 @@ model AssetRecord {
   status                   String
   condition                String
   purchaseDate             String?
-  purchasePrice            Float?
-  rentalPrice              Float?
+  purchasePrice            Decimal?                 @db.Decimal(18, 2)
+  rentalPrice              Decimal?                 @db.Decimal(18, 2)
   lastMaintenance          String?
   nextMaintenance          String?
   operatorName             String?
   projectName              String?
   rentedTo                 String?
   notes                    String?
+  spesifikasi              String?
   project                  ProjectRecord?           @relation(fields: [projectId], references: [id], onDelete: SetNull, onUpdate: Cascade)
   maintenances             MaintenanceRecord[]
   fleetHealthEntries       FleetHealthEntry[]
@@ -1603,7 +1606,7 @@ model MaintenanceRecord {
   scheduledDate   String?
   completedDate   String?
   status          String
-  cost            Float?
+  cost            Decimal?       @db.Decimal(18, 2)
   performedBy     String?
   notes           String?
   asset           AssetRecord?   @relation(fields: [assetId], references: [id], onDelete: SetNull, onUpdate: Cascade)
@@ -1622,15 +1625,15 @@ model PayrollRecord {
   employeeId     String?
   month          String
   year           Int
-  totalPayroll   Float
+  totalPayroll   Decimal         @db.Decimal(18, 2)
   status         String
   employeeCount  Int
   employeeName   String?
-  baseSalary     Float?
-  totalOutput    Float?
-  incentiveTotal Float?
-  allowanceTotal Float?
-  totalGaji      Float?
+  baseSalary     Decimal?        @db.Decimal(18, 2)
+  totalOutput    Decimal?        @db.Decimal(18, 2)
+  incentiveTotal Decimal?        @db.Decimal(18, 2)
+  allowanceTotal Decimal?        @db.Decimal(18, 2)
+  totalGaji      Decimal?        @db.Decimal(18, 2)
   employee       EmployeeRecord? @relation(fields: [employeeId], references: [id], onDelete: SetNull, onUpdate: Cascade)
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
@@ -1646,7 +1649,7 @@ model ArchiveRegistryEntry {
   tanggal     DateTime
   reference   String
   description String
-  amount      Float
+  amount      Decimal  @db.Decimal(18, 2)
   projectName String
   adminName   String
   type        String
@@ -1813,12 +1816,12 @@ model FinanceCustomerInvoice {
   customerName        String
   projectName         String?
   perihal             String?
-  subtotal            Float                           @default(0)
-  ppn                 Float                           @default(0)
-  pph                 Float                           @default(0)
-  totalAmount         Float                           @default(0)
-  paidAmount          Float                           @default(0)
-  outstandingAmount   Float                           @default(0)
+  subtotal            Decimal                         @default(0) @db.Decimal(18, 2)
+  ppn                 Decimal                         @default(0) @db.Decimal(18, 2)
+  pph                 Decimal                         @default(0) @db.Decimal(18, 2)
+  totalAmount         Decimal                         @default(0) @db.Decimal(18, 2)
+  paidAmount          Decimal                         @default(0) @db.Decimal(18, 2)
+  outstandingAmount   Decimal                         @default(0) @db.Decimal(18, 2)
   status              String
   noKontrak           String?
   noPO                String?
@@ -1847,10 +1850,10 @@ model FinanceCustomerInvoiceItem {
   id          String                 @id
   invoiceId   String
   description String
-  qty         Float                  @default(0)
+  qty         Decimal                @default(0) @db.Decimal(18, 4)
   unit        String
-  unitPrice   Float                  @default(0)
-  amount      Float                  @default(0)
+  unitPrice   Decimal                @default(0) @db.Decimal(18, 2)
+  amount      Decimal                @default(0) @db.Decimal(18, 2)
   invoice     FinanceCustomerInvoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade, onUpdate: Cascade)
 
   @@index([invoiceId])
@@ -1860,7 +1863,7 @@ model FinanceCustomerInvoicePayment {
   id        String                 @id
   invoiceId String
   tanggal   DateTime
-  nominal   Float                  @default(0)
+  nominal   Decimal                @default(0) @db.Decimal(18, 2)
   method    String
   proofNo   String?
   bankName  String?
@@ -1887,9 +1890,9 @@ model FinanceVendorExpense {
   kategori        String?
   costRecognition String         @default("DIRECT_PROJECT")
   keterangan      String?
-  nominal         Float          @default(0)
-  ppn             Float          @default(0)
-  totalNominal    Float          @default(0)
+  nominal         Decimal        @default(0) @db.Decimal(18, 2)
+  ppn             Decimal        @default(0) @db.Decimal(18, 2)
+  totalNominal    Decimal        @default(0) @db.Decimal(18, 2)
   hasKwitansi     Boolean        @default(false)
   kwitansiUrl     String?
   noKwitansi      String?
@@ -1923,10 +1926,10 @@ model FinanceVendorInvoice {
   number              String
   noPO                String?
   supplierName        String
-  totalAmount         Float                          @default(0)
-  paidAmount          Float                          @default(0)
-  outstandingAmount   Float                          @default(0)
-  ppn                 Float                          @default(0)
+  totalAmount         Decimal                        @default(0) @db.Decimal(18, 2)
+  paidAmount          Decimal                        @default(0) @db.Decimal(18, 2)
+  outstandingAmount   Decimal                        @default(0) @db.Decimal(18, 2)
+  ppn                 Decimal                        @default(0) @db.Decimal(18, 2)
   status              String
   tanggal             DateTime?
   dueDate             DateTime?
@@ -1956,7 +1959,7 @@ model FinanceVendorInvoicePayment {
   id              String               @id
   vendorInvoiceId String
   tanggal         DateTime
-  nominal         Float                @default(0)
+  nominal         Decimal              @default(0) @db.Decimal(18, 2)
   metodeBayar     String?
   noBukti         String?
   bank            String?
@@ -1993,7 +1996,7 @@ model FinanceWorkingExpenseSheet {
   date          DateTime
   noHal         String
   revisi        String?
-  totalKas      Float                       @default(0)
+  totalKas      Decimal                     @default(0) @db.Decimal(18, 2)
   status        String
   createdBy     String?
   legacyPayload Json?
@@ -2012,7 +2015,7 @@ model FinanceWorkingExpenseItem {
   sheetId     String
   date        DateTime?
   description String
-  nominal     Float                      @default(0)
+  nominal     Decimal                    @default(0) @db.Decimal(18, 2)
   hasNota     String?
   remark      String?
   sheet       FinanceWorkingExpenseSheet @relation(fields: [sheetId], references: [id], onDelete: Cascade, onUpdate: Cascade)
@@ -2031,9 +2034,9 @@ model FinanceBankReconciliation {
   periodLabel               String?
   account                   String?
   description               String?
-  debit                     Float                    @default(0)
-  credit                    Float                    @default(0)
-  balance                   Float                    @default(0)
+  debit                     Decimal                  @default(0) @db.Decimal(18, 2)
+  credit                    Decimal                  @default(0) @db.Decimal(18, 2)
+  balance                   Decimal                  @default(0) @db.Decimal(18, 2)
   status                    String
   matchedId                 String?
   note                      String?
@@ -2062,7 +2065,7 @@ model FinancePettyCashTransaction {
   date            DateTime
   ref             String?
   description     String
-  amount          Float           @default(0)
+  amount          Decimal         @default(0) @db.Decimal(18, 2)
   accountCode     String?
   direction       String
   projectName     String?
@@ -2086,7 +2089,7 @@ model HrKasbon {
   projectId     String?
   employeeName  String?
   date          DateTime
-  amount        Float           @default(0)
+  amount        Decimal         @default(0) @db.Decimal(18, 2)
   status        String
   approved      Boolean         @default(false)
   createdBy     String?
@@ -2110,13 +2113,13 @@ model ProjectLaborEntry {
   workerType      String
   workerName      String
   role            String?
-  qtyDays         Float           @default(1)
+  qtyDays         Decimal         @default(1) @db.Decimal(18, 4)
   checkIn         String?
   checkOut        String?
-  hoursWorked     Float           @default(0)
-  overtimeHours   Float           @default(0)
-  rate            Float           @default(0)
-  amount          Float           @default(0)
+  hoursWorked     Decimal         @default(0) @db.Decimal(18, 4)
+  overtimeHours   Decimal         @default(0) @db.Decimal(18, 4)
+  rate            Decimal         @default(0) @db.Decimal(18, 2)
+  amount          Decimal         @default(0) @db.Decimal(18, 2)
   source          String          @default("FIELD_RECORD")
   notes           String?
   createdByUserId String?
@@ -2225,7 +2228,7 @@ model HrLeaveRecord {
   leaveType    String
   startDate    String
   endDate      String
-  totalDays    Float
+  totalDays    Decimal  @db.Decimal(18, 4)
   reason       String
   status       String
   notes        String?
@@ -2249,8 +2252,8 @@ model KoperasiMember {
   employeeName         String
   joinDate             DateTime
   status               String             @default("Active")
-  simpananPokok        Float              @default(0)
-  simpananWajibBulanan Float              @default(0)
+  simpananPokok        Decimal            @default(0) @db.Decimal(18, 2)
+  simpananWajibBulanan Decimal            @default(0) @db.Decimal(18, 2)
   employee             EmployeeRecord     @relation(fields: [employeeId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   simpanans            KoperasiSimpanan[]
   pinjamans            KoperasiPinjaman[]
@@ -2265,7 +2268,7 @@ model KoperasiSimpanan {
   memberId   String
   memberName String
   type       String
-  amount     Float          @default(0)
+  amount     Decimal        @default(0) @db.Decimal(18, 2)
   date       DateTime
   period     String?
   notes      String?
@@ -2282,12 +2285,12 @@ model KoperasiPinjaman {
   pinjamanNo        String         @unique
   memberId          String
   memberName        String
-  amount            Float          @default(0)
-  adminFeePercent   Float          @default(0)
-  adminFeeAmount    Float          @default(0)
-  totalAmount       Float          @default(0)
+  amount            Decimal        @default(0) @db.Decimal(18, 2)
+  adminFeePercent   Decimal        @default(0) @db.Decimal(18, 4)
+  adminFeeAmount    Decimal        @default(0) @db.Decimal(18, 2)
+  totalAmount       Decimal        @default(0) @db.Decimal(18, 2)
   installmentCount  Int
-  installmentAmount Float          @default(0)
+  installmentAmount Decimal        @default(0) @db.Decimal(18, 2)
   paidInstallments  Int            @default(0)
   requestDate       DateTime
   status            String         @default("Pending")
@@ -2309,7 +2312,7 @@ model KoperasiCashTransaction {
   date                DateTime
   type                String
   direction           String
-  amount              Float                       @default(0)
+  amount              Decimal                     @default(0) @db.Decimal(18, 2)
   status              String                      @default("Posted")
   referenceType       String?
   referenceId         String?
@@ -2411,10 +2414,10 @@ model FleetHealthEntry {
   projectId       String
   tanggal         DateTime
   equipmentName   String
-  hoursUsed       Float
+  hoursUsed       Decimal       @db.Decimal(18, 4)
   operatorName    String
-  fuelConsumption Float?
-  costPerHour     Float
+  fuelConsumption Decimal?      @db.Decimal(18, 4)
+  costPerHour     Decimal       @db.Decimal(18, 2)
   status          String
   notes           String?
   asset           AssetRecord   @relation(fields: [assetId], references: [id], onDelete: Restrict, onUpdate: Cascade)

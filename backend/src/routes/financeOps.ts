@@ -9,8 +9,32 @@ import { sendError } from "../utils/http";
 import { hasRoleAccess } from "../utils/roles";
 import { assertFinancialYearsOpen, FinancialYearClosedError, financialYearsFromValue } from "../middlewares/financialYearLock";
 import { receiveCustomerInvoicePayment, payVendorInvoice } from "../services/financePaymentService";
+import { jakartaDateString } from "../utils/jakartaDate";
 
 export const financeOpsRouter = Router();
+
+// Saldo kas kecil dibaca lalu ditulis (read-modify-write). Jalankan pada
+// isolation Serializable + retry P2034 agar dua approval bersamaan tidak
+// saling menimpa saldo.
+async function financeOpsSerializableTransaction<T>(
+  work: (tx: Prisma.TransactionClient) => Promise<T>,
+): Promise<T> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await prisma.$transaction(work, {
+        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+      });
+    } catch (error) {
+      if (
+        !(error instanceof Prisma.PrismaClientKnownRequestError) ||
+        error.code !== "P2034" ||
+        attempt >= 2
+      ) {
+        throw error;
+      }
+    }
+  }
+}
 
 // Approve a petty-cash top-up and post the cash entry atomically.
 const TOPUP_APPROVE_ROLES: Role[] = ["OWNER", "SPV", "ADMIN", "MANAGER", "FINANCE", "FINANCE_ACCOUNTING"];
@@ -24,7 +48,7 @@ financeOpsRouter.post("/finance/petty-cash-topups/:id/approve", authenticate, as
   const topupResource = warehouse ? "finance-warehouse-petty-cash-topups" : "finance-petty-cash-topups";
   const cashResource = warehouse ? "finance-warehouse-petty-cash" : "finance-petty-cash";
   try {
-    const result = await prisma.$transaction(async (tx) => {
+    const result = await financeOpsSerializableTransaction(async (tx) => {
       const row = await tx.appEntity.findUnique({ where: { resource_entityId: { resource: topupResource, entityId: id } } });
       if (!row) throw new Error("Top-up request tidak ditemukan");
       const request = asRecord(row.payload);
@@ -59,6 +83,39 @@ financeOpsRouter.post("/finance/petty-cash-topups/:id/approve", authenticate, as
   } catch (err) {
     if (sendFinancialYearError(res, err)) return;
     return sendError(res, 400, { code: "TOPUP_APPROVAL_FAILED", message: err instanceof Error ? err.message : "Approval gagal", legacyError: "Top-up approval failed" });
+  }
+});
+
+// Reject a petty-cash top-up (no cash posting).
+financeOpsRouter.post("/finance/petty-cash-topups/:id/reject", authenticate, async (req: AuthRequest, res: Response) => {
+  if (!TOPUP_APPROVE_ROLES.includes(req.user?.role as Role)) {
+    return sendError(res, 403, { code: "FORBIDDEN", message: "Hanya Owner/SPV/Admin/Manager/Finance yang dapat menolak top-up kas", legacyError: "Forbidden" });
+  }
+  const id = String(req.params.id || "");
+  const warehouse = req.body?.warehouse === true;
+  const topupResource = warehouse ? "finance-warehouse-petty-cash-topups" : "finance-petty-cash-topups";
+  const reason = asTrimmedString(req.body?.reason) || asTrimmedString(req.body?.rejectedReason) || "";
+  try {
+    const result = await prisma.$transaction(async (tx) => {
+      const row = await tx.appEntity.findUnique({ where: { resource_entityId: { resource: topupResource, entityId: id } } });
+      if (!row) throw new Error("Top-up request tidak ditemukan");
+      const request = asRecord(row.payload);
+      if (String(request.status || "Pending") !== "Pending") throw new Error("Top-up request sudah diproses");
+      const rejected = {
+        ...request,
+        id,
+        status: "Rejected",
+        rejectedBy: req.body?.rejectedBy || req.user?.id || null,
+        rejectedReason: reason,
+        rejectedAt: new Date().toISOString(),
+      };
+      await tx.appEntity.update({ where: { resource_entityId: { resource: topupResource, entityId: id } }, data: { payload: rejected as Prisma.InputJsonValue } });
+      await tx.auditLogEntry.create({ data: { id: randomUUID(), timestamp: new Date(), action: "PETTY_CASH_TOPUP_REJECT", actorUserId: req.user?.id ?? null, actorRole: req.user?.role ?? null, userId: req.user?.id ?? null, module: "Finance", details: `reject ${id}`, status: "Success", domain: "finance", resource: topupResource, entityId: id, operation: "reject" } });
+      return { request: rejected };
+    });
+    return res.json(result);
+  } catch (err) {
+    return sendError(res, 400, { code: "TOPUP_REJECT_FAILED", message: err instanceof Error ? err.message : "Penolakan gagal", legacyError: "Top-up reject failed" });
   }
 });
 
@@ -145,14 +202,15 @@ function toFiniteNumber(value: unknown, fallback = 0): number {
     const parsed = Number(value.replace(/,/g, "").trim());
     return Number.isFinite(parsed) ? parsed : fallback;
   }
+  if (value && typeof (value as { toNumber?: unknown }).toNumber === "function") {
+    const parsed = (value as { toNumber: () => number }).toNumber();
+    if (Number.isFinite(parsed)) return parsed;
+  }
   return fallback;
 }
 
 function inventoryDateString(value: string | Date | null | undefined): string {
-  if (!value) return new Date().toISOString().slice(0, 10);
-  if (value instanceof Date) return value.toISOString().slice(0, 10);
-  const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? String(value) : parsed.toISOString().slice(0, 10);
+  return jakartaDateString(value);
 }
 
 function sanitizeCustomerInvoiceInput(payload: Record<string, unknown>, id: string) {
@@ -197,9 +255,11 @@ function sanitizeCustomerInvoiceInput(payload: Record<string, unknown>, id: stri
   const ppn = Math.max(0, toFiniteNumber(payload.ppn, 0));
   const pph = Math.max(0, toFiniteNumber(payload.pph, 0));
   const totalAmount = Math.max(0, subtotal + ppn - pph);
-  const paidAmountRaw = Math.max(
-    0,
-    payments.reduce((sum, payment) => sum + payment.nominal, 0) || toFiniteNumber(payload.paidAmount, 0)
+  // paidAmount hanya boleh berasal dari baris pembayaran; payload.paidAmount
+  // dari client tidak dipercaya (cegah status Paid tanpa receipt).
+  const paidAmountRaw = payments.reduce(
+    (sum, payment) => sum + payment.nominal,
+    0
   );
   const paidAmount = Math.min(totalAmount, paidAmountRaw);
   const outstandingAmount = Math.max(0, totalAmount - paidAmount);
@@ -209,7 +269,9 @@ function sanitizeCustomerInvoiceInput(payload: Record<string, unknown>, id: stri
       ? "Paid"
       : paidAmount > 0
         ? "Partial"
-        : statusInput;
+        : ["PAID", "PARTIAL", "PARTIALLY PAID"].includes(statusInput.toUpperCase())
+          ? "Approved"
+          : statusInput;
 
   return {
     items,
@@ -234,12 +296,12 @@ function mapCustomerInvoice(row: {
   customerName: string;
   projectName: string | null;
   perihal: string | null;
-  subtotal: number;
-  ppn: number;
-  pph: number;
-  totalAmount: number;
-  paidAmount: number;
-  outstandingAmount: number;
+  subtotal: Prisma.Decimal | number;
+  ppn: Prisma.Decimal | number;
+  pph: Prisma.Decimal | number;
+  totalAmount: Prisma.Decimal | number;
+  paidAmount: Prisma.Decimal | number;
+  outstandingAmount: Prisma.Decimal | number;
   status: string;
   noKontrak: string | null;
   noPO: string | null;
@@ -250,8 +312,8 @@ function mapCustomerInvoice(row: {
   remark: string | null;
   createdBy: string | null;
   sentAt: Date | null;
-  items: Array<{ id: string; description: string; qty: number; unit: string; unitPrice: number; amount: number }>;
-  payments: Array<{ id: string; tanggal: Date; nominal: number; method: string; proofNo: string | null; bankName: string | null; remark: string | null; createdBy: string | null; paidAt: Date | null }>;
+  items: Array<{ id: string; description: string; qty: Prisma.Decimal | number; unit: string; unitPrice: Prisma.Decimal | number; amount: Prisma.Decimal | number }>;
+  payments: Array<{ id: string; tanggal: Date; nominal: Prisma.Decimal | number; method: string; proofNo: string | null; bankName: string | null; remark: string | null; createdBy: string | null; paidAt: Date | null }>;
 }) {
   return {
     id: row.id,
@@ -265,14 +327,14 @@ function mapCustomerInvoice(row: {
     customer: row.customerName,
     projectName: row.projectName ?? undefined,
     perihal: row.perihal ?? "",
-    subtotal: row.subtotal,
-    ppn: row.ppn,
-    pph: row.pph,
-    totalNominal: row.totalAmount,
-    totalAmount: row.totalAmount,
-    totalBayar: row.totalAmount,
-    paidAmount: row.paidAmount,
-    outstandingAmount: row.outstandingAmount,
+    subtotal: Number(row.subtotal),
+    ppn: Number(row.ppn),
+    pph: Number(row.pph),
+    totalNominal: Number(row.totalAmount),
+    totalAmount: Number(row.totalAmount),
+    totalBayar: Number(row.totalAmount),
+    paidAmount: Number(row.paidAmount),
+    outstandingAmount: Number(row.outstandingAmount),
     status: row.status,
     noKontrak: row.noKontrak ?? undefined,
     noPO: row.noPO ?? undefined,
@@ -287,18 +349,18 @@ function mapCustomerInvoice(row: {
       id: item.id,
       deskripsi: item.description,
       description: item.description,
-      qty: item.qty,
+      qty: Number(item.qty),
       satuan: item.unit,
       unit: item.unit,
-      hargaSatuan: item.unitPrice,
-      unitPrice: item.unitPrice,
-      jumlah: item.amount,
-      total: item.amount,
+      hargaSatuan: Number(item.unitPrice),
+      unitPrice: Number(item.unitPrice),
+      jumlah: Number(item.amount),
+      total: Number(item.amount),
     })),
     paymentHistory: row.payments.map((item) => ({
       id: item.id,
       tanggal: item.tanggal.toISOString().slice(0, 10),
-      nominal: item.nominal,
+      nominal: Number(item.nominal),
       metodeBayar: item.method,
       noBukti: item.proofNo ?? undefined,
       bankName: item.bankName ?? undefined,
@@ -322,9 +384,9 @@ function mapVendorExpense(row: {
   kategori: string | null;
   costRecognition: string;
   keterangan: string | null;
-  nominal: number;
-  ppn: number;
-  totalNominal: number;
+  nominal: Prisma.Decimal | number;
+  ppn: Prisma.Decimal | number;
+  totalNominal: Prisma.Decimal | number;
   hasKwitansi: boolean;
   kwitansiUrl: string | null;
   noKwitansi: string | null;
@@ -353,9 +415,9 @@ function mapVendorExpense(row: {
     kategori: row.kategori ?? undefined,
     keterangan: row.keterangan ?? "",
     costRecognition: row.costRecognition,
-    nominal: row.nominal,
-    ppn: row.ppn,
-    totalNominal: row.totalNominal,
+    nominal: Number(row.nominal),
+    ppn: Number(row.ppn),
+    totalNominal: Number(row.totalNominal),
     hasKwitansi: row.hasKwitansi,
     kwitansiUrl: row.kwitansiUrl ?? undefined,
     noKwitansi: row.noKwitansi ?? undefined,
@@ -389,6 +451,30 @@ function sanitizeVendorInvoicePayments(payload: Record<string, unknown>, invoice
   }).filter(payment => payment.nominal > 0);
 }
 
+// paidAmount vendor hanya boleh turunan dari baris pembayaran. Status Paid/
+// Partial dari client diabaikan bila tidak ada pembayaran yang tercatat.
+function deriveVendorInvoiceAmounts(
+  totalAmount: number,
+  payments: Array<{ nominal: number }>,
+  statusInput: string,
+) {
+  const paidAmount = Math.min(
+    totalAmount,
+    payments.reduce((sum, payment) => sum + payment.nominal, 0),
+  );
+  const outstandingAmount = Math.max(0, totalAmount - paidAmount);
+  const normalizedInput = statusInput.toUpperCase();
+  const status =
+    totalAmount > 0 && outstandingAmount <= 0
+      ? "Paid"
+      : paidAmount > 0
+        ? "Partial"
+        : ["PAID", "PARTIAL", "PARTIALLY PAID"].includes(normalizedInput)
+          ? "Unpaid"
+          : statusInput;
+  return { paidAmount, outstandingAmount, status };
+}
+
 function mapVendorInvoice(row: {
   id: string;
   vendorId: string | null;
@@ -397,15 +483,15 @@ function mapVendorInvoice(row: {
   number: string;
   noPO: string | null;
   supplierName: string;
-  totalAmount: number;
-  paidAmount: number;
-  outstandingAmount: number;
-  ppn: number;
+  totalAmount: Prisma.Decimal | number;
+  paidAmount: Prisma.Decimal | number;
+  outstandingAmount: Prisma.Decimal | number;
+  ppn: Prisma.Decimal | number;
   status: string;
   tanggal: Date | null;
   dueDate: Date | null;
   keterangan: string | null;
-  payments: Array<{ id: string; tanggal: Date; nominal: number; metodeBayar: string | null; noBukti: string | null; bank: string | null; noRekening: string | null; keterangan: string | null }>;
+  payments: Array<{ id: string; tanggal: Date; nominal: Prisma.Decimal | number; metodeBayar: string | null; noBukti: string | null; bank: string | null; noRekening: string | null; keterangan: string | null }>;
 }) {
   return {
     id: row.id,
@@ -417,11 +503,11 @@ function mapVendorInvoice(row: {
     noPO: row.noPO ?? undefined,
     supplier: row.supplierName,
     vendorName: row.supplierName,
-    totalAmount: row.totalAmount,
-    amount: row.totalAmount,
-    paidAmount: row.paidAmount,
-    outstandingAmount: row.outstandingAmount,
-    ppn: row.ppn,
+    totalAmount: Number(row.totalAmount),
+    amount: Number(row.totalAmount),
+    paidAmount: Number(row.paidAmount),
+    outstandingAmount: Number(row.outstandingAmount),
+    ppn: Number(row.ppn),
     status: row.status,
     tanggal: row.tanggal ? row.tanggal.toISOString().slice(0, 10) : undefined,
     jatuhTempo: row.dueDate ? row.dueDate.toISOString().slice(0, 10) : undefined,
@@ -429,7 +515,7 @@ function mapVendorInvoice(row: {
     paymentHistory: row.payments.map(payment => ({
       id: payment.id,
       tanggal: payment.tanggal.toISOString().slice(0, 10),
-      nominal: payment.nominal,
+      nominal: Number(payment.nominal),
       metodeBayar: payment.metodeBayar ?? undefined,
       noBukti: payment.noBukti ?? undefined,
       bank: payment.bank ?? undefined,
@@ -613,7 +699,11 @@ async function createResource(resource: FinanceOpsResource, payload: Record<stri
     case "vendor-invoices": {
       const payments = sanitizeVendorInvoicePayments(payload, id);
       const totalAmount = Math.max(0, toFiniteNumber(payload.totalAmount ?? payload.amount, 0));
-      const paidAmount = Math.min(totalAmount, payments.reduce((sum, payment) => sum + payment.nominal, 0) || Math.max(0, toFiniteNumber(payload.paidAmount, 0)));
+      const { paidAmount, outstandingAmount, status } = deriveVendorInvoiceAmounts(
+        totalAmount,
+        payments,
+        asTrimmedString(payload.status) || "Unpaid",
+      );
       await db.financeVendorInvoice.create({
         data: {
           id,
@@ -625,9 +715,9 @@ async function createResource(resource: FinanceOpsResource, payload: Record<stri
           supplierName: asTrimmedString(payload.supplier || payload.vendorName) || "",
           totalAmount,
           paidAmount,
-          outstandingAmount: Math.max(0, totalAmount - paidAmount),
+          outstandingAmount,
           ppn: toFiniteNumber(payload.ppn, 0),
-          status: asTrimmedString(payload.status) || "Unpaid",
+          status,
           tanggal: asTrimmedString(payload.tanggal) ? new Date(String(payload.tanggal)) : undefined,
           dueDate: asTrimmedString(payload.jatuhTempo) ? new Date(String(payload.jatuhTempo)) : undefined,
           keterangan: asTrimmedString(payload.keterangan) || undefined,
@@ -642,6 +732,14 @@ async function createResource(resource: FinanceOpsResource, payload: Record<stri
 async function updateResource(resource: FinanceOpsResource, id: string, payload: Record<string, unknown>, db: FinanceDb = prisma) {
   switch (resource) {
     case "customer-invoices": {
+      const existing = await db.financeCustomerInvoice.findUnique({
+        where: { id },
+        include: { items: true, payments: true },
+      });
+      if (!existing) throw new Error("NOT_FOUND");
+      // PATCH parsial tidak boleh menghapus items/payments atau men-zero-kan
+      // nominal: gabungkan payload dengan data tersimpan sebelum normalisasi.
+      payload = { ...mapCustomerInvoice(existing), ...payload };
       const normalized = sanitizeCustomerInvoiceInput(payload, id);
       await db.financeCustomerInvoice.update({
         where: { id },
@@ -719,9 +817,20 @@ async function updateResource(resource: FinanceOpsResource, id: string, payload:
       return getResource(resource, id, db);
     }
     case "vendor-invoices": {
+      const existing = await db.financeVendorInvoice.findUnique({
+        where: { id },
+        include: { payments: true },
+      });
+      if (!existing) throw new Error("NOT_FOUND");
+      // Pertahankan payment history & nominal saat PATCH parsial.
+      payload = { ...mapVendorInvoice(existing), ...payload };
       const payments = sanitizeVendorInvoicePayments(payload, id);
       const totalAmount = Math.max(0, toFiniteNumber(payload.totalAmount ?? payload.amount, 0));
-      const paidAmount = Math.min(totalAmount, payments.reduce((sum, payment) => sum + payment.nominal, 0) || Math.max(0, toFiniteNumber(payload.paidAmount, 0)));
+      const { paidAmount, outstandingAmount, status } = deriveVendorInvoiceAmounts(
+        totalAmount,
+        payments,
+        asTrimmedString(payload.status) || "Unpaid",
+      );
       await db.financeVendorInvoice.update({
         where: { id },
         data: {
@@ -733,9 +842,9 @@ async function updateResource(resource: FinanceOpsResource, id: string, payload:
           supplierName: asTrimmedString(payload.supplier || payload.vendorName) || "",
           totalAmount,
           paidAmount,
-          outstandingAmount: Math.max(0, totalAmount - paidAmount),
+          outstandingAmount,
           ppn: toFiniteNumber(payload.ppn, 0),
-          status: asTrimmedString(payload.status) || "Unpaid",
+          status,
           tanggal: asTrimmedString(payload.tanggal) ? new Date(String(payload.tanggal)) : null,
           dueDate: asTrimmedString(payload.jatuhTempo) ? new Date(String(payload.jatuhTempo)) : null,
           keterangan: asTrimmedString(payload.keterangan) || null,
@@ -784,13 +893,14 @@ function registerRoutes(resource: FinanceOpsResource) {
       return sendError(res, 400, { code: "VALIDATION_ERROR", message: "Validation failed", details: parsed.error.flatten(), legacyError: parsed.error.flatten() });
     }
     try {
-      const existing = await listResource(resource);
       const incomingIds = new Set(parsed.data.map((item) => item.id));
-      const removedRows = existing.filter((item) => !incomingIds.has(String((item as { id: string }).id)));
       await prisma.$transaction(async (tx) => {
-        await assertFinancialYearsOpen(tx, yearsFromRows([...parsed.data, ...removedRows]));
         const currentRows = await listResource(resource, tx);
         const existingIds = new Set(currentRows.map((item) => String((item as { id: string }).id)));
+        const removedRows = currentRows.filter(
+          (item) => !incomingIds.has(String((item as { id: string }).id)),
+        );
+        await assertFinancialYearsOpen(tx, yearsFromRows([...parsed.data, ...removedRows]));
         for (const item of parsed.data) {
           await assertRefs(resource, item, tx);
           if (existingIds.has(item.id)) await updateResource(resource, item.id, item, tx);

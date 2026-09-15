@@ -1,5 +1,10 @@
 import { randomUUID } from "crypto";
 import { Prisma, Role } from "@prisma/client";
+import { serializeDecimals } from "../utils/decimal";
+
+function asNumbered<T>(row: unknown): T {
+  return serializeDecimals(row as T);
+}
 import { Router, Response } from "express";
 import { z } from "zod";
 import { authenticate } from "../middlewares/auth";
@@ -109,6 +114,10 @@ function toFiniteNumber(value: unknown, fallback = 0): number {
   if (typeof value === "string") {
     const parsed = Number(value.replace(/,/g, "").trim());
     return Number.isFinite(parsed) ? parsed : fallback;
+  }
+  if (value && typeof (value as { toNumber?: unknown }).toNumber === "function") {
+    const parsed = (value as { toNumber: () => number }).toNumber();
+    if (Number.isFinite(parsed)) return parsed;
   }
   return fallback;
 }
@@ -288,7 +297,7 @@ async function reverseStockOutInventory(tx: InventoryTx, stockOutId: string) {
           where: { OR: [{ code: item.itemCode }, { name: item.itemName }] },
         });
     if (!inventoryItem) continue;
-    const nextQty = inventoryItem.onHandQty + item.qty;
+    const nextQty = Number(inventoryItem.onHandQty) + Number(item.qty);
     const metadata = {
       ...asRecord(inventoryItem.metadata),
       stok: nextQty,
@@ -314,7 +323,7 @@ async function applyStockOutInventory(tx: InventoryTx, stockOutId: string) {
     : [];
 
   for (const [index, item] of stockOut.items.entries()) {
-    if (item.qty <= 0)
+    if (Number(item.qty) <= 0)
       throw new Error(
         `Qty ${item.itemName || item.itemCode} tidak boleh nol atau negatif`,
       );
@@ -330,8 +339,8 @@ async function applyStockOutInventory(tx: InventoryTx, stockOutId: string) {
         `Stok ${inventoryItem.name} tidak cukup: tersedia ${inventoryItem.onHandQty}, diminta ${item.qty}`,
       );
     }
-    const stockBefore = inventoryItem.onHandQty;
-    const stockAfter = stockBefore - item.qty;
+    const stockBefore = Number(inventoryItem.onHandQty);
+    const stockAfter = stockBefore - Number(item.qty);
     const now = new Date();
     const metadata = {
       ...asRecord(inventoryItem.metadata),
@@ -370,7 +379,7 @@ async function applyStockOutInventory(tx: InventoryTx, stockOutId: string) {
           projectName: inventoryProjectName(stockOut.project),
           unitPrice: toFiniteNumber(
             legacyItems[index]?.hargaSatuan,
-            inventoryItem.unitPrice ?? 0,
+            Number(inventoryItem.unitPrice ?? 0),
           ),
         } as Prisma.InputJsonValue,
       },
@@ -388,7 +397,7 @@ async function reverseStockInInventory(tx: InventoryTx, stockInId: string) {
       where: { id: movement.inventoryItemId },
     });
     if (!inventoryItem) continue;
-    const nextQty = Math.max(0, inventoryItem.onHandQty - movement.qty);
+    const nextQty = Math.max(0, Number(inventoryItem.onHandQty) - Number(movement.qty));
     await tx.inventoryItem.update({
       where: { id: inventoryItem.id },
       data: {
@@ -423,7 +432,7 @@ async function applyStockInInventory(tx: InventoryTx, stockInId: string) {
     (stockIn.type === "Production Output" ? "Barang Jadi" : "General");
 
   for (const [index, item] of stockIn.items.entries()) {
-    if (item.qty <= 0) continue;
+    if (Number(item.qty) <= 0) continue;
     let inventoryItem = await tx.inventoryItem.findFirst({
       where: { OR: [{ code: item.itemCode }, { name: item.itemName }] },
     });
@@ -449,8 +458,8 @@ async function applyStockInInventory(tx: InventoryTx, stockInId: string) {
         },
       });
     }
-    const stockBefore = inventoryItem.onHandQty;
-    const stockAfter = stockBefore + item.qty;
+    const stockBefore = Number(inventoryItem.onHandQty);
+    const stockAfter = stockBefore + Number(item.qty);
     await tx.inventoryItem.update({
       where: { id: inventoryItem.id },
       data: {
@@ -861,7 +870,7 @@ async function listResource(resource: InventoryResource) {
       const rows = await prisma.inventoryItem.findMany({
         orderBy: { updatedAt: "desc" },
       });
-      return rows.map(mapInventoryItem);
+      return rows.map((row) => mapInventoryItem(asNumbered(row)));
     }
     case "stock-ins": {
       const rows = await prisma.inventoryStockIn.findMany({
@@ -872,28 +881,28 @@ async function listResource(resource: InventoryResource) {
           project: { select: { payload: true } },
         },
       });
-      return rows.map(mapInventoryStockIn);
+      return rows.map((row) => mapInventoryStockIn(asNumbered(row)));
     }
     case "stock-outs": {
       const rows = await prisma.inventoryStockOut.findMany({
         orderBy: { updatedAt: "desc" },
         include: { items: true, project: { select: { payload: true } } },
       });
-      return rows.map(mapInventoryStockOut);
+      return rows.map((row) => mapInventoryStockOut(asNumbered(row)));
     }
     case "stock-movements": {
       const rows = await prisma.inventoryStockMovement.findMany({
         orderBy: { updatedAt: "desc" },
         include: { project: { select: { payload: true } } },
       });
-      return rows.map(mapInventoryMovement);
+      return rows.map((row) => mapInventoryMovement(asNumbered(row)));
     }
     case "stock-opnames": {
       const rows = await prisma.inventoryStockOpname.findMany({
         orderBy: { updatedAt: "desc" },
         include: { items: true },
       });
-      return rows.map(mapInventoryOpname);
+      return rows.map((row) => mapInventoryOpname(asNumbered(row)));
     }
   }
 }
@@ -902,7 +911,7 @@ async function getResource(resource: InventoryResource, id: string) {
   switch (resource) {
     case "stock-items": {
       const row = await prisma.inventoryItem.findUnique({ where: { id } });
-      return row ? mapInventoryItem(row) : null;
+      return row ? mapInventoryItem(asNumbered(row)) : null;
     }
     case "stock-ins": {
       const row = await prisma.inventoryStockIn.findUnique({
@@ -913,28 +922,28 @@ async function getResource(resource: InventoryResource, id: string) {
           project: { select: { payload: true } },
         },
       });
-      return row ? mapInventoryStockIn(row) : null;
+      return row ? mapInventoryStockIn(asNumbered(row)) : null;
     }
     case "stock-outs": {
       const row = await prisma.inventoryStockOut.findUnique({
         where: { id },
         include: { items: true, project: { select: { payload: true } } },
       });
-      return row ? mapInventoryStockOut(row) : null;
+      return row ? mapInventoryStockOut(asNumbered(row)) : null;
     }
     case "stock-movements": {
       const row = await prisma.inventoryStockMovement.findUnique({
         where: { id },
         include: { project: { select: { payload: true } } },
       });
-      return row ? mapInventoryMovement(row) : null;
+      return row ? mapInventoryMovement(asNumbered(row)) : null;
     }
     case "stock-opnames": {
       const row = await prisma.inventoryStockOpname.findUnique({
         where: { id },
         include: { items: true },
       });
-      return row ? mapInventoryOpname(row) : null;
+      return row ? mapInventoryOpname(asNumbered(row)) : null;
     }
   }
 }
@@ -1005,7 +1014,7 @@ export async function validateStockIn(
   const allowed = new Map<string, number>();
   for (const item of receiving.items) {
     const code = item.itemCode || "";
-    allowed.set(code, (allowed.get(code) || 0) + item.qtyGood);
+    allowed.set(code, (allowed.get(code) || 0) + Number(item.qtyGood));
   }
   for (const item of items) {
     const code = asTrimmedString(item.kode ?? item.itemKode) || "";
@@ -1152,7 +1161,7 @@ async function createResource(
               name,
             );
             let inventoryItemId = existingItem?.id;
-            let stockBefore = existingItem?.onHandQty || 0;
+            let stockBefore = Number(existingItem?.onHandQty) || 0;
             let stockAfter = stockBefore + qty;
 
             if (existingItem) {
@@ -1437,13 +1446,13 @@ async function updateResource(
         }
         if (
           payload.stok !== undefined &&
-          Number(payload.stok) !== current.onHandQty
+          Number(payload.stok) !== Number(current.onHandQty)
         ) {
           throw new Error("STOCK_BALANCE_READ_ONLY");
         }
 
         const merged = {
-          ...mapInventoryItem(current),
+          ...mapInventoryItem(asNumbered(current)),
           reserved: current.reservedQty,
           onOrderQty: current.onOrderQty,
           status: current.status,
@@ -1490,7 +1499,7 @@ async function updateResource(
         const originalReceivingId =
           currentStockIn.receivingId ??
           asTrimmedString(asRecord(currentStockIn.legacyPayload).receivingId);
-        payload = { ...mapInventoryStockIn(currentStockIn), ...payload };
+        payload = { ...mapInventoryStockIn(asNumbered(currentStockIn)), ...payload };
         if (originalReceivingId) payload.receivingId = originalReceivingId;
         await validateStockIn(tx, payload, id);
         await reverseStockInInventory(tx, id);
@@ -1640,7 +1649,7 @@ async function updateResource(
         }
 
         payload = {
-          ...mapInventoryOpname(currentOpname),
+          ...mapInventoryOpname(asNumbered(currentOpname)),
           ...payload,
           status: requestedStatus || currentOpname.status || "Draft",
         };
@@ -1697,7 +1706,47 @@ async function deleteResource(
 ) {
   switch (resource) {
     case "stock-items":
-      await prisma.inventoryItem.delete({ where: { id } });
+      await inventoryTransaction(async (tx) => {
+        const currentItem = await tx.inventoryItem.findUniqueOrThrow({
+          where: { id },
+          select: {
+            onHandQty: true,
+            reservedQty: true,
+            onOrderQty: true,
+            _count: {
+              select: {
+                stockInItems: true,
+                stockOutItems: true,
+                movementRows: true,
+                opnameItems: true,
+              },
+            },
+          },
+        });
+
+        const hasBalance =
+          Math.abs(Number(currentItem.onHandQty)) > 1e-9 ||
+          Math.abs(Number(currentItem.reservedQty)) > 1e-9 ||
+          Math.abs(Number(currentItem.onOrderQty)) > 1e-9;
+
+        if (hasBalance) {
+          throw new Error("STOCK_ITEM_HAS_BALANCE");
+        }
+
+        const hasHistory =
+          currentItem._count.stockInItems > 0 ||
+          currentItem._count.stockOutItems > 0 ||
+          currentItem._count.movementRows > 0 ||
+          currentItem._count.opnameItems > 0;
+
+        if (hasHistory) {
+          throw new Error("STOCK_ITEM_HAS_HISTORY");
+        }
+
+        await tx.inventoryItem.delete({ where: { id } });
+
+        if (audit) await audit(tx);
+      });
       return;
     case "stock-ins":
       await inventoryTransaction(async (tx) => {
@@ -2012,6 +2061,7 @@ function registerRoutes(resource: InventoryResource) {
       try {
         const id = String(req.params.id || "");
         const critical =
+          resource === "stock-items" ||
           resource === "stock-ins" ||
           resource === "stock-outs" ||
           resource === "stock-opnames";
@@ -2042,6 +2092,24 @@ function registerRoutes(resource: InventoryResource) {
               "Stock Opname yang sudah Completed bersifat final dan tidak dapat diubah atau dihapus.",
             legacyError:
               "Stock Opname Completed tidak dapat diubah atau dihapus.",
+          });
+
+        if (err instanceof Error && err.message === "STOCK_ITEM_HAS_BALANCE")
+          return sendError(res, 409, {
+            code: "STOCK_ITEM_HAS_BALANCE",
+            message:
+              "Item stok masih memiliki saldo on hand, reserved, atau on order dan tidak dapat dihapus.",
+            legacyError:
+              "Item stok masih memiliki saldo dan tidak dapat dihapus.",
+          });
+
+        if (err instanceof Error && err.message === "STOCK_ITEM_HAS_HISTORY")
+          return sendError(res, 409, {
+            code: "STOCK_ITEM_HAS_HISTORY",
+            message:
+              "Item stok sudah memiliki histori transaksi dan tidak dapat dihapus.",
+            legacyError:
+              "Item stok sudah memiliki histori transaksi dan tidak dapat dihapus.",
           });
 
         if (
@@ -2278,8 +2346,8 @@ inventoryRouter.post(
           if (
             !Number.isFinite(line.systemQty) ||
             !Number.isFinite(line.physicalQty) ||
-            line.systemQty < 0 ||
-            line.physicalQty < 0
+            Number(line.systemQty) < 0 ||
+            Number(line.physicalQty) < 0
           ) {
             throw new Error("STOCK_OPNAME_INVALID_QTY");
           }
@@ -2288,8 +2356,8 @@ inventoryRouter.post(
             throw new Error("STOCK_OPNAME_STALE");
           }
 
-          const stockBefore = item.onHandQty;
-          const stockAfter = line.physicalQty;
+          const stockBefore = Number(item.onHandQty);
+          const stockAfter = Number(line.physicalQty);
           await tx.inventoryItem.update({
             where: { id: item.id },
             data: {
