@@ -87,6 +87,7 @@ export default function PayrollSlipPage() {
   const holidayCount = slip.holidayDays ?? 0;
 
   const sigDate = run.disbursedAt ?? run.processedDate ?? new Date().toISOString();
+  const isSyamsudinApprover = run.approvedByUserId === 'e74dc394-0f80-4bec-91e8-bea02b20c09f';
 
   return (
     <div className="min-h-screen bg-gray-200 py-8 px-4">
@@ -280,13 +281,35 @@ export default function PayrollSlipPage() {
           </div>
           <div className="grid grid-cols-3 gap-2 text-center text-[10px]">
             {[
-              { role: 'Mengetahui,',  name: 'SYAMSUDIN' },
-              { role: 'Menyetujui,',  name: 'SRI RAHAYU' },
-              { role: 'Menerima,',    name: slip.employeeName.toUpperCase() },
+              {
+                role: 'Mengetahui,',
+                name: isSyamsudinApprover
+                  ? 'SYAMSUDIN'
+                  : (run.approvedBy || 'SYAMSUDIN').toUpperCase(),
+                signatureUrl: isSyamsudinApprover ? run.approvedSignatureUrl : undefined,
+              },
+              {
+                role: 'Menyetujui,',
+                name: 'SRI RAHAYU',
+                signatureUrl: undefined,
+              },
+              {
+                role: 'Menerima,',
+                name: slip.employeeName.toUpperCase(),
+                signatureUrl: undefined,
+              },
             ].map(sig => (
               <div key={sig.role}>
                 <div className="text-gray-700 mb-1">{sig.role}</div>
-                <div className="h-14 border-b border-gray-500" />
+                <div className="h-14 border-b border-gray-500 flex items-end justify-center">
+                  {sig.signatureUrl && (
+                    <img
+                      src={sig.signatureUrl}
+                      alt={`Tanda tangan ${sig.name}`}
+                      className="max-h-14 max-w-[140px] object-contain"
+                    />
+                  )}
+                </div>
                 <div className="font-bold mt-1 uppercase">{sig.name}</div>
               </div>
             ))}

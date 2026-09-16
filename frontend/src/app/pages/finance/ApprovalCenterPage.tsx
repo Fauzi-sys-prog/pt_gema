@@ -303,13 +303,8 @@ export default function ApprovalCenterPage() {
   const handleApproveExpense = async (exp: VendorExpense) => {
     setProcessingId(exp.id);
     try {
-      approveExpense(exp.id, currentUser?.fullName || 'Approver');
-      try {
-        addAuditLog({ action: 'EXPENSE_APPROVED', module: 'Finance', details: `Expense ${exp.noExpense} (${exp.vendorName}) disetujui oleh ${currentUser?.fullName}`, status: 'Success' });
-      } catch (auditErr) {
-        throw auditErr;
-      }
-      toast.success(`Expense ${exp.noExpense} disetujui.`);
+      await approveExpense(exp.id, currentUser?.fullName || 'Approver');
+      toast.success(`Expense ${exp.noExpense} disetujui & dibayar dari Petty Cash.`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Gagal menyetujui expense');
     } finally {

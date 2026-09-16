@@ -160,10 +160,8 @@ export default function PettyCashGudangPage() {
   const [newTransaction, setNewTransaction] = useState({
     date: new Date().toISOString().split('T')[0],
     accountCode: '',
-    description: '',
     type: 'Credit' as 'Debit' | 'Credit',
     amount: 0,
-    kasir: 'BCA PT Gema Teknik Perkasa',
     sumberDana: '',
   });
   const [previewBon, setPreviewBon] = useState<{ name: string; url: string } | null>(null);
@@ -250,16 +248,18 @@ export default function PettyCashGudangPage() {
       const creditVal = newTransaction.type === 'Credit' ? newTransaction.amount : 0;
 
       const entryRef = `PCG-${newTransaction.accountCode}-${Date.now().toString().slice(-4)}`;
+      const selectedAccount = accountList.find(acc => acc.code === newTransaction.accountCode);
+      const autoDescription = `${newTransaction.type === 'Credit' ? 'Pengeluaran' : 'Penerimaan'} Petty Cash Gudang — ${selectedAccount ? `${selectedAccount.code} ${selectedAccount.name}` : newTransaction.accountCode}`;
 
       // Step 1: Add petty cash gudang entry (async — entry not added on failure)
       await addPettyCashGudangEntry({
         date: newTransaction.date,
         accountCode: newTransaction.accountCode,
-        description: newTransaction.description,
+        description: autoDescription,
         debit: debitVal,
         credit: creditVal,
         balance: currentBalance + debitVal - creditVal,
-        kasir: newTransaction.kasir,
+        kasir: 'Petty Cash Gudang',
         sumberDana: newTransaction.type === 'Debit' ? newTransaction.sumberDana : undefined,
       });
 
@@ -268,7 +268,7 @@ export default function PettyCashGudangPage() {
         addArchiveEntry({
           date: newTransaction.date,
           ref: entryRef,
-          description: newTransaction.description,
+          description: autoDescription,
           amount: newTransaction.amount,
           project: 'Gudang/PettyCash',
           admin: 'Finance Admin',
@@ -291,10 +291,8 @@ export default function PettyCashGudangPage() {
       setNewTransaction({
         date: new Date().toISOString().split('T')[0],
         accountCode: '',
-        description: '',
         type: 'Credit',
         amount: 0,
-        kasir: 'BCA PT Gema Teknik Perkasa',
         sumberDana: '',
       });
       toast.success("Transaksi kas gudang berhasil dicatat");
@@ -345,7 +343,8 @@ export default function PettyCashGudangPage() {
 
   const computedInitialBalance = useMemo(() => {
     if (entries.length === 0) return 0;
-    return entries[0].balance - (entries[0].type === 'credit' ? entries[0].amount : -entries[0].amount);
+    const firstEntry = entries[0];
+    return firstEntry.balance - (firstEntry.debit || 0) + (firstEntry.credit || 0);
   }, [entries]);
 
   return (
@@ -513,7 +512,7 @@ export default function PettyCashGudangPage() {
                 <thead>
                   <tr className="bg-amber-600 text-amber-100">
                     <th className="px-8 py-6 text-[10px] font-black uppercase tracking-widest border-b border-amber-700">Tanggal</th>
-                    <th className="px-8 py-6 text-[10px] font-black uppercase tracking-widest border-b border-amber-700">Bank</th>
+                    <th className="px-8 py-6 text-[10px] font-black uppercase tracking-widest border-b border-amber-700">Sumber / Kas</th>
                     <th className="px-8 py-6 text-[10px] font-black uppercase tracking-widest border-b border-amber-700">Akun</th>
                     <th className="px-8 py-6 text-[10px] font-black uppercase tracking-widest border-b border-amber-700">Keterangan</th>
                     <th className="px-8 py-6 text-right text-[10px] font-black uppercase tracking-widest border-b border-amber-700">Debit</th>
@@ -535,7 +534,7 @@ export default function PettyCashGudangPage() {
                       <td className="px-8 py-6 text-xs font-black text-slate-500 italic uppercase">{entry.date}</td>
                       <td className="px-8 py-6">
                         <span className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-tighter ${entry.kasir === 'BCA PT Gema Teknik Perkasa' ? 'bg-blue-50 text-blue-700' : entry.kasir === 'BNI' ? 'bg-orange-50 text-orange-700' : 'bg-yellow-50 text-yellow-700'}`}>
-                          {entry.kasir || 'BCA PT Gema Teknik Perkasa'}
+                          {entry.kasir || 'Petty Cash Gudang'}
                         </span>
                       </td>
                       <td className="px-8 py-6">
@@ -673,36 +672,22 @@ export default function PettyCashGudangPage() {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-6">
+                  {newTransaction.type === 'Debit' && (
                     <div className="space-y-2">
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Bank</label>
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Sumber Dana</label>
                       <select
-                        value={newTransaction.kasir}
-                        onChange={(e) => setNewTransaction({...newTransaction, kasir: e.target.value})}
+                        value={newTransaction.sumberDana}
+                        onChange={(e) => setNewTransaction({...newTransaction, sumberDana: e.target.value})}
                         className="w-full px-6 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl text-sm font-bold outline-none focus:border-amber-500 transition-all appearance-none"
                       >
-                        <option value="BCA PT Gema Teknik Perkasa">BCA PT Gema Teknik Perkasa</option>
-                        <option value="BNI">BNI</option>
-                        <option value="Mandiri">Mandiri</option>
+                        <option value="">Pilih Sumber</option>
+                        <option value="Rek Ibu Sri Rahayu (BCA)">Rek Ibu Sri Rahayu (BCA)</option>
+                        <option value="Rekening BCA GTP">Rekening BCA GTP</option>
+                        <option value="Sisa Kas Project">Sisa Kas Project</option>
+                        <option value="Lainnya">Lainnya</option>
                       </select>
                     </div>
-                    {newTransaction.type === 'Debit' && (
-                      <div className="space-y-2">
-                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Sumber Dana</label>
-                        <select
-                          value={newTransaction.sumberDana}
-                          onChange={(e) => setNewTransaction({...newTransaction, sumberDana: e.target.value})}
-                          className="w-full px-6 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl text-sm font-bold outline-none focus:border-amber-500 transition-all appearance-none"
-                        >
-                          <option value="">Pilih Sumber</option>
-                          <option value="Rek Ibu Sri Rahayu (BCA)">Rek Ibu Sri Rahayu (BCA)</option>
-                          <option value="Rekening BCA GTP">Rekening BCA GTP</option>
-                          <option value="Sisa Kas Project">Sisa Kas Project</option>
-                          <option value="Lainnya">Lainnya</option>
-                        </select>
-                      </div>
-                    )}
-                  </div>
+                  )}
 
                   <div className="space-y-2">
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Kategori Akun</label>
@@ -717,18 +702,6 @@ export default function PettyCashGudangPage() {
                         <option key={acc.code} value={acc.code}>{acc.code} - {acc.name}</option>
                       ))}
                     </select>
-                  </div>
-
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Keterangan Transaksi</label>
-                    <textarea
-                      required
-                      placeholder="Contoh: Pembelian material gudang..."
-                      rows={3}
-                      value={newTransaction.description}
-                      onChange={(e) => setNewTransaction({...newTransaction, description: e.target.value})}
-                      className="w-full px-8 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl text-sm font-bold outline-none focus:border-amber-500 transition-all resize-none"
-                    />
                   </div>
 
                   <div className="space-y-2">

@@ -36,6 +36,7 @@ export const updateUserSchema = z.object({
     .optional(),
   name: z.string().trim().max(120).optional(),
   phone: z.string().trim().max(30).optional(),
+  signatureUrl: z.string().trim().max(2_000_000).nullable().optional(),
   password: passwordSchema.optional(),
   role: z.enum(roleValues).optional(),
   isActive: z.boolean().optional(),

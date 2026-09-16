@@ -185,7 +185,27 @@ export default function PayrollProPage() {
       const pph21 = comp?.pph21Amount ?? 0;
       const koperasiMember = koperasiMembers.find(member => member.employeeId === emp.id && member.status === 'Active');
       const koperasiLoans = koperasiMember ? koperasiPinjamanList.filter(loan => loan.memberId === koperasiMember.id && loan.status === 'Active') : [];
-      const koperasiLoanDetails = koperasiLoans.map(loan => ({ loanId: loan.id, pinjamanNo: loan.pinjamanNo, installmentNumber: loan.paidInstallments + 1, installmentAmount: loan.installmentAmount, remainingAfter: Math.max(0, loan.totalAmount - ((loan.paidInstallments + 1) * loan.installmentAmount)) }));
+      const koperasiLoanDetails = koperasiLoans.map(loan => {
+        const installmentNumber = loan.paidInstallments + 1;
+        const settled = installmentNumber >= loan.installmentCount;
+
+        // Sama dengan backend Koperasi:
+        // cicilan reguler hanya pokok, admin 2.5% ditagihkan sekali di cicilan terakhir.
+        const installmentAmount = settled
+          ? Math.max(0, loan.totalAmount - loan.installmentAmount * (loan.installmentCount - 1))
+          : loan.installmentAmount;
+
+        const alreadyPaid = loan.paidInstallments * loan.installmentAmount;
+        const remainingAfter = Math.max(0, loan.totalAmount - alreadyPaid - installmentAmount);
+
+        return {
+          loanId: loan.id,
+          pinjamanNo: loan.pinjamanNo,
+          installmentNumber,
+          installmentAmount,
+          remainingAfter,
+        };
+      });
       const koperasiLoanDeduction = koperasiLoanDetails.reduce((sum, row) => sum + row.installmentAmount, 0);
       const koperasiMandatorySavingDeduction = koperasiMember?.simpananWajibBulanan ?? 0;
       const koperasiDeduction = koperasiLoanDeduction + koperasiMandatorySavingDeduction;
@@ -337,7 +357,11 @@ export default function PayrollProPage() {
     });
 
     const exportPeriod = run.periodStart && run.periodEnd ? `${fmtDate(run.periodStart)} - ${fmtDate(run.periodEnd)}` : run.periodLabel;
-    void exportEmployeePayrollSlips(exportRows, exportPeriod);
+    void exportEmployeePayrollSlips(exportRows, exportPeriod, {
+      approvedByUserId: run.approvedByUserId,
+      approvedBy: run.approvedBy,
+      approvedSignatureUrl: run.approvedSignatureUrl,
+    });
   }
 
   // ── History data ─────────────────────────────────────────────────────────
@@ -411,11 +435,14 @@ export default function PayrollProPage() {
             </button>
             <button
               disabled={mismatch || selectedRun.status !== 'Calculated' || isProcessingAction}
-              onClick={() => {
+              onClick={async () => {
                 if (isProcessingAction) return;
                 setIsProcessingAction(true);
                 try {
-                  updatePayrollRun(selectedRun.id, { status: 'Approved', approvedAt: new Date().toISOString(), approvedBy: 'Current User' });
+                  await updatePayrollRun(selectedRun.id, { status: 'Approved' });
+                  toast.success('Payroll berhasil disetujui');
+                } catch (error) {
+                  toast.error(error instanceof Error ? error.message : 'Approval payroll gagal');
                 } finally {
                   setIsProcessingAction(false);
                 }
@@ -445,11 +472,14 @@ export default function PayrollProPage() {
             </button>
             <button
               disabled={selectedRun.status !== 'Disbursed' || isProcessingAction}
-              onClick={() => {
+              onClick={async () => {
                 if (isProcessingAction) return;
                 setIsProcessingAction(true);
                 try {
-                  updatePayrollRun(selectedRun.id, { status: 'Closed', closedAt: new Date().toISOString() });
+                  await updatePayrollRun(selectedRun.id, { status: 'Closed', closedAt: new Date().toISOString() });
+                  toast.success('Payroll berhasil ditutup');
+                } catch (error) {
+                  toast.error(error instanceof Error ? error.message : 'Penutupan payroll gagal');
                 } finally {
                   setIsProcessingAction(false);
                 }

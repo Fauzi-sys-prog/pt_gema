@@ -2094,12 +2094,9 @@ export async function buildFinanceReconciliationCheckPayload(params: {
   const { loadDashboardPayloadRows, startDateRaw = "2026-01-01" } = params;
   const startDate = parseDate(startDateRaw) || new Date("2026-01-01");
 
-  const [invoices, vendorExpenses] = await Promise.all([
-    prisma.invoiceRecord.findMany({
-      select: invoiceDashboardSelect,
-    }),
-    loadDashboardPayloadRows("vendor-expenses"),
-  ]);
+  const invoices = await prisma.invoiceRecord.findMany({
+    select: invoiceDashboardSelect,
+  });
 
   const pettyDelegate = (prisma as unknown as Record<string, unknown>)
     .financePettyCashTransactionRecord as DashboardPettyCashDelegate | undefined;
@@ -2121,13 +2118,9 @@ export async function buildFinanceReconciliationCheckPayload(params: {
         readString(row, "tanggalBayar") || readString(row, "paidAt") || readString(row, "tanggal") || readString(row, "date")
       )
     );
-  const expenseRows = vendorExpenses
-    .map((row) => asRecord(row.payload))
-    .filter((row) =>
-      isOnOrAfterStart(
-        readString(row, "paidAt") || readString(row, "tanggalBayar") || readString(row, "tanggal") || readString(row, "date")
-      )
-    );
+  // Tambahan Biaya Proyek dibayar dari Petty Cash, bukan arus Bank.
+  // Jangan masukkan vendor-expenses ke bank reconciliation check.
+  const expenseRows: Array<Record<string, unknown>> = [];
   const pettyRows = pettyTransactions
     .map((tx) => ({ id: tx.id, payload: asRecord(tx.payload), updatedAt: tx.updatedAt }))
     .filter((tx) => {
@@ -2151,7 +2144,6 @@ export async function buildFinanceReconciliationCheckPayload(params: {
     recordCounts,
     lastUpdatedAt: maxDate([
       ...invoices.map((row) => row.updatedAt),
-      ...vendorExpenses.map((row) => row.updatedAt),
       ...pettyRows.map((row) => row.updatedAt),
     ]),
   };

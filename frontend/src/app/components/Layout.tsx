@@ -231,6 +231,7 @@ export default function Layout({ children }: LayoutProps) {
         { title: "Project Profit & Loss", path: "/finance/project-analysis" },
         { title: "General Ledger", path: "/finance/ledger" },
         { title: "Laporan Pajak PPN", path: "/finance/ppn" },
+        { title: "PPh 21", path: "/finance/pph21" },
         {
           title: "Aging AR (Analisis Umur Piutang)",
           path: "/finance/aging-ar",

@@ -181,6 +181,7 @@ const ApprovalCenterPage = lazy(
   () => import("./pages/finance/ApprovalCenterPage"),
 );
 const PPNPage = lazy(() => import("./pages/finance/PPNPage"));
+const PPh21Page = lazy(() => import("./pages/finance/PPh21Page"));
 const BankReconciliationPage = lazy(
   () => import("./pages/finance/BankReconciliationPage"),
 );
@@ -788,6 +789,7 @@ export default function App() {
                     </ProtectedRoute>
                   }
                 />
+                <Route path="/finance/pph21" element={<ProtectedRoute><Layout><PPh21Page /></Layout></ProtectedRoute>} />
                 <Route
                   path="/finance/ppn"
                   element={

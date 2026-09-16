@@ -195,7 +195,11 @@ function registerAlias(resource: (typeof ALIAS_RESOURCES)[number]) {
     try {
       const rows = await prisma.appEntity.findMany({
         where: { resource },
-        orderBy: { updatedAt: "desc" },
+        orderBy:
+          resource === "finance-petty-cash" ||
+          resource === "finance-warehouse-petty-cash"
+            ? { createdAt: "asc" }
+            : { updatedAt: "desc" },
         select: { entityId: true, payload: true },
       });
       return res.json(rows.map((row) => ensurePayloadWithId(row.entityId, row.payload)));
@@ -293,6 +297,60 @@ function registerAlias(resource: (typeof ALIAS_RESOURCES)[number]) {
             message: "Payroll yang sudah ditutup tidak dapat diubah",
             legacyError: "Payroll finalized",
           });
+        }
+
+        const approvalFields = [
+          "approvedByUserId",
+          "approvedBy",
+          "approvedAt",
+          "approvedSignatureUrl",
+        ] as const;
+
+        if (currentStatus === "CALCULATED" && nextStatus === "APPROVED") {
+          if (!req.user?.id) {
+            return sendError(res, 401, {
+              code: "UNAUTHORIZED",
+              message: "Unauthorized",
+              legacyError: "Unauthorized",
+            });
+          }
+
+          const approver = await prisma.user.findUnique({
+            where: { id: req.user.id },
+            select: {
+              id: true,
+              username: true,
+              name: true,
+              signatureUrl: true,
+            },
+          });
+
+          if (!approver) {
+            return sendError(res, 401, {
+              code: "APPROVER_NOT_FOUND",
+              message: "User approver tidak ditemukan",
+              legacyError: "Approver not found",
+            });
+          }
+
+          merged.approvedByUserId = approver.id;
+          merged.approvedBy = approver.name?.trim() || approver.username;
+          merged.approvedAt = new Date().toISOString();
+          merged.approvedSignatureUrl = approver.signatureUrl ?? null;
+        } else if (["APPROVED", "DISBURSED", "CLOSED"].includes(currentStatus)) {
+          // Snapshot approval immutable setelah payroll disetujui.
+          for (const field of approvalFields) {
+            if (Object.prototype.hasOwnProperty.call(currentPayload, field)) {
+              merged[field] = currentPayload[field];
+            } else {
+              delete merged[field];
+            }
+          }
+        } else {
+          // Status sebelum Approved tidak boleh menyuntikkan identitas / TTD approver.
+          for (const field of approvalFields) {
+            delete merged[field];
+          }
         }
       }
       await prisma.appEntity.update({

@@ -2248,18 +2248,32 @@ model HrLeaveRecord {
 model KoperasiMember {
   id                   String             @id
   memberNo             String             @unique
-  employeeId           String             @unique
+
+  // Unified member identity:
+  // EMPLOYEE -> subjectId = EmployeeRecord.id
+  // THL      -> subjectId = AppEntity.entityId (resource hr-thl-contracts)
+  memberType           String             @default("EMPLOYEE")
+  subjectId            String?
+
+  // Legacy employee relation tetap dipertahankan untuk anggota karyawan.
+  // THL tidak punya EmployeeRecord, jadi employeeId/employee harus nullable.
+  employeeId           String?            @unique
   employeeName         String
+
   joinDate             DateTime
   status               String             @default("Active")
   simpananPokok        Decimal            @default(0) @db.Decimal(18, 2)
   simpananWajibBulanan Decimal            @default(0) @db.Decimal(18, 2)
-  employee             EmployeeRecord     @relation(fields: [employeeId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  employee             EmployeeRecord?    @relation(fields: [employeeId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   simpanans            KoperasiSimpanan[]
   pinjamans            KoperasiPinjaman[]
+
   createdAt            DateTime           @default(now())
   updatedAt            DateTime           @updatedAt
 
+  @@unique([memberType, subjectId])
+  @@index([memberType])
   @@index([status])
 }
 

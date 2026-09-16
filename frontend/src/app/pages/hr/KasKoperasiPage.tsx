@@ -52,7 +52,7 @@ export default function KasKoperasiPage() {
     koperasiSimpananList, addKoperasiSimpanan,
     koperasiPinjamanList, addKoperasiPinjaman, approveKoperasiPinjaman, bayarKoperasiAngsuran,
     koperasiBalance, topUpKoperasi,
-    employeeList,
+    employeeList, thlList,
   } = useApp();
 
   const [tab, setTab] = useState<Tab>("anggota");
@@ -67,7 +67,12 @@ export default function KasKoperasiPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [processingId, setProcessingId] = useState<string | null>(null);
 
-  const [memberForm, setMemberForm] = useState({ employeeId: "", simpananPokok: SIMPANAN_POKOK_DEFAULT, simpananWajibBulanan: 0 });
+  const [memberForm, setMemberForm] = useState({
+    memberType: "EMPLOYEE" as "EMPLOYEE" | "THL",
+    subjectId: "",
+    simpananPokok: SIMPANAN_POKOK_DEFAULT,
+    simpananWajibBulanan: 0,
+  });
 
   const [simpananForm, setSimpananForm] = useState({
     memberId: "", type: "Wajib" as "Wajib" | "Sukarela",
@@ -87,7 +92,7 @@ export default function KasKoperasiPage() {
     const totalSimpanan = totalSimpananPokok + totalSimpananWajibSukarela;
     const activePinjaman = koperasiPinjamanList.filter(p => p.status === "Active");
     const totalPinjaman = activePinjaman.reduce((s, p) =>
-      s + (p.installmentCount - p.paidInstallments) * p.installmentAmount, 0);
+      s + Math.max(0, p.totalAmount - p.paidInstallments * p.installmentAmount), 0);
     const pendingPinjaman = koperasiPinjamanList.filter(p => p.status === "Pending").length;
     return { activeMembers, totalSimpanan, totalPinjaman, pendingPinjaman };
   }, [koperasiMembers, koperasiSimpananList, koperasiPinjamanList]);
@@ -121,19 +126,80 @@ export default function KasKoperasiPage() {
   const handleAddMember = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isAddingMember) return;
-    const emp = employeeList.find(x => x.id === memberForm.employeeId);
-    if (!emp) { toast.error("Pilih karyawan"); return; }
-    if (koperasiMembers.find(m => m.employeeId === emp.id)) { toast.error("Karyawan sudah jadi anggota"); return; }
+
+    const memberType = memberForm.memberType;
+    const subjectId = memberForm.subjectId;
+
+    if (!subjectId) {
+      toast.error(memberType === "EMPLOYEE" ? "Pilih karyawan" : "Pilih THL");
+      return;
+    }
+
+    const employee = memberType === "EMPLOYEE"
+      ? employeeList.find(x => x.id === subjectId)
+      : undefined;
+
+    const thl = memberType === "THL"
+      ? thlList.find(x => x.id === subjectId)
+      : undefined;
+
+    if (memberType === "EMPLOYEE" && !employee) {
+      toast.error("Karyawan tidak ditemukan");
+      return;
+    }
+
+    if (memberType === "THL" && !thl) {
+      toast.error("THL tidak ditemukan");
+      return;
+    }
+
+    const alreadyMember = koperasiMembers.some(member => {
+      const existingType = member.memberType ?? "EMPLOYEE";
+      const existingSubjectId = member.subjectId ?? member.employeeId;
+      return existingType === memberType && existingSubjectId === subjectId;
+    });
+
+    if (alreadyMember) {
+      toast.error(memberType === "EMPLOYEE"
+        ? "Karyawan sudah jadi anggota"
+        : "THL sudah jadi anggota");
+      return;
+    }
+
+    const memberName = memberType === "EMPLOYEE"
+      ? employee!.name
+      : thl!.nama;
+
     const memberNo = `KOP/${new Date().getFullYear()}/${String(koperasiMembers.length + 1).padStart(4, "0")}`;
     const submittedForm = { ...memberForm };
+
     setIsAddingMember(true);
     setShowAddMember(false);
-    const loadingToast = toast.loading(`Menyimpan anggota ${emp.name}...`);
+
+    const loadingToast = toast.loading(`Menyimpan anggota ${memberName}...`);
+
     try {
-      await addKoperasiMember({ id: `km-${Date.now()}`, memberNo, employeeId: emp.id, employeeName: emp.name,
-        joinDate: new Date().toISOString().split("T")[0], status: "Active", simpananPokok: memberForm.simpananPokok, simpananWajibBulanan: memberForm.simpananWajibBulanan });
-      toast.success(`${emp.name} berhasil jadi anggota koperasi`, { id: loadingToast });
-      setMemberForm({ employeeId: "", simpananPokok: SIMPANAN_POKOK_DEFAULT, simpananWajibBulanan: 0 });
+      await addKoperasiMember({
+        id: `km-${Date.now()}`,
+        memberNo,
+        memberType,
+        subjectId,
+        employeeId: memberType === "EMPLOYEE" ? subjectId : null,
+        employeeName: memberName,
+        joinDate: new Date().toISOString().split("T")[0],
+        status: "Active",
+        simpananPokok: memberForm.simpananPokok,
+        simpananWajibBulanan: memberForm.simpananWajibBulanan,
+      });
+
+      toast.success(`${memberName} berhasil jadi anggota koperasi`, { id: loadingToast });
+
+      setMemberForm({
+        memberType: "EMPLOYEE",
+        subjectId: "",
+        simpananPokok: SIMPANAN_POKOK_DEFAULT,
+        simpananWajibBulanan: 0,
+      });
     } catch (error) {
       setMemberForm(submittedForm);
       setShowAddMember(true);
@@ -171,7 +237,7 @@ export default function KasKoperasiPage() {
     const adminFeePercent = 2.5;
     const adminFeeAmount = Math.round(pinjamanForm.amount * adminFeePercent / 100);
     const totalAmount = pinjamanForm.amount + adminFeeAmount;
-    const installmentAmount = Math.round(totalAmount / pinjamanForm.installmentCount);
+    const installmentAmount = Math.round(pinjamanForm.amount / pinjamanForm.installmentCount);
     const pinjamanNo = `PIN/${new Date().getFullYear()}/${String(koperasiPinjamanList.length + 1).padStart(4, "0")}`;
     setIsSubmitting(true);
     try {
@@ -470,15 +536,63 @@ export default function KasKoperasiPage() {
 
       {/* ── Modal: Tambah Anggota ── */}
       {showAddMember && (
-        <KopModal title="Tambah Anggota" subtitle="Daftarkan karyawan ke koperasi" onClose={() => setShowAddMember(false)}>
+        <KopModal title="Tambah Anggota" subtitle="Daftarkan karyawan atau THL ke koperasi" onClose={() => setShowAddMember(false)}>
           <form onSubmit={handleAddMember} className="space-y-4">
             <div>
-              <label className="kop-label">Karyawan *</label>
-              <select value={memberForm.employeeId} onChange={e => setMemberForm(f => ({ ...f, employeeId: e.target.value }))} required className="kop-input">
-                <option value="">— Pilih Karyawan —</option>
-                {employeeList.filter(e => e.status === "Active" && !koperasiMembers.find(m => m.employeeId === e.id)).map(e => (
-                  <option key={e.id} value={e.id}>{e.name} · {e.position}</option>
-                ))}
+              <label className="kop-label">Jenis Anggota *</label>
+              <select
+                value={memberForm.memberType}
+                onChange={e => setMemberForm(f => ({
+                  ...f,
+                  memberType: e.target.value as "EMPLOYEE" | "THL",
+                  subjectId: "",
+                }))}
+                className="kop-input"
+              >
+                <option value="EMPLOYEE">Karyawan</option>
+                <option value="THL">THL</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="kop-label">
+                {memberForm.memberType === "EMPLOYEE" ? "Karyawan" : "THL"} *
+              </label>
+              <select
+                value={memberForm.subjectId}
+                onChange={e => setMemberForm(f => ({ ...f, subjectId: e.target.value }))}
+                required
+                className="kop-input"
+              >
+                <option value="">
+                  — Pilih {memberForm.memberType === "EMPLOYEE" ? "Karyawan" : "THL"} —
+                </option>
+
+                {memberForm.memberType === "EMPLOYEE"
+                  ? employeeList
+                      .filter(e =>
+                        e.status === "Active" &&
+                        !koperasiMembers.some(m =>
+                          (m.memberType ?? "EMPLOYEE") === "EMPLOYEE" &&
+                          (m.subjectId ?? m.employeeId) === e.id
+                        )
+                      )
+                      .map(e => (
+                        <option key={e.id} value={e.id}>{e.name} · {e.position}</option>
+                      ))
+                  : thlList
+                      .filter(t =>
+                        !koperasiMembers.some(m =>
+                          m.memberType === "THL" &&
+                          m.subjectId === t.id
+                        )
+                      )
+                      .map(t => (
+                        <option key={t.id} value={t.id}>
+                          {t.nama} · {t.posisi} · {t.status}
+                        </option>
+                      ))
+                }
               </select>
             </div>
             <div>

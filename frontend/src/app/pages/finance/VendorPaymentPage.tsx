@@ -586,14 +586,22 @@ export default function VendorPaymentPage() {
                               )}
                               {expense.status === 'Approved' && (
                                 <button
-                                  onClick={() => {
-                                    setSelectedExpense(expense);
-                                    setPayForm({ bank: 'BCA PT Gema Teknik Perkasa', noBukti: '', tanggal: new Date().toISOString().split('T')[0] });
-                                    setShowPayModal(true);
+                                  onClick={async () => {
+                                    if (processingId) return;
+                                    setProcessingId(expense.id);
+                                    try {
+                                      await approveExpense(expense.id, currentUser?.fullName || 'Admin');
+                                      toast.success('Expense dibayar dari Petty Cash');
+                                    } catch (err) {
+                                      toast.error('Gagal bayar dari Petty Cash: ' + (err instanceof Error ? err.message : 'Unknown error'));
+                                    } finally {
+                                      setProcessingId(null);
+                                    }
                                   }}
-                                  className="px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-bold hover:bg-emerald-700 transition-all"
+                                  disabled={processingId === expense.id}
+                                  className="px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-bold hover:bg-emerald-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
-                                  Mark as Paid
+                                  Bayar Petty Cash
                                 </button>
                               )}
                               <button

@@ -116,6 +116,7 @@ usersRouter.get("/users", authenticate, async (req: AuthRequest, res: Response) 
           username: true,
           name: true,
           phone: true,
+          signatureUrl: true,
           role: true,
           isActive: true,
           createdAt: true,
@@ -165,7 +166,7 @@ usersRouter.patch(
       });
     }
 
-    const { email, username, role, name, phone, password, isActive } = parsed.data;
+    const { email, username, role, name, phone, signatureUrl, password, isActive } = parsed.data;
 
     const existingUser = await prisma.user.findUnique({
       where: { id },
@@ -176,7 +177,7 @@ usersRouter.patch(
     }
 
     if (req.user?.role === "SPV") {
-      const nonPasswordUpdates = [email, username, role, name, phone, isActive].some(
+      const nonPasswordUpdates = [email, username, role, name, phone, signatureUrl, isActive].some(
         (value) => typeof value !== "undefined"
       );
 
@@ -232,6 +233,12 @@ usersRouter.patch(
               : phone.trim().length > 0
                 ? phone.trim()
                 : null,
+          signatureUrl:
+            typeof signatureUrl === "undefined"
+              ? undefined
+              : signatureUrl && signatureUrl.trim().length > 0
+                ? signatureUrl.trim()
+                : null,
           password: hashedPassword,
           isActive,
         }, select: {
@@ -240,6 +247,7 @@ usersRouter.patch(
           username: true,
           name: true,
           phone: true,
+          signatureUrl: true,
           role: true,
           isActive: true,
           lastLoginAt: true,

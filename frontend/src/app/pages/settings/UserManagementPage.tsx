@@ -75,8 +75,7 @@ export default function UserManagementPage() {
     setIsSubmitting(true);
     try {
       if (editingUser) {
-        updateUser(editingUser.id, { ...formData, username, email, fullName });
-        toast.success('User berhasil diupdate.');
+        await updateUser(editingUser.id, { ...formData, username, email, fullName });
       } else {
         await addUser({
           ...formData,
@@ -110,6 +109,7 @@ export default function UserManagementPage() {
       role: user.role,
       department: user.department,
       phone: user.phone,
+      signatureUrl: user.signatureUrl,
       status: user.status,
     });
     setShowModal(true);
@@ -467,6 +467,85 @@ export default function UserManagementPage() {
                   />
                 </div>
               </div>
+
+              {editingUser && (
+                <div className="rounded-lg border border-gray-200 p-4 space-y-3">
+                  <div>
+                    <label className="block text-gray-700 mb-2">
+                      Tanda Tangan
+                    </label>
+                    <input
+                      type="file"
+                      accept="image/png,image/jpeg"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+
+                        if (file.size > 1_400_000) {
+                          setFormError('Ukuran file tanda tangan maksimal sekitar 1,4 MB.');
+                          e.target.value = '';
+                          return;
+                        }
+
+                        const reader = new FileReader();
+                        reader.onload = () => {
+                          const result = typeof reader.result === 'string' ? reader.result : '';
+                          if (!result.startsWith('data:image/')) {
+                            setFormError('File tanda tangan harus berupa gambar.');
+                            return;
+                          }
+                          if (result.length > 2_000_000) {
+                            setFormError('File tanda tangan terlalu besar.');
+                            return;
+                          }
+
+                          setFormError(null);
+                          setFormData((prev) => ({
+                            ...prev,
+                            signatureUrl: result,
+                          }));
+                        };
+                        reader.onerror = () => {
+                          setFormError('File tanda tangan gagal dibaca.');
+                        };
+                        reader.readAsDataURL(file);
+                      }}
+                      className="block w-full text-sm text-gray-600"
+                    />
+                    <p className="mt-1 text-xs text-gray-500">
+                      PNG/JPG. Tanda tangan ini akan dipakai sebagai snapshot saat user melakukan approval.
+                    </p>
+                  </div>
+
+                  {formData.signatureUrl ? (
+                    <div className="flex items-center gap-4">
+                      <div className="flex h-24 w-48 items-center justify-center rounded border border-gray-200 bg-white p-2">
+                        <img
+                          src={formData.signatureUrl}
+                          alt="Preview tanda tangan"
+                          className="max-h-full max-w-full object-contain"
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setFormData((prev) => ({
+                            ...prev,
+                            signatureUrl: '',
+                          }))
+                        }
+                        className="px-3 py-2 text-sm text-red-600 border border-red-200 rounded-lg hover:bg-red-50"
+                      >
+                        Hapus TTD
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="text-sm text-gray-500">
+                      Belum ada tanda tangan tersimpan.
+                    </div>
+                  )}
+                </div>
+              )}
 
               <div>
                 <label className="block text-gray-700 mb-2">Status</label>

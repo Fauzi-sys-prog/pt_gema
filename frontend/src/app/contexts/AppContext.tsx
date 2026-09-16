@@ -58,6 +58,7 @@ type BackendUser = {
   username: string;
   name?: string | null;
   phone?: string | null;
+  signatureUrl?: string | null;
   role: string;
   isActive?: boolean;
   lastLogin?: string | null;
@@ -102,6 +103,7 @@ const mapBackendUser = (user: BackendUser): User => {
     username: user.username,
     email: user.email || "",
     phone: user.phone || "",
+    signatureUrl: user.signatureUrl || undefined,
     fullName: user.name || user.username,
     role,
     department: departmentFromRole(role),
@@ -1097,6 +1099,12 @@ export interface PettyCashEntry {
   kasir?: string;
   sumberDana?: string;
   bonList?: { name: string; url: string }[];
+  sourceType?: string;
+  sourceId?: string;
+  projectId?: string;
+  projectName?: string;
+  ref?: string;
+  kategori?: string;
 }
 
 export interface TopUpRequest {
@@ -1522,8 +1530,10 @@ export interface PayrollRun {
     "Draft" | "Calculated" | "Reviewed" | "Approved" | "Disbursed" | "Closed";
   slips: PayrollSlip[];
   processedBy: string;
+  approvedByUserId?: string;
   approvedBy?: string;
   approvedAt?: string;
+  approvedSignatureUrl?: string | null;
   disbursedAt?: string;
   closedAt?: string;
   notes?: string;
@@ -1603,8 +1613,17 @@ export interface StockOpname {
 export interface KoperasiMember {
   id: string;
   memberNo: string;
-  employeeId: string;
+
+  // Unified identity:
+  // EMPLOYEE -> subjectId = EmployeeRecord.id
+  // THL      -> subjectId = hr-thl-contracts entity id
+  memberType?: "EMPLOYEE" | "THL";
+  subjectId?: string | null;
+
+  // Hanya terisi untuk member karyawan.
+  employeeId?: string | null;
   employeeName: string;
+
   joinDate: string;
   status: "Active" | "Inactive";
   simpananPokok: number;
@@ -1763,7 +1782,7 @@ export interface AppContextType {
   addAuditLog: (
     log: Omit<AuditLog, "id" | "timestamp" | "userId" | "userName">,
   ) => void;
-  updateUser: (id: string, updates: Partial<User>) => void;
+  updateUser: (id: string, updates: Partial<User>) => Promise<void>;
   addUser: (user: User) => Promise<BackendUser>;
   deleteUser: (id: string) => Promise<void>;
   addPO: (po: PurchaseOrder) => void;
@@ -1915,7 +1934,7 @@ export interface AppContextType {
   addExpense: (expense: VendorExpense) => void;
   updateExpense: (id: string, updates: Partial<VendorExpense>) => void;
   deleteExpense: (id: string) => void;
-  approveExpense: (id: string, approver: string) => void;
+  approveExpense: (id: string, approver: string) => Promise<void>;
   rejectExpense: (id: string, reason: string) => void;
   addCustomer: (customer: Customer) => void;
   updateCustomer: (id: string, updates: Partial<Customer>) => void;
@@ -1961,7 +1980,7 @@ export interface AppContextType {
   ) => void;
   payrollRunList: PayrollRun[];
   addPayrollRun: (run: PayrollRun) => void;
-  updatePayrollRun: (id: string, updates: Partial<PayrollRun>) => void;
+  updatePayrollRun: (id: string, updates: Partial<PayrollRun>) => Promise<void>;
   disbursePayrollRun: (
     id: string,
     updates: Partial<PayrollRun>,
@@ -2853,24 +2872,20 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({
         }),
       );
 
-  // Kas kecil dan request top-up tetap memakai bentuk data UI yang lama, tetapi
-  // sumber utamanya kini AppEntity di PostgreSQL. LocalStorage hanya fallback bila offline.
+  // Kas kecil dan request top-up memakai AppEntity PostgreSQL sebagai
+  // sumber kebenaran setelah login. Cache browser tidak boleh menulis balik
+  // otomatis ke database ketika hasil dari server kosong.
   useEffect(() => {
     if (!localStorage.getItem("authToken")) return;
     let active = true;
     const syncList = async <T extends { id: string }>(
       path: string,
-      cached: T[],
+      _cached: T[],
       apply: (rows: T[]) => void,
     ) => {
       const rows = await api.request<T[]>(path);
       if (!active) return;
-      if (rows.length > 0) apply(rows);
-      else if (cached.length > 0)
-        await api.request(`${path}/bulk`, {
-          method: "PUT",
-          body: JSON.stringify(cached),
-        });
+      apply(rows);
     };
 
     Promise.all([
@@ -3001,22 +3016,39 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({
       );
     });
   };
-  const updatePayrollRun = (id: string, updates: Partial<PayrollRun>) => {
+  const updatePayrollRun = async (
+    id: string,
+    updates: Partial<PayrollRun>,
+  ): Promise<void> => {
     const current = payrollRunList.find((run) => run.id === id);
-    if (!current) return;
+    if (!current) throw new Error("Payroll tidak ditemukan");
+
     const next = { ...current, ...updates };
+
+    // Optimistic untuk respons UI, tetapi state final harus memakai payload
+    // hasil backend karena approval identity/signature ditentukan server.
     setPayrollRunList((prev) =>
       prev.map((run) => (run.id === id ? next : run)),
     );
-    if (!localStorage.getItem("authToken")) return;
-    void persistHrAlias("/hr-payroll-runs", next).catch((error) => {
+
+    if (!localStorage.getItem("authToken")) {
       setPayrollRunList((prev) =>
         prev.map((run) => (run.id === id ? current : run)),
       );
-      toast.error(
-        `Payroll gagal diperbarui: ${error instanceof Error ? error.message : "database tidak dapat dihubungi"}`,
+      throw new Error("Sesi login tidak tersedia");
+    }
+
+    try {
+      const saved = await persistHrAlias("/hr-payroll-runs", next);
+      setPayrollRunList((prev) =>
+        prev.map((run) => (run.id === id ? saved : run)),
       );
-    });
+    } catch (error) {
+      setPayrollRunList((prev) =>
+        prev.map((run) => (run.id === id ? current : run)),
+      );
+      throw error;
+    }
   };
   const disbursePayrollRun = async (
     id: string,
@@ -3507,9 +3539,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({
           next,
         );
         setPettyCashGudangList((prev) => [...prev, saved]);
-      } catch {
+      } catch (error) {
         toast.error("Transaksi kas gudang gagal disimpan");
-        return;
+        throw error;
       }
     } else setPettyCashGudangList((prev) => [...prev, next]);
   };
@@ -3890,9 +3922,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({
     }
   };
 
-  const updateUser = (id: string, updates: Partial<User>) => {
+  const updateUser = async (id: string, updates: Partial<User>): Promise<void> => {
     const existing = userList.find((user) => user.id === id);
-    if (!existing) return;
+    if (!existing) throw new Error("User tidak ditemukan");
     const next = { ...existing, ...updates };
     setUserList((prev) => prev.map((user) => (user.id === id ? next : user)));
 
@@ -3904,25 +3936,28 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({
     };
     if (next.email) payload.email = next.email;
     if (typeof next.phone !== "undefined") payload.phone = next.phone;
+    if (typeof updates.signatureUrl !== "undefined") {
+      payload.signatureUrl = updates.signatureUrl || null;
+    }
     if (updates.password?.trim()) payload.password = updates.password.trim();
 
-    api
-      .request<BackendUser>(`/users/${id}`, {
+    try {
+      const saved = await api.request<BackendUser>(`/users/${id}`, {
         method: "PATCH",
         body: JSON.stringify(payload),
-      })
-      .then((saved) => {
-        setUserList((prev) =>
-          prev.map((user) => (user.id === id ? mapBackendUser(saved) : user)),
-        );
-        toast.success("User berhasil diperbarui");
-      })
-      .catch((error) => {
-        setUserList((prev) =>
-          prev.map((user) => (user.id === id ? existing : user)),
-        );
-        toast.error(`User gagal diperbarui: ${error.message}`);
       });
+      setUserList((prev) =>
+        prev.map((user) => (user.id === id ? mapBackendUser(saved) : user)),
+      );
+      toast.success("User berhasil diperbarui");
+    } catch (error) {
+      setUserList((prev) =>
+        prev.map((user) => (user.id === id ? existing : user)),
+      );
+      const message = error instanceof Error ? error.message : "Kesalahan server";
+      toast.error(`User gagal diperbarui: ${message}`);
+      throw error;
+    }
   };
 
   const deleteUser = async (id: string): Promise<void> => {
@@ -6112,47 +6147,31 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({
     });
   };
 
-  const approveExpense = (id: string, approver: string) => {
-    const current = expenseList.find((e) => e.id === id);
-    const approvedAt = new Date().toISOString();
-    setExpenseList((prev) =>
-      prev.map((e) =>
-        e.id === id
-          ? { ...e, status: "Approved", approvedBy: approver, approvedAt }
-          : e,
-      ),
-    );
-    if (current && localStorage.getItem("authToken")) {
-      api
-        .request<VendorExpense>(
-          `/finance/vendor-expenses/${encodeURIComponent(id)}`,
-          {
-            method: "PATCH",
-            body: JSON.stringify({
-              ...current,
-              status: "Approved",
-              approvedBy: approver,
-              approvedAt,
-            }),
-          },
-        )
-        .catch((error) => {
-          if (current)
-            setExpenseList((prev) =>
-              prev.map((e) => (e.id === id ? current : e)),
-            );
-          toast.error(
-            `Approval biaya gagal disimpan ke database: ${error.message}`,
-          );
-        });
+  const approveExpense = async (id: string, approver: string): Promise<void> => {
+    if (!localStorage.getItem("authToken")) {
+      throw new Error("Sesi login tidak ditemukan");
     }
-    const expense = expenseList.find((e) => e.id === id);
-    toast.success(`Expense ${expense?.noExpense} telah disetujui!`);
-    addAuditLog({
-      action: "Expense Approved",
-      module: "Finance",
-      details: `Menyetujui expense: ${expense?.noExpense} - Rp ${expense?.totalNominal.toLocaleString("id-ID")}`,
-      status: "Success",
+
+    const result = await api.request<{
+      expense: VendorExpense;
+      entry: PettyCashEntry;
+    }>(
+      `/finance/vendor-expenses/${encodeURIComponent(id)}/approve-petty-cash`,
+      {
+        method: "POST",
+        body: JSON.stringify({ approverName: approver }),
+      },
+    );
+
+    setExpenseList((prev) =>
+      prev.map((e) => (e.id === id ? result.expense : e)),
+    );
+
+    setPettyCashList((prev) => {
+      const exists = prev.some((e) => e.id === result.entry.id);
+      return exists
+        ? prev.map((e) => (e.id === result.entry.id ? result.entry : e))
+        : [...prev, result.entry];
     });
   };
 
@@ -6703,9 +6722,22 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({
   // Kas Koperasi uses dedicated PostgreSQL tables. Local state is updated only
   // after the API confirms the write so the displayed balance cannot diverge.
   const addKoperasiMember = async (member: KoperasiMember) => {
+    const memberType = member.memberType ?? "EMPLOYEE";
+    const subjectId = member.subjectId ?? member.employeeId ?? undefined;
+
     const saved = await api.request<KoperasiMember>("/koperasi/members", {
       method: "POST",
-      body: JSON.stringify(member),
+      body: JSON.stringify({
+        id: member.id,
+        memberNo: member.memberNo,
+        memberType,
+        subjectId,
+        employeeId: memberType === "EMPLOYEE" ? member.employeeId ?? subjectId : undefined,
+        employeeName: member.employeeName,
+        joinDate: member.joinDate,
+        simpananPokok: member.simpananPokok,
+        simpananWajibBulanan: member.simpananWajibBulanan,
+      }),
     });
     setKoperasiMembers((prev) => [
       ...prev.filter((item) => item.id !== saved.id),
@@ -6742,7 +6774,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({
   const addKoperasiPinjaman = async (pinjaman: KoperasiPinjaman) => {
     const saved = await api.request<KoperasiPinjaman>("/koperasi/pinjaman", {
       method: "POST",
-      body: JSON.stringify(pinjaman),
+      body: JSON.stringify({
+        id: pinjaman.id,
+        pinjamanNo: pinjaman.pinjamanNo,
+        memberId: pinjaman.memberId,
+        amount: pinjaman.amount,
+        installmentCount: pinjaman.installmentCount,
+        requestDate: pinjaman.requestDate,
+        notes: pinjaman.notes,
+      }),
     });
     setKoperasiPinjamanList((prev) => [
       ...prev.filter((item) => item.id !== saved.id),

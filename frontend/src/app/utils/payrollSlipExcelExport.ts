@@ -14,8 +14,44 @@ function border(ws: ExcelJS.Worksheet, r1: number, r2: number, c1: number, c2: n
 function rupiah(ws: ExcelJS.Worksheet, row: number, label: string, value: number) { ws.mergeCells(`A${row}:C${row}`); ws.getCell(`A${row}`).value=label; ws.getCell(`D${row}`).value='Rp'; ws.getCell(`E${row}`).value=value; ws.getCell(`E${row}`).numFmt=money; }
 
 /** One sheet per permanent employee. THL is deliberately excluded from this payroll slip export. */
-export async function exportEmployeePayrollSlips(rows: any[], period: string) {
-  const workbook = new ExcelJS.Workbook(); const logo = workbook.addImage({ base64: await getLogo(), extension: 'png' });
+type PayrollApprovalSnapshot = {
+  approvedByUserId?: string;
+  approvedBy?: string;
+  approvedSignatureUrl?: string | null;
+};
+
+export async function exportEmployeePayrollSlips(
+  rows: any[],
+  period: string,
+  approval?: PayrollApprovalSnapshot,
+) {
+  const workbook = new ExcelJS.Workbook();
+  const logo = workbook.addImage({ base64: await getLogo(), extension: 'png' });
+
+  const isSyamsudinApprover =
+    approval?.approvedByUserId === 'e74dc394-0f80-4bec-91e8-bea02b20c09f';
+  const approverName = isSyamsudinApprover
+    ? 'SYAMSUDIN'
+    : String(approval?.approvedBy || 'SYAMSUDIN').toUpperCase();
+  const signatureDataUrl = isSyamsudinApprover
+    ? approval?.approvedSignatureUrl || ''
+    : '';
+  let approverSignature: number | undefined;
+
+  if (signatureDataUrl.startsWith('data:image/png')) {
+    approverSignature = workbook.addImage({
+      base64: signatureDataUrl,
+      extension: 'png',
+    });
+  } else if (
+    signatureDataUrl.startsWith('data:image/jpeg') ||
+    signatureDataUrl.startsWith('data:image/jpg')
+  ) {
+    approverSignature = workbook.addImage({
+      base64: signatureDataUrl,
+      extension: 'jpeg',
+    });
+  }
   const employees = rows.filter((row) => String(row.employmentType || '').toUpperCase() !== 'THL');
   employees.forEach((employee, index) => {
     const employeeName = String(employee.employeeName || employee.name || `Karyawan ${index+1}`);
@@ -47,7 +83,14 @@ export async function exportEmployeePayrollSlips(rows: any[], period: string) {
     border(ws,5,13,1,5);border(ws,5,12,6,8);border(ws,13,18,6,8);border(ws,14,25,1,5);border(ws,19,25,6,8);[13,23,25].forEach(r=>{for(let c=1;c<=8;c+=1)ws.getCell(r,c).font={name:'Arial',size:9,bold:true};});
     // Keep the THP total on row 25; the date belongs to its own footer row.
     ws.mergeCells('A26:H26');ws.getCell('A26').value=`Bekasi, ${new Date().toLocaleDateString('id-ID')}`;ws.getCell('A26').alignment={horizontal:'center'};
-    [['A28','Mengetahui,'],['D28','Menyetujui,'],['G28','Menerima,'],['A33','SYAMSUDIN'],['D33','SRI RAHAYU'],['G33',employeeName.toUpperCase()]].forEach(([cell,value])=>{ws.getCell(cell).value=value;ws.getCell(cell).alignment={horizontal:'center'};ws.getCell(cell).font={name:'Arial',size:9};});border(ws,27,33,1,8);ws.pageSetup.printArea='A1:H33';
+    [['A28','Mengetahui,'],['D28','Menyetujui,'],['G28','Menerima,'],['A33',approverName],['D33','SRI RAHAYU'],['G33',employeeName.toUpperCase()]].forEach(([cell,value])=>{ws.getCell(cell).value=value;ws.getCell(cell).alignment={horizontal:'center'};ws.getCell(cell).font={name:'Arial',size:9};});
+    if (approverSignature !== undefined) {
+      ws.addImage(approverSignature, {
+        tl: { col: 0.45, row: 28.4 },
+        ext: { width: 115, height: 55 },
+      });
+    }
+    border(ws,27,33,1,8);ws.pageSetup.printArea='A1:H33';
   });
   const buffer=await workbook.xlsx.writeBuffer();const url=URL.createObjectURL(new Blob([buffer],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));const anchor=document.createElement('a');anchor.href=url;anchor.download=`Slip_Gaji_Karyawan_${period.replace(/\s/g,'_')}.xlsx`;anchor.click();URL.revokeObjectURL(url);
 }

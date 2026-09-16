@@ -143,7 +143,7 @@ export default function GeneralLedgerPage() {
           date: paymentDate,
           reference: `#GJ-EXP-${String(idx + 1).padStart(3, '0')}`,
           description: `Pembayaran ${exp.kategori} — ${exp.vendorName}${exp.projectName ? ` (${exp.projectName})` : ''}`,
-          category: 'Bank',
+          category: exp.bank === 'Petty Cash' ? 'Petty Cash' : 'Bank',
           debit: 0,
           credit: exp.totalNominal || 0,
         });
@@ -223,7 +223,12 @@ export default function GeneralLedgerPage() {
 
     // Petty Cash Kantor — credit = pengeluaran kas
     pettyCashList
-      .filter(e => e.date && e.credit > 0 && e.accountCode !== '00000')
+      .filter(e =>
+        e.date &&
+        e.credit > 0 &&
+        e.accountCode !== '00000' &&
+        e.sourceType !== 'VENDOR_EXPENSE'
+      )
       .forEach((e, idx) => {
         addLine({
           id: `erp-pc-${e.id}`,

@@ -57,7 +57,7 @@ financeOpsRouter.post("/finance/petty-cash-topups/:id/approve", authenticate, as
       const amount = toFiniteNumber(request.amount, 0);
       if (amount <= 0) throw new Error("Nominal top-up tidak valid");
       const approved = { ...request, id, status: "Approved", approvedBy: req.body?.approverName || req.user?.id || "Manager", approvedAt: new Date().toISOString() };
-      const entries = await tx.appEntity.findMany({ where: { resource: cashResource }, orderBy: { updatedAt: "desc" }, take: 1 });
+      const entries = await tx.appEntity.findMany({ where: { resource: cashResource }, orderBy: { createdAt: "desc" }, take: 1 });
       const last = entries[0] ? toFiniteNumber(asRecord(entries[0].payload).balance, 0) : 0;
       const entry = { id: randomUUID(), date: request.date || new Date().toISOString().slice(0, 10), accountCode: "00000", description: `Top-Up Kas Kecil dari ${request.bank || "Bank"}${request.notes ? ` — ${request.notes}` : ""}`, debit: amount, credit: 0, balance: last + amount, kasir: request.bank || "", sumberDana: request.bank || "" };
       await tx.appEntity.update({ where: { resource_entityId: { resource: topupResource, entityId: id } }, data: { payload: approved as Prisma.InputJsonValue } });
@@ -116,6 +116,293 @@ financeOpsRouter.post("/finance/petty-cash-topups/:id/reject", authenticate, asy
     return res.json(result);
   } catch (err) {
     return sendError(res, 400, { code: "TOPUP_REJECT_FAILED", message: err instanceof Error ? err.message : "Penolakan gagal", legacyError: "Top-up reject failed" });
+  }
+});
+
+
+// Post a manual petty-cash expense atomically.
+// Manual entry hanya untuk uang keluar. Uang masuk wajib melalui flow Top-Up + approval.
+financeOpsRouter.post("/finance/petty-cash/manual-entry", authenticate, async (req: AuthRequest, res: Response) => {
+  const warehouse = req.body?.warehouse === true;
+
+  const allowedRoles: Role[] = warehouse
+    ? [
+        "OWNER",
+        "SPV",
+        "ADMIN",
+        "MANAGER",
+        "FINANCE",
+        "FINANCE_ACCOUNTING",
+        "OPERATIONAL_PRODUCTION",
+        "OPERATIONS",
+      ]
+    : [
+        "OWNER",
+        "SPV",
+        "ADMIN",
+        "MANAGER",
+        "FINANCE",
+        "FINANCE_ACCOUNTING",
+      ];
+
+  if (!allowedRoles.includes(req.user?.role as Role)) {
+    return sendError(res, 403, {
+      code: "FORBIDDEN",
+      message: "Anda tidak berhak mencatat transaksi Petty Cash",
+      legacyError: "Forbidden",
+    });
+  }
+
+  const cashResource = warehouse
+    ? "finance-warehouse-petty-cash"
+    : "finance-petty-cash";
+
+  try {
+    const result = await financeOpsSerializableTransaction(async (tx) => {
+      const date = asTrimmedString(req.body?.date);
+      const accountCode = asTrimmedString(req.body?.accountCode);
+      const description = asTrimmedString(req.body?.description);
+      const amount = toFiniteNumber(req.body?.amount ?? req.body?.credit, 0);
+      const debit = toFiniteNumber(req.body?.debit, 0);
+
+      if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        throw new Error("Tanggal transaksi tidak valid");
+      }
+      if (!accountCode) {
+        throw new Error("Akun transaksi wajib diisi");
+      }
+      if (!description) {
+        throw new Error("Keterangan transaksi wajib diisi");
+      }
+      if (debit > 0) {
+        throw new Error("Penerimaan Petty Cash wajib melalui proses Top-Up");
+      }
+      if (!Number.isFinite(amount) || amount <= 0) {
+        throw new Error("Nominal transaksi tidak valid");
+      }
+
+      await assertFinancialYearsOpen(
+        tx,
+        financialYearsFromValue({ date }),
+      );
+
+      const latestEntries = await tx.appEntity.findMany({
+        where: { resource: cashResource },
+        orderBy: { createdAt: "desc" },
+        take: 1,
+      });
+
+      const lastBalance = latestEntries[0]
+        ? toFiniteNumber(asRecord(latestEntries[0].payload).balance, 0)
+        : 0;
+
+      if (lastBalance < amount) {
+        throw new Error(
+          `Saldo ${warehouse ? "Petty Cash Gudang" : "Petty Cash"} tidak mencukupi`,
+        );
+      }
+
+      const entryId = randomUUID();
+      const entry = {
+        id: entryId,
+        date,
+        accountCode,
+        description,
+        debit: 0,
+        credit: amount,
+        balance: lastBalance - amount,
+        kasir: warehouse ? "Petty Cash Gudang" : "Petty Cash",
+        sumberDana: warehouse ? "Petty Cash Gudang" : "Petty Cash",
+        sourceType: "MANUAL_PETTY_CASH",
+        sourceId: entryId,
+      };
+
+      await tx.appEntity.create({
+        data: {
+          resource: cashResource,
+          entityId: entryId,
+          payload: entry as Prisma.InputJsonValue,
+        },
+      });
+
+      await tx.auditLogEntry.create({
+        data: {
+          id: randomUUID(),
+          timestamp: new Date(),
+          action: "PETTY_CASH_MANUAL_EXPENSE",
+          actorUserId: req.user?.id ?? null,
+          actorRole: req.user?.role ?? null,
+          userId: req.user?.id ?? null,
+          module: "Finance",
+          details: `${warehouse ? "Petty Cash Gudang" : "Petty Cash"} manual expense ${entryId}`,
+          status: "Success",
+          domain: "finance",
+          resource: cashResource,
+          entityId: entryId,
+          operation: "manual-expense",
+        },
+      });
+
+      return { entry };
+    });
+
+    return res.status(201).json(result);
+  } catch (err) {
+    if (sendFinancialYearError(res, err)) return;
+    return sendError(res, 400, {
+      code: "PETTY_CASH_MANUAL_ENTRY_FAILED",
+      message: err instanceof Error ? err.message : "Transaksi Petty Cash gagal",
+      legacyError: "Petty cash manual entry failed",
+    });
+  }
+});
+
+// Approve DIRECT_PROJECT vendor expense and pay it from ordinary Petty Cash atomically.
+financeOpsRouter.post("/finance/vendor-expenses/:id/approve-petty-cash", authenticate, async (req: AuthRequest, res: Response) => {
+  if (!TOPUP_APPROVE_ROLES.includes(req.user?.role as Role)) {
+    return sendError(res, 403, {
+      code: "FORBIDDEN",
+      message: "Anda tidak berhak menyetujui pembayaran biaya proyek",
+      legacyError: "Forbidden",
+    });
+  }
+
+  const id = String(req.params.id || "");
+  const cashResource = "finance-petty-cash";
+
+  try {
+    const result = await financeOpsSerializableTransaction(async (tx) => {
+      const expense = await tx.financeVendorExpense.findUnique({ where: { id } });
+      if (!expense) throw new Error("Expense tidak ditemukan");
+
+      await assertFinancialYearsOpen(
+        tx,
+        financialYearsFromValue({ tanggal: expense.tanggal.toISOString() }),
+      );
+
+      if (!["Pending Approval", "Approved"].includes(expense.status)) {
+        throw new Error("Expense tidak dalam status yang dapat dibayar");
+      }
+      if (expense.costRecognition !== "DIRECT_PROJECT") {
+        throw new Error("Hanya DIRECT_PROJECT yang dapat dibayar dari Petty Cash");
+      }
+
+      const amount = Number(expense.totalNominal);
+      if (!Number.isFinite(amount) || amount <= 0) {
+        throw new Error("Nominal expense tidak valid");
+      }
+
+      const category = String(expense.kategori || "").trim();
+      const accountCode =
+        category === "Material" || category === "Consumable"
+          ? "51001"
+          : category === "Gaji/Manpower"
+            ? "51002"
+            : category === "Kasbon"
+              ? "12002"
+              : "51003";
+
+      const existingCashEntry = await tx.appEntity.findUnique({
+        where: {
+          resource_entityId: {
+            resource: cashResource,
+            entityId: `PETTY-EXP-${id}`,
+          },
+        },
+      });
+      if (existingCashEntry) throw new Error("Expense ini sudah memiliki transaksi Petty Cash");
+
+      const latestEntries = await tx.appEntity.findMany({
+        where: { resource: cashResource },
+        orderBy: { createdAt: "desc" },
+        take: 1,
+      });
+
+      const lastBalance = latestEntries[0]
+        ? toFiniteNumber(asRecord(latestEntries[0].payload).balance, 0)
+        : 0;
+
+      if (lastBalance < amount) {
+        throw new Error("Saldo Petty Cash tidak mencukupi");
+      }
+
+      const now = new Date();
+      const paymentDate = jakartaDateString(now);
+      const approverName =
+        asTrimmedString(req.body?.approverName) ||
+        req.user?.id ||
+        "Approver";
+
+      const entry = {
+        id: `PETTY-EXP-${id}`,
+        date: paymentDate,
+        accountCode,
+        description: `Tambahan Biaya Proyek ${expense.number} — ${category || "Biaya Proyek"}${expense.projectName ? ` — ${expense.projectName}` : ""}`,
+        debit: 0,
+        credit: amount,
+        balance: lastBalance - amount,
+        kasir: "Petty Cash",
+        sumberDana: "Petty Cash",
+        sourceType: "VENDOR_EXPENSE",
+        sourceId: expense.id,
+        projectId: expense.projectId,
+        projectName: expense.projectName,
+        ref: expense.number,
+        kategori: expense.kategori,
+      };
+
+      const updatedExpense = await tx.financeVendorExpense.update({
+        where: { id },
+        data: {
+          status: "Paid",
+          approvedBy: expense.approvedBy || approverName,
+          approvedAt: expense.approvedAt || now,
+          paidAt: now,
+          metodeBayar: "Cash",
+          bank: "Petty Cash",
+        },
+      });
+
+      await tx.appEntity.create({
+        data: {
+          resource: cashResource,
+          entityId: entry.id,
+          payload: entry as Prisma.InputJsonValue,
+        },
+      });
+
+      await tx.auditLogEntry.create({
+        data: {
+          id: randomUUID(),
+          timestamp: now,
+          action: "VENDOR_EXPENSE_APPROVE_PETTY_CASH",
+          actorUserId: req.user?.id ?? null,
+          actorRole: req.user?.role ?? null,
+          userId: req.user?.id ?? null,
+          module: "Finance",
+          details: `approve & pay ${expense.number} from Petty Cash`,
+          status: "Success",
+          domain: "finance",
+          resource: "vendor-expenses",
+          entityId: id,
+          operation: "approve-petty-cash",
+        },
+      });
+
+      return {
+        expense: mapVendorExpense(updatedExpense),
+        entry,
+      };
+    });
+
+    return res.json(result);
+  } catch (err) {
+    if (sendFinancialYearError(res, err)) return;
+    return sendError(res, 400, {
+      code: "EXPENSE_PETTY_CASH_APPROVAL_FAILED",
+      message: err instanceof Error ? err.message : "Approval gagal",
+      legacyError: "Expense petty cash approval failed",
+    });
   }
 });
 

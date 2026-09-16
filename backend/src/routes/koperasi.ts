@@ -130,26 +130,105 @@ koperasiRouter.post("/koperasi/members", authenticate, async (req: AuthRequest, 
   if (!canWrite(req.user?.role)) return deny(res);
   const parsed = koperasiMemberSchema.safeParse(req.body);
   if (!parsed.success) return sendError(res, 400, { code: "VALIDATION_ERROR", message: "Data anggota tidak valid", details: parsed.error.flatten(), legacyError: "Data anggota tidak valid" });
+
   try {
     const payload = parsed.data;
-    const employee = await prisma.employeeRecord.findUnique({ where: { id: payload.employeeId }, select: { id: true, name: true } });
-    if (!employee) return sendError(res, 400, { code: "EMPLOYEE_NOT_FOUND", message: "Karyawan tidak ditemukan", legacyError: "Karyawan tidak ditemukan" });
+    const memberType = payload.memberType;
+    const subjectId = payload.subjectId || payload.employeeId;
+
+    if (!subjectId) {
+      return sendError(res, 400, { code: "SUBJECT_REQUIRED", message: "Identitas anggota wajib diisi", legacyError: "Identitas anggota wajib diisi" });
+    }
+
+    let memberName = "";
+    let employeeId: string | null = null;
+
+    if (memberType === "EMPLOYEE") {
+      if (payload.employeeId && payload.subjectId && payload.employeeId !== payload.subjectId) {
+        return sendError(res, 400, { code: "MEMBER_ID_MISMATCH", message: "employeeId dan subjectId karyawan tidak cocok", legacyError: "Identitas karyawan tidak cocok" });
+      }
+
+      const employee = await prisma.employeeRecord.findUnique({
+        where: { id: subjectId },
+        select: { id: true, name: true },
+      });
+
+      if (!employee) {
+        return sendError(res, 400, { code: "EMPLOYEE_NOT_FOUND", message: "Karyawan tidak ditemukan", legacyError: "Karyawan tidak ditemukan" });
+      }
+
+      employeeId = employee.id;
+      memberName = employee.name;
+    } else {
+      const thl = await prisma.appEntity.findUnique({
+        where: {
+          resource_entityId: {
+            resource: "hr-thl-contracts",
+            entityId: subjectId,
+          },
+        },
+        select: { entityId: true, payload: true },
+      });
+
+      if (!thl) {
+        return sendError(res, 400, { code: "THL_NOT_FOUND", message: "THL tidak ditemukan", legacyError: "THL tidak ditemukan" });
+      }
+
+      const thlPayload = thl.payload as Record<string, unknown>;
+      const nama = typeof thlPayload.nama === "string" ? thlPayload.nama.trim() : "";
+
+      if (!nama) {
+        return sendError(res, 400, { code: "THL_NAME_INVALID", message: "Nama THL tidak valid", legacyError: "Nama THL tidak valid" });
+      }
+
+      memberName = nama;
+    }
+
     const member = await prisma.$transaction(async (tx) => {
       await assertFinancialYearsOpen(tx, financialYearsFromValue({ date: payload.joinDate }));
-      const created = await tx.koperasiMember.create({ data: { ...payload, employeeName: employee.name, joinDate: new Date(`${payload.joinDate}T00:00:00.000Z`) } });
+
+      const created = await tx.koperasiMember.create({
+        data: {
+          id: payload.id,
+          memberNo: payload.memberNo,
+          memberType,
+          subjectId,
+          employeeId,
+          employeeName: memberName,
+          joinDate: new Date(`${payload.joinDate}T00:00:00.000Z`),
+          simpananPokok: payload.simpananPokok,
+          simpananWajibBulanan: payload.simpananWajibBulanan,
+        },
+      });
+
       if (payload.simpananPokok > 0) {
         await tx.koperasiCashTransaction.create({ data: transactionInput({
-          date: payload.joinDate, type: "SIMPANAN_POKOK", direction: "IN", amount: payload.simpananPokok,
-          description: `Simpanan pokok ${employee.name}`, referenceType: "KOPERASI_MEMBER", referenceId: created.id, createdBy: req.user?.id,
+          date: payload.joinDate,
+          type: "SIMPANAN_POKOK",
+          direction: "IN",
+          amount: payload.simpananPokok,
+          description: `Simpanan pokok ${memberName}`,
+          referenceType: "KOPERASI_MEMBER",
+          referenceId: created.id,
+          createdBy: req.user?.id,
         }) });
       }
+
       return created;
     });
-    await writeAuditLog(req, "create", "koperasi-members", member.id, { memberNo: member.memberNo });
+
+    await writeAuditLog(req, "create", "koperasi-members", member.id, {
+      memberNo: member.memberNo,
+      memberType: member.memberType,
+      subjectId: member.subjectId,
+    });
+
     return res.status(201).json(serializeDecimals({ ...member, joinDate: dateOnly(member.joinDate) }));
   } catch (error) {
     if (sendYearClosed(res, error)) return;
-    const message = error instanceof Error && error.message.includes("Unique constraint") ? "Karyawan sudah menjadi anggota koperasi" : "Gagal menambah anggota";
+    const message = error instanceof Error && error.message.includes("Unique constraint")
+      ? "Karyawan / THL sudah menjadi anggota koperasi"
+      : "Gagal menambah anggota";
     return sendError(res, 400, { code: "CREATE_FAILED", message, legacyError: message });
   }
 });
@@ -197,10 +276,26 @@ koperasiRouter.post("/koperasi/pinjaman", authenticate, async (req: AuthRequest,
     const payload = parsed.data;
     const member = await prisma.koperasiMember.findUnique({ where: { id: payload.memberId } });
     if (!member || member.status !== "Active") return sendError(res, 400, { code: "MEMBER_INVALID", message: "Anggota aktif tidak ditemukan", legacyError: "Anggota aktif tidak ditemukan" });
-    const adminFeeAmount = Math.round(payload.amount * payload.adminFeePercent / 100);
+    const adminFeePercent = 2.5;
+    const adminFeeAmount = Math.round(payload.amount * adminFeePercent / 100);
     const totalAmount = payload.amount + adminFeeAmount;
-    const installmentAmount = Math.round(totalAmount / payload.installmentCount);
-    const pinjaman = await prisma.koperasiPinjaman.create({ data: { ...payload, memberName: member.employeeName, adminFeeAmount, totalAmount, installmentAmount, paidInstallments: 0, status: "Pending", requestDate: new Date(`${payload.requestDate}T00:00:00.000Z`) } });
+
+    // Angsuran reguler hanya membayar pokok.
+    // Biaya admin 2.5% adalah kewajiban satu kali dan diserap pada angsuran terakhir.
+    const installmentAmount = Math.round(payload.amount / payload.installmentCount);
+    const pinjaman = await prisma.koperasiPinjaman.create({
+      data: {
+        ...payload,
+        memberName: member.employeeName,
+        adminFeePercent,
+        adminFeeAmount,
+        totalAmount,
+        installmentAmount,
+        paidInstallments: 0,
+        status: "Pending",
+        requestDate: new Date(`${payload.requestDate}T00:00:00.000Z`),
+      },
+    });
     await writeAuditLog(req, "create", "koperasi-pinjaman", pinjaman.id, { pinjamanNo: pinjaman.pinjamanNo, amount: pinjaman.amount });
     return res.status(201).json(serializeDecimals({ ...pinjaman, requestDate: dateOnly(pinjaman.requestDate), approvedDate: undefined, disbursedDate: undefined }));
   } catch {
@@ -255,16 +350,14 @@ koperasiRouter.post("/koperasi/pinjaman/:id/installments", authenticate, async (
       if (current.status !== "Active") throw new Error("INVALID_STATUS");
       const paidInstallments = current.paidInstallments + 1;
       const settled = paidInstallments >= current.installmentCount;
-      const scheduledPrincipal = Math.round(Number(current.amount) / current.installmentCount);
+      const scheduledPrincipal = Number(current.installmentAmount);
       const principal = settled
         ? Number(current.amount) - scheduledPrincipal * (current.installmentCount - 1)
         : scheduledPrincipal;
-      // Angsuran terakhir menyerap sisa pembulatan agar total tertagih
-      // (pokok + admin) tepat sama dengan totalAmount pinjaman.
-      const targetInstallmentTotal = settled
-        ? Math.max(0, Number(current.totalAmount) - Number(current.installmentAmount) * (current.installmentCount - 1))
-        : Number(current.installmentAmount);
-      const admin = Math.max(0, targetInstallmentTotal - principal);
+
+      // Admin fee tidak dicicil setiap periode.
+      // Seluruh admin fee ditagihkan sekali pada angsuran terakhir.
+      const admin = settled ? Math.max(0, Number(current.adminFeeAmount)) : 0;
       const today = dateOnly(new Date());
       const updated = await tx.koperasiPinjaman.update({ where: { id: current.id }, data: { paidInstallments, status: settled ? "Settled" : "Active" } });
       await tx.koperasiCashTransaction.createMany({ data: [
