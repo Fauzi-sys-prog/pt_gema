@@ -44,6 +44,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       fullName: user.name || user.username,
       signatureUrl: user.signatureUrl || undefined,
       role: roleMap[user.role] || user.role,
+      backendRole: user.role,
       status: user.isActive === false ? 'Inactive' : 'Active',
       lastLogin: user.lastLogin || user.lastLoginAt,
     };

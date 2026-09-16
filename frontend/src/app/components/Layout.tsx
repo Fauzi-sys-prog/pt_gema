@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from "react-router";
 import { Toaster, toast } from "sonner";
 import {
   LayoutDashboard,
+  Film,
   FileText,
   Calculator,
   Briefcase,
@@ -139,6 +140,7 @@ export default function Layout({ children }: LayoutProps) {
 
   const hasAccessToMenu = (menuTitle: string): boolean => {
     if (!currentUser) return false;
+    if (menuTitle === "Video Tutorial") return true;
     const role = currentUser.role;
     // Full access roles
     if (
@@ -179,6 +181,11 @@ export default function Layout({ children }: LayoutProps) {
   };
 
   const menuItems: MenuItem[] = [
+    {
+      title: "Video Tutorial",
+      icon: <Film size={20} />,
+      path: "/video-tutorial",
+    },
     {
       title: "Dashboard",
       icon: <LayoutDashboard size={20} />,

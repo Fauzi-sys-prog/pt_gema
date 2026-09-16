@@ -49,6 +49,9 @@ class AppErrorBoundary extends Component<
 }
 
 // Lazy-loaded pages
+const VideoTutorialPage = lazy(
+  () => import("./pages/video-tutorial/VideoTutorialPage"),
+);
 const MainDashboard = lazy(() => import("./pages/dashboard/MainDashboard"));
 const DataCollection = lazy(
   () => import("./pages/data-collection/DataCollection"),
@@ -375,6 +378,17 @@ export default function App() {
                     </ProtectedRoute>
                   }
                   path="/"
+                />
+
+                <Route
+                  path="/video-tutorial"
+                  element={
+                    <ProtectedRoute>
+                      <Layout>
+                        <VideoTutorialPage />
+                      </Layout>
+                    </ProtectedRoute>
+                  }
                 />
 
                 <Route

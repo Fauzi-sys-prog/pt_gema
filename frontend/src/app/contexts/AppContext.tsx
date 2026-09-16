@@ -46,6 +46,7 @@ export interface User {
   signatureUrl?: string;
   fullName: string;
   role: string;
+  backendRole?: string;
   department?: string;
   status?: string;
   lastLogin?: any;
@@ -106,6 +107,7 @@ const mapBackendUser = (user: BackendUser): User => {
     signatureUrl: user.signatureUrl || undefined,
     fullName: user.name || user.username,
     role,
+    backendRole: user.role,
     department: departmentFromRole(role),
     status: user.isActive === false ? "Inactive" : "Active",
     lastLogin: user.lastLogin || user.lastLoginAt || null,

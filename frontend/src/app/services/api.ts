@@ -30,15 +30,27 @@ export const api = {
     try {
       const token = localStorage.getItem('authToken');
       const csrfToken = localStorage.getItem('csrfToken');
+      const isFormData =
+        typeof FormData !== 'undefined' && options.body instanceof FormData;
+
+      const headers = new Headers(options.headers || {});
+
+      if (!isFormData && !headers.has('Content-Type')) {
+        headers.set('Content-Type', 'application/json');
+      }
+
+      if (token && !headers.has('Authorization')) {
+        headers.set('Authorization', `Bearer ${token}`);
+      }
+
+      if (csrfToken && !headers.has('X-CSRF-Token')) {
+        headers.set('X-CSRF-Token', csrfToken);
+      }
+
       const response = await fetch(url, {
         ...options,
         credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          ...(csrfToken ? { 'X-CSRF-Token': csrfToken } : {}),
-          ...options.headers,
-        },
+        headers,
       });
 
       if (!response.ok) {
