@@ -624,6 +624,7 @@ export default function VideoTutorialPage() {
               <video
                 key={playing.videoUrl}
                 src={playing.videoUrl}
+                crossOrigin="use-credentials"
                 controls
                 autoPlay
                 playsInline
@@ -953,6 +954,7 @@ function VideoCard({
       >
         <video
           src={video.videoUrl}
+          crossOrigin="use-credentials"
           preload="metadata"
           muted
           playsInline

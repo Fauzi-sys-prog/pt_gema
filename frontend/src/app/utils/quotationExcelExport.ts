@@ -23,22 +23,43 @@ export async function exportQuotationToXlsx(q: any) {
   ws.columns = [{ width: 7 }, { width: 58 }, { width: 19 }, { width: 18 }, { width: 21 }];
 
   const logo = wb.addImage({ base64: await logoBase64(), extension: 'png' });
-  ws.addImage(logo, { tl: { col: .08, row: .2 }, ext: { width: 88, height: 66 } });
+  ws.addImage(logo, {
+    tl: { col: 0.12, row: 0.28 },
+    ext: { width: 46, height: 46 },
+  });
+
   for (let r = 1; r <= 5; r++) ws.mergeCells(r, 2, r, 5);
+
   const head = [
-    ['GEMA TEKNIK PERKASA', 18, true, 'FF000000'],
-    ['REFRACTORY FURNACE AND BOILER', 11, true, 'FF000000'],
-    ['Jl. Nurushoba II No 13 Setia Mekar Tambun Selatan Bekasi 17510', 10, false, 'FF000000'],
-    ['Phone : 085 100 420 221, 021.88354 139   Fax : 021.88354 139', 10, false, 'FF000000'],
-    ['Email : gemateknik@gmail.com', 10, true, 'FF0000CC'],
+    ['GEMA TEKNIK PERKASA', 17, true, 'FF000000'],
+    ['REFRACTORY FURNACE AND BOILER', 10, true, 'FF000000'],
+    ['Jl. Nurushoba II No 13 Setia Mekar Tambun Selatan Bekasi 17510', 9, false, 'FF000000'],
+    ['Phone : 085 100 420 221, 021.88354 139   Fax : 021.88354 139', 9, false, 'FF000000'],
+    ['Email : gemateknik@gmail.com', 9, true, 'FF0000CC'],
   ] as const;
+
   head.forEach(([value, size, bold, color], index) => {
     const cell = ws.getCell(index + 1, 2);
     cell.value = value;
-    cell.font = { name: 'Times New Roman', size, bold, italic: true, color: { argb: color } };
-    cell.alignment = { horizontal: 'left', vertical: 'middle', indent: 5 };
+    cell.font = {
+      name: 'Times New Roman',
+      size,
+      bold,
+      italic: index <= 1,
+      color: { argb: color },
+    };
+    cell.alignment = {
+      horizontal: 'left',
+      vertical: 'middle',
+      indent: 0,
+    };
   });
-  ws.getRow(1).height = 24; [2,3,4,5].forEach(r => ws.getRow(r).height = 15);
+
+  ws.getRow(1).height = 22;
+  ws.getRow(2).height = 16;
+  ws.getRow(3).height = 14;
+  ws.getRow(4).height = 14;
+  ws.getRow(5).height = 14;
   ws.getRow(6).height = 7;
   for (let c = 1; c <= 5; c++) ws.getCell(6, c).border = { bottom: { style: 'thick', color: { argb: 'FF000000' } } };
 
@@ -57,22 +78,136 @@ export async function exportQuotationToXlsx(q: any) {
   ws.addRow([]); mergedLine('Dengan hormat,');
   mergedLine(q.paragrafPembuka || `Sehubungan dengan permintaan Bapak/Ibu mengenai ${q.perihal || 'penawaran harga'}, maka dengan ini kami ajukan penawaran sebagai berikut:`);
   ws.addRow([]);
-  const header=ws.addRow(['No','Keterangan','Harga/Unit','Jumlah','Total Harga']);
-  header.eachCell(c=>{c.font={name:'Times New Roman',size:11,bold:true};c.alignment={horizontal:'center',vertical:'middle'};c.border=border;});
+  const header = ws.addRow(['No', 'Keterangan', 'Harga/Unit', 'Jumlah', 'Total Harga']);
+  header.height = 22;
+  header.eachCell(c => {
+    c.font = { name: 'Times New Roman', size: 11, bold: true };
+    c.alignment = { horizontal: 'center', vertical: 'middle' };
+    c.border = border;
+  });
 
-  const sections=q.sections?.length?q.sections:[{nama:q.jenisQuotation==='Jasa'?'Jasa Kerja':'Material / Equipment',items:q.items||q.materials||[]}];
-  let itemNo=0; const sectionTotalRows:number[]=[]; const grouped=q.jenisQuotation==='Jasa'||sections.length>1;
-  sections.forEach((section:any,si:number)=>{
-    const first=ws.rowCount+1; let last=first;
-    (section.items||[]).forEach((item:any,ii:number)=>{
-      itemNo++; const qty=n(item.qty??item.quantity??item.jumlah), price=n(item.hargaJualUnit??item.hargaUnit??item.unitPrice), total=n(item.hargaJual??item.totalPrice??item.total??qty*price);
-      const desc=`${ii===0?`${section.nama||section.title||section.label||'Keterangan'}\n`:''}${item.keterangan||item.description||item.materialName||'-'}${item.subKeterangan?`\n${item.subKeterangan}`:''}`;
-      const row=ws.addRow([grouped?(ii===0?si+1:''):itemNo,desc,price,`${qty} ${item.satuan||item.unit||'Lot'}`,total]); last=row.number;
-      row.height=Math.max(19,desc.split('\n').length*15); row.eachCell(c=>{c.font={name:'Times New Roman',size:10};c.alignment={vertical:'top',wrapText:true};c.border=border;});
-      row.getCell(1).alignment={horizontal:'center',vertical:'top'}; row.getCell(3).numFmt='"Rp" #,##0'; row.getCell(3).alignment={horizontal:'right'}; row.getCell(4).alignment={horizontal:'center'}; row.getCell(5).numFmt='"Rp" #,##0'; row.getCell(5).alignment={horizontal:'right'};
-      if(ii===0) row.getCell(2).font={name:'Times New Roman',size:10,bold:true};
+  const sections = q.sections?.length
+    ? q.sections
+    : [{
+        nama: q.jenisQuotation === 'Jasa' ? 'Jasa Kerja' : 'Material / Equipment',
+        items: q.items || q.materials || []
+      }];
+
+  let itemNo = 0;
+  const sectionTotalRows: number[] = [];
+
+  sections.forEach((section: any, si: number) => {
+    const sectionName = section.nama || section.title || section.label || `Bagian ${si + 1}`;
+
+    const sectionRow = ws.addRow(['', sectionName.toUpperCase(), '', '', '']);
+    ws.mergeCells(sectionRow.number, 2, sectionRow.number, 5);
+    sectionRow.height = 20;
+    sectionRow.getCell(1).border = border;
+    sectionRow.getCell(2).border = border;
+    sectionRow.getCell(2).font = {
+      name: 'Times New Roman',
+      size: 10,
+      bold: true
+    };
+    sectionRow.getCell(2).alignment = {
+      horizontal: 'left',
+      vertical: 'middle'
+    };
+    for (let c = 3; c <= 5; c++) ws.getCell(sectionRow.number, c).border = border;
+
+    const firstItemRow = ws.rowCount + 1;
+    let lastItemRow = firstItemRow - 1;
+
+    (section.items || []).forEach((item: any) => {
+      itemNo++;
+
+      const qty = n(item.qty ?? item.quantity ?? item.jumlah);
+      const price = n(item.hargaJualUnit ?? item.hargaUnit ?? item.unitPrice);
+      const pricingMethod = String(item.pricingMethod || 'PER_UNIT').toUpperCase();
+      const total = pricingMethod === 'LUMP_SUM' ? price : qty * price;
+
+      const name =
+        item.keterangan ||
+        item.description ||
+        item.materialName ||
+        '-';
+
+      const desc = item.subKeterangan
+        ? `${name}\n${item.subKeterangan}`
+        : name;
+
+      const unit = item.satuan || item.unit || 'Lot';
+
+      const row = ws.addRow([
+        itemNo,
+        desc,
+        price,
+        `${qty} ${unit}`,
+        total
+      ]);
+
+      lastItemRow = row.number;
+      row.height = Math.max(20, desc.split('\n').length * 15);
+
+      row.eachCell(c => {
+        c.font = { name: 'Times New Roman', size: 10 };
+        c.alignment = { vertical: 'top', wrapText: true };
+        c.border = border;
+      });
+
+      row.getCell(1).alignment = {
+        horizontal: 'center',
+        vertical: 'top'
+      };
+
+      row.getCell(2).alignment = {
+        horizontal: 'left',
+        vertical: 'top',
+        wrapText: true
+      };
+
+      row.getCell(3).numFmt = '"Rp" #,##0';
+      row.getCell(3).alignment = {
+        horizontal: 'right',
+        vertical: 'top'
+      };
+
+      row.getCell(4).alignment = {
+        horizontal: 'center',
+        vertical: 'top'
+      };
+
+      row.getCell(5).numFmt = '"Rp" #,##0';
+      row.getCell(5).alignment = {
+        horizontal: 'right',
+        vertical: 'top'
+      };
     });
-    if(grouped){const r=ws.addRow(['','','',`Total ${si+1}`,{formula:`SUM(E${first}:E${last})`}]);sectionTotalRows.push(r.number);r.eachCell(c=>{c.border=border;c.font={name:'Times New Roman',size:10,bold:c.col>=4};});r.getCell(5).numFmt='"Rp" #,##0';}
+
+    if (lastItemRow >= firstItemRow) {
+      const r = ws.addRow([
+        '',
+        '',
+        '',
+        `Total ${sectionName}`,
+        { formula: `SUM(E${firstItemRow}:E${lastItemRow})` }
+      ]);
+
+      sectionTotalRows.push(r.number);
+
+      r.eachCell(c => {
+        c.border = border;
+        c.font = {
+          name: 'Times New Roman',
+          size: 10,
+          bold: c.col >= 4
+        };
+      });
+
+      r.getCell(4).alignment = { horizontal: 'right' };
+      r.getCell(5).numFmt = '"Rp" #,##0';
+      r.getCell(5).alignment = { horizontal: 'right' };
+    }
   });
   const total=ws.addRow(['','','','Total',{formula:sectionTotalRows.length?sectionTotalRows.map(r=>`E${r}`).join('+'):`SUM(E${header.number+1}:E${ws.rowCount})`}]);
   const discount=n(q.pricingConfig?.discountPercent??q.diskonPersen??q.discountPercent); let discountRow=0;

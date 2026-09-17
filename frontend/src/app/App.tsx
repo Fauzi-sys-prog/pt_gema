@@ -1133,7 +1133,7 @@ export default function App() {
                 <Route
                   path="/hr/kasbon-thl"
                   element={
-                    <Navigate to="/hr/employee-advance?type=thl" replace />
+                    <Navigate to="/hr/kas-koperasi" replace />
                   }
                 />
                 <Route

@@ -18,8 +18,10 @@ function parseTime(t: string): number {
 
 export default function GajianTHLPage() {
   const {
-    thlList, thlTimesheetList, kasbonTHLList,
-    thlPayrollRunList, addTHLPayrollRun, updateTHLPayrollRun, deleteTHLPayrollRun,
+    thlList, thlTimesheetList,
+    koperasiMembers, koperasiPinjamanList,
+    thlPayrollRunList, addTHLPayrollRun, updateTHLPayrollRun,
+    disburseTHLPayrollRun, deleteTHLPayrollRun,
   } = useApp();
 
   const now = new Date();
@@ -67,18 +69,92 @@ export default function GajianTHLPage() {
     const slips: THLPayrollSlip[] = aktiveTHL
       .map(thl => {
         const { hariKerja, totalJam, totalUpah } = calcUpah(thl.id, periode);
-        const kasbon    = kasbonTHLList.filter(k => k.thlId === thl.id && k.status !== 'Rejected').reduce((s, k) => s + k.nominal, 0);
-        const adminFee  = Math.round(kasbon * 0.025);
-        const bpjstk    = includeBPJSTK ? 60000 : 0;
-        const jkn       = includeJKN    ? 52193 : 0;
-        const potongan  = kasbon + adminFee + bpjstk + jkn;
-        const netto     = Math.max(0, Math.round(totalUpah) - potongan);
-        return { thlId: thl.id, thlNama: thl.nama, posisi: thl.posisi, project: thl.project, hariKerja, totalJam: Math.round(totalJam * 10) / 10, totalUpah: Math.round(totalUpah), totalKasbon: kasbon, adminFee, bpjstk, jkn, netto };
+
+        const koperasiMember = koperasiMembers.find(member =>
+          member.status === 'Active' &&
+          member.memberType === 'THL' &&
+          member.subjectId === thl.id
+        );
+
+        const koperasiLoans = koperasiMember
+          ? koperasiPinjamanList.filter(
+              loan =>
+                loan.memberId === koperasiMember.id &&
+                loan.status === 'Active',
+            )
+          : [];
+
+        const koperasiLoanDetails = koperasiLoans.map(loan => {
+          const installmentNumber = loan.paidInstallments + 1;
+          const settled = installmentNumber >= loan.installmentCount;
+
+          // Rule Kas Koperasi:
+          // cicilan reguler = pokok.
+          // Admin 2.5% dari keseluruhan pinjaman hanya ditagihkan sekali,
+          // dan masuk pada cicilan terakhir.
+          const installmentAmount = settled
+            ? Math.max(
+                0,
+                loan.totalAmount -
+                  loan.installmentAmount * (loan.installmentCount - 1),
+              )
+            : loan.installmentAmount;
+
+          const alreadyPaid =
+            loan.paidInstallments * loan.installmentAmount;
+
+          return {
+            loanId: loan.id,
+            pinjamanNo: loan.pinjamanNo,
+            installmentNumber,
+            installmentAmount,
+            remainingAfter: Math.max(
+              0,
+              loan.totalAmount - alreadyPaid - installmentAmount,
+            ),
+          };
+        });
+
+        const koperasiLoanDeduction = koperasiLoanDetails.reduce(
+          (sum, row) => sum + row.installmentAmount,
+          0,
+        );
+
+        const koperasiMandatorySavingDeduction =
+          koperasiMember?.simpananWajibBulanan ?? 0;
+
+        const koperasiDeduction =
+          koperasiLoanDeduction + koperasiMandatorySavingDeduction;
+
+        const bpjstk = includeBPJSTK ? 60000 : 0;
+        const jkn = includeJKN ? 52193 : 0;
+
+        const potongan = koperasiDeduction + bpjstk + jkn;
+        const netto = Math.max(0, Math.round(totalUpah) - potongan);
+
+        return {
+          thlId: thl.id,
+          thlNama: thl.nama,
+          posisi: thl.posisi,
+          project: thl.project,
+          hariKerja,
+          totalJam: Math.round(totalJam * 10) / 10,
+          totalUpah: Math.round(totalUpah),
+
+          koperasiLoanDeduction,
+          koperasiMandatorySavingDeduction,
+          koperasiDeduction,
+          koperasiLoanDetails,
+
+          bpjstk,
+          jkn,
+          netto,
+        };
       })
-      .filter(s => s.hariKerja > 0 || s.totalKasbon > 0);
+      .filter(s => s.hariKerja > 0 || s.koperasiDeduction > 0);
 
     if (slips.length === 0) {
-      toast.error('Tidak ada THL aktif dengan data timesheet atau kasbon di periode ini');
+      toast.error('Tidak ada THL aktif dengan data timesheet di periode ini');
       return;
     }
 
@@ -86,9 +162,19 @@ export default function GajianTHLPage() {
       id: `THLRUN-${Date.now()}`,
       periode, periodLabel,
       thlCount:      slips.length,
-      totalUpah:     slips.reduce((s, x) => s + x.totalUpah, 0),
-      totalKasbon:   slips.reduce((s, x) => s + x.totalKasbon, 0),
-      totalAdminFee: slips.reduce((s, x) => s + x.adminFee, 0),
+      totalUpah: slips.reduce((s, x) => s + x.totalUpah, 0),
+      totalKoperasiLoan: slips.reduce(
+        (s, x) => s + x.koperasiLoanDeduction,
+        0,
+      ),
+      totalKoperasiSaving: slips.reduce(
+        (s, x) => s + x.koperasiMandatorySavingDeduction,
+        0,
+      ),
+      totalKoperasiDeduction: slips.reduce(
+        (s, x) => s + x.koperasiDeduction,
+        0,
+      ),
       totalBPJSTK:   slips.reduce((s, x) => s + x.bpjstk, 0),
       totalJKN:      slips.reduce((s, x) => s + x.jkn, 0),
       totalNetto:    slips.reduce((s, x) => s + x.netto, 0),
@@ -110,11 +196,14 @@ export default function GajianTHLPage() {
   };
 
   // ── Approve ──────────────────────────────────────────────────────────────
-  const handleApprove = (runId: string) => {
+  const handleApprove = async (runId: string) => {
     if (isProcessing) return;
     setIsProcessing(true);
     try {
-      updateTHLPayrollRun(runId, { status: 'Approved', approvedAt: new Date().toISOString() });
+      await updateTHLPayrollRun(runId, {
+        status: 'Approved',
+        approvedAt: new Date().toISOString(),
+      });
       toast.success('Gajian disetujui — siap dicairkan');
     } catch (err) {
       toast.error('Gagal approve: ' + (err instanceof Error ? err.message : 'Error'));
@@ -123,18 +212,20 @@ export default function GajianTHLPage() {
     }
   };
 
-  // ── Disbursed → kurangi Petty Cash Gudang ────────────────────────────────
-  const handleDisburse = (run: THLPayrollRun, bank: string) => {
+  // ── Disburse payroll + posting potongan Kas Koperasi secara atomic ───────
+  const handleDisburse = async (run: THLPayrollRun, bank: string) => {
     if (isProcessing) return;
     setIsProcessing(true);
     try {
-      updateTHLPayrollRun(run.id, {
+      await disburseTHLPayrollRun(run.id, {
         status: 'Disbursed',
         disbursedAt: new Date().toISOString(),
         bank,
       });
       setDisburseRun(null);
-      toast.success(`Gaji THL ${run.periodLabel} dicairkan — ${fmt(run.totalNetto)} keluar dari rekening ${bank}`);
+      toast.success(
+        `Gaji THL ${run.periodLabel} dicairkan via ${bank} — potongan koperasi berhasil diposting`,
+      );
     } catch (err) {
       toast.error('Gagal mencairkan: ' + (err instanceof Error ? err.message : 'Error'));
     } finally {
@@ -211,7 +302,8 @@ export default function GajianTHLPage() {
         <div className="space-y-3">
           {thlPayrollRunList.map(run => {
             const isExpanded = expandedId === run.id;
-            const totalPotongan = run.totalKasbon + run.totalAdminFee + run.totalBPJSTK + run.totalJKN;
+            const totalPotongan =
+              run.totalKoperasiDeduction + run.totalBPJSTK + run.totalJKN;
 
             return (
               <div key={run.id} className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
@@ -294,8 +386,8 @@ export default function GajianTHLPage() {
                               { h: 'Posisi / Project', a: '' },
                               { h: 'Hari Kerja',   a: 'text-center' },
                               { h: 'Total Upah',   a: 'text-right' },
-                              { h: 'Kasbon',       a: 'text-right' },
-                              { h: 'Admin 2.5%',   a: 'text-right' },
+                              { h: 'Cicilan Koperasi', a: 'text-right' },
+                              { h: 'Simpanan Wajib', a: 'text-right' },
                               { h: 'BPJSTK',       a: 'text-right' },
                               { h: 'JKN',          a: 'text-right' },
                               { h: 'Netto Dibayar',a: 'text-right' },
@@ -320,10 +412,10 @@ export default function GajianTHLPage() {
                               </td>
                               <td className="px-3 py-3 text-right font-bold text-slate-800 whitespace-nowrap">{fmt(slip.totalUpah)}</td>
                               <td className="px-3 py-3 text-right font-bold text-orange-600 whitespace-nowrap">
-                                {slip.totalKasbon > 0 ? fmt(slip.totalKasbon) : <span className="text-slate-300">—</span>}
+                                {slip.koperasiLoanDeduction > 0 ? fmt(slip.koperasiLoanDeduction) : <span className="text-slate-300">—</span>}
                               </td>
                               <td className="px-3 py-3 text-right font-bold text-orange-400 whitespace-nowrap">
-                                {slip.adminFee > 0 ? fmt(slip.adminFee) : <span className="text-slate-300">—</span>}
+                                {slip.koperasiMandatorySavingDeduction > 0 ? fmt(slip.koperasiMandatorySavingDeduction) : <span className="text-slate-300">—</span>}
                               </td>
                               <td className="px-3 py-3 text-right font-bold text-slate-500 whitespace-nowrap">
                                 {slip.bpjstk > 0 ? fmt(slip.bpjstk) : <span className="text-slate-300">—</span>}
@@ -345,8 +437,8 @@ export default function GajianTHLPage() {
                               TOTAL — {run.thlCount} THL
                             </td>
                             <td className="px-3 py-3 text-right font-black whitespace-nowrap">{fmt(run.totalUpah)}</td>
-                            <td className="px-3 py-3 text-right font-black text-orange-300 whitespace-nowrap">{fmt(run.totalKasbon)}</td>
-                            <td className="px-3 py-3 text-right font-black text-orange-200 whitespace-nowrap">{fmt(run.totalAdminFee)}</td>
+                            <td className="px-3 py-3 text-right font-black text-orange-300 whitespace-nowrap">{fmt(run.totalKoperasiLoan)}</td>
+                            <td className="px-3 py-3 text-right font-black text-orange-200 whitespace-nowrap">{fmt(run.totalKoperasiSaving)}</td>
                             <td className="px-3 py-3 text-right font-black text-slate-300 whitespace-nowrap">{fmt(run.totalBPJSTK)}</td>
                             <td className="px-3 py-3 text-right font-black text-slate-300 whitespace-nowrap">{fmt(run.totalJKN)}</td>
                             <td className="px-3 py-3 text-right font-black text-emerald-300 whitespace-nowrap">{fmt(run.totalNetto)}</td>
@@ -360,8 +452,8 @@ export default function GajianTHLPage() {
                       <AlertCircle size={13} className="text-amber-500 shrink-0 mt-0.5" />
                       <p className="text-[10px] text-amber-700 font-bold">
                         {run.status === 'Disbursed'
-                          ? `Dicairkan ${run.disbursedAt?.slice(0, 10)} — total ${fmt(run.totalNetto)} sudah keluar dari Petty Cash Gudang`
-                          : 'Saat Cairkan diklik, netto setiap THL otomatis mengurangi saldo Petty Cash Gudang'}
+                          ? `Dicairkan ${run.disbursedAt?.slice(0, 10)} — cicilan dan simpanan THL sudah diposting ke Kas Koperasi`
+                          : 'Saat Cairkan diklik, cicilan pinjaman dan simpanan wajib THL akan diposting otomatis ke Kas Koperasi. Admin pinjaman 2.5% hanya masuk pada cicilan terakhir.'}
                       </p>
                     </div>
                   </div>
@@ -406,7 +498,7 @@ export default function GajianTHLPage() {
                   {BANKS.map(b => <option key={b}>{b}</option>)}
                 </select>
               </div>
-              <p className="text-[10px] text-slate-400 mt-2">Akan tercatat sebagai arus keluar di Rekonsiliasi Bank.</p>
+              <p className="text-[10px] text-slate-400 mt-2">Bank sumber pembayaran disimpan sebagai referensi pada run gajian THL.</p>
             </div>
 
             <div className="flex gap-3">

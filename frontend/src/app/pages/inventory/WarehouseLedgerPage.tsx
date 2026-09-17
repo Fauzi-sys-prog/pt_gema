@@ -19,7 +19,6 @@ import {
   Calendar,
   Hourglass,
   ClipboardList,
-  ChevronRight,
   Plus,
   X
 } from 'lucide-react';
@@ -36,7 +35,7 @@ const KATEGORI_OPTIONS = [
 
 export default function WarehouseLedgerPage() {
   const navigate = useNavigate();
-  const { stockItemList = [], stockMovementList = [], receivingList = [], extraCategories, addExtraCategory } = useApp();
+  const { stockItemList = [], stockMovementList = [], extraCategories, addExtraCategory } = useApp();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [selectedLocation, setSelectedLocation] = useState('All');
@@ -71,10 +70,9 @@ export default function WarehouseLedgerPage() {
     const totalItems = stockItemList.length;
     const lowStockCount = stockItemList.filter(i => i.stok <= i.minStock).length;
     const totalValue = stockItemList.reduce((acc, curr) => acc + (curr.stok * curr.hargaSatuan), 0);
-    const pendingRecv = receivingList.filter(r => r.status === 'Partial' || r.status === 'Pending').length;
 
-    return { totalItems, lowStockCount, totalValue, pendingRecv };
-  }, [stockItemList, receivingList]);
+    return { totalItems, lowStockCount, totalValue };
+  }, [stockItemList]);
 
   const categories = useMemo(() => {
     const cats = ['All', ...getWarehouseCategories(stockItemList, extraCategories)];
@@ -120,7 +118,7 @@ export default function WarehouseLedgerPage() {
         <div className="absolute top-0 right-0 p-20 opacity-10 pointer-events-none">
           <Database className="w-96 h-96 rotate-12" />
         </div>
-        
+
         <div className="relative z-10 max-w-7xl mx-auto">
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-8">
             <div>
@@ -139,25 +137,25 @@ export default function WarehouseLedgerPage() {
             </div>
 
             <div className="flex flex-wrap gap-4">
-              <button 
+              <button
                 onClick={() => navigate('/inventory/stock-journal')}
                 className="px-8 py-4 bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all flex items-center gap-3 italic cursor-pointer"
               >
                 <History className="w-4 h-4" /> Audit Movement
               </button>
-              <button 
+              <button
                 onClick={() => navigate('/inventory/stock-in')}
                 className="px-8 py-4 bg-emerald-500 hover:bg-emerald-600 text-slate-900 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all flex items-center gap-3 italic shadow-xl shadow-emerald-500/20 cursor-pointer"
               >
                 <ArrowUpRight className="w-4 h-4" /> Inbound Logistics
               </button>
-              <button 
+              <button
                 onClick={() => navigate('/inventory/traceability')}
                 className="px-8 py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all flex items-center gap-3 italic shadow-xl shadow-indigo-500/20 cursor-pointer"
               >
                 <Layers className="w-4 h-4" /> Batch Traceability
               </button>
-              <button 
+              <button
                 onClick={() => navigate('/inventory/opname')}
                 className="px-8 py-4 bg-white hover:bg-slate-100 text-slate-900 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all flex items-center gap-3 italic shadow-xl shadow-white/10 cursor-pointer"
               >
@@ -179,7 +177,7 @@ export default function WarehouseLedgerPage() {
           </div>
 
           {/* Key Metrics */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-16">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-6 mt-16">
             <div className="bg-white/5 border border-white/10 rounded-[32px] p-8 backdrop-blur-sm">
               <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest block mb-4 italic">Total SKU Registered</label>
               <div className="flex items-end gap-3">
@@ -194,21 +192,7 @@ export default function WarehouseLedgerPage() {
                 <span className="text-[10px] font-black text-slate-500 uppercase mb-1 italic">Shortages</span>
               </div>
             </div>
-            <div className={`rounded-[32px] p-8 border backdrop-blur-sm transition-all ${stats.pendingRecv > 0 ? 'bg-indigo-500/20 border-indigo-500/40 shadow-2xl shadow-indigo-500/10' : 'bg-white/5 border-white/10'}`}>
-              <label className={`text-[9px] font-black uppercase tracking-widest block mb-4 italic ${stats.pendingRecv > 0 ? 'text-indigo-400' : 'text-slate-500'}`}>Pending Receiving</label>
-              <div className="flex items-end gap-3">
-                <span className={`text-4xl font-black italic leading-none ${stats.pendingRecv > 0 ? 'text-indigo-400' : 'text-white'}`}>{stats.pendingRecv}</span>
-                <span className="text-[10px] font-black text-slate-500 uppercase mb-1 italic">Documents</span>
-              </div>
-              {stats.pendingRecv > 0 && (
-                <button 
-                  onClick={() => navigate('/inventory/receiving')}
-                  className="mt-4 w-full py-2 bg-indigo-600 text-white rounded-xl text-[8px] font-black uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-indigo-500 transition-all cursor-pointer"
-                >
-                  Review Receiving <ChevronRight size={10} />
-                </button>
-              )}
-            </div>
+
           </div>
         </div>
       </div>
@@ -219,8 +203,8 @@ export default function WarehouseLedgerPage() {
           <div className="p-8 lg:p-10 border-b border-slate-50 flex flex-col lg:flex-row gap-6 items-center justify-between bg-white">
             <div className="relative w-full lg:max-w-md">
               <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-300" size={20} />
-              <input 
-                type="text" 
+              <input
+                type="text"
                 placeholder="Search SKU or Item Name..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
@@ -231,7 +215,7 @@ export default function WarehouseLedgerPage() {
             <div className="flex flex-wrap gap-4 w-full lg:w-auto">
               <div className="flex items-center gap-2 bg-slate-50 p-2 rounded-2xl">
                 <Filter className="w-4 h-4 text-slate-400 ml-2" />
-                <select 
+                <select
                   value={selectedCategory}
                   onChange={(e) => setSelectedCategory(e.target.value)}
                   className="bg-transparent border-none font-black text-[10px] uppercase tracking-widest text-slate-600 outline-none pr-8 cursor-pointer italic"
@@ -241,7 +225,7 @@ export default function WarehouseLedgerPage() {
               </div>
               <div className="flex items-center gap-2 bg-slate-50 p-2 rounded-2xl">
                 <MapPin className="w-4 h-4 text-slate-400 ml-2" />
-                <select 
+                <select
                   value={selectedLocation}
                   onChange={(e) => setSelectedLocation(e.target.value)}
                   className="bg-transparent border-none font-black text-[10px] uppercase tracking-widest text-slate-600 outline-none pr-8 cursor-pointer italic"
@@ -285,12 +269,12 @@ export default function WarehouseLedgerPage() {
                   </tr>
                   {items.map((item, idx) => {
                     const isExpired = item.expiryDate && new Date(item.expiryDate) < new Date();
-                    const isNearExpiry = item.expiryDate && !isExpired && 
+                    const isNearExpiry = item.expiryDate && !isExpired &&
                       (new Date(item.expiryDate).getTime() - new Date().getTime()) < (30 * 24 * 60 * 60 * 1000); // 30 days
 
                     return (
-                      <tr 
-                        key={item.id} 
+                      <tr
+                        key={item.id}
                         className="group hover:bg-slate-50 transition-all cursor-pointer border-b border-slate-100"
                         onClick={() => navigate(`/inventory/stock-card/${item.id}`)}
                       >
@@ -361,13 +345,13 @@ export default function WarehouseLedgerPage() {
                 <h4 className="text-xl font-black italic uppercase tracking-tighter">Optimal Operating Level</h4>
               </div>
             </div>
-            
+
             <div className="flex gap-4">
               <div className="text-right hidden md:block">
                 <p className="text-[9px] font-black text-white/50 uppercase tracking-widest mb-1 italic">Total Valuation</p>
                 <p className="text-2xl font-black italic uppercase tracking-tighter text-emerald-400">{formatCurrency(stats.totalValue)}</p>
               </div>
-              <button 
+              <button
                 onClick={() => navigate('/inventory/stock-journal')}
                 className="px-8 py-4 bg-white text-slate-900 rounded-2xl font-black text-[10px] uppercase tracking-[0.3em] transition-all hover:bg-emerald-400 hover:scale-105 active:scale-95 italic shadow-2xl cursor-pointer"
               >

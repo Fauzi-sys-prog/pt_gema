@@ -1192,7 +1192,6 @@ export interface Leave {
   status: "Pending" | "Approved" | "Rejected";
   days?: number;
   totalDays?: number;
-  nominal?: number;
   approvedBy?: string;
   approvedDate?: string;
   notes?: string;
@@ -1268,8 +1267,18 @@ export interface THLPayrollSlip {
   hariKerja: number;
   totalJam: number;
   totalUpah: number;
-  totalKasbon: number;
-  adminFee: number;
+
+  koperasiLoanDeduction: number;
+  koperasiMandatorySavingDeduction: number;
+  koperasiDeduction: number;
+  koperasiLoanDetails: Array<{
+    loanId: string;
+    pinjamanNo: string;
+    installmentNumber: number;
+    installmentAmount: number;
+    remainingAfter: number;
+  }>;
+
   bpjstk: number;
   jkn: number;
   netto: number;
@@ -1281,8 +1290,11 @@ export interface THLPayrollRun {
   periodLabel: string;
   thlCount: number;
   totalUpah: number;
-  totalKasbon: number;
-  totalAdminFee: number;
+
+  totalKoperasiLoan: number;
+  totalKoperasiSaving: number;
+  totalKoperasiDeduction: number;
+
   totalBPJSTK: number;
   totalJKN: number;
   totalNetto: number;
@@ -1500,6 +1512,10 @@ export interface PayrollSlip {
   kasbonAdminFee?: number;
   jpkAllowance?: number;
   cutiAllowance?: number;
+  /** Snapshot Unpaid Leave agar slip historis tidak berubah. */
+  unpaidLeaveDays?: number;
+  unpaidLeaveRatePerDay?: number;
+  unpaidLeaveDeduction?: number;
   takeHomePay: number;
   attendanceDays: number;
   standardDays: number;
@@ -1661,6 +1677,9 @@ export interface KoperasiPinjaman {
   approvedBy?: string;
   approvedDate?: string;
   disbursedDate?: string;
+  createdByUserId?: string;
+  approvedByUserId?: string;
+  disbursedByUserId?: string;
 }
 
 export interface KoperasiCashTransaction {
@@ -1695,6 +1714,7 @@ export interface AppContextType {
     pinjaman: KoperasiPinjaman,
   ) => Promise<KoperasiPinjaman>;
   approveKoperasiPinjaman: (id: string) => Promise<KoperasiPinjaman>;
+  disburseKoperasiPinjaman: (id: string) => Promise<KoperasiPinjaman>;
   bayarKoperasiAngsuran: (id: string) => Promise<KoperasiPinjaman>;
   koperasiBalance: number;
   koperasiTransactions: KoperasiCashTransaction[];
@@ -1756,7 +1776,14 @@ export interface AppContextType {
   deleteTHLSettlement: (id: string) => void;
   thlPayrollRunList: THLPayrollRun[];
   addTHLPayrollRun: (run: THLPayrollRun) => void;
-  updateTHLPayrollRun: (id: string, updates: Partial<THLPayrollRun>) => void;
+  updateTHLPayrollRun: (
+    id: string,
+    updates: Partial<THLPayrollRun>,
+  ) => Promise<void>;
+  disburseTHLPayrollRun: (
+    id: string,
+    updates: Partial<THLPayrollRun>,
+  ) => Promise<void>;
   deleteTHLPayrollRun: (id: string) => void;
   payrollRecords: PayrollRecord[];
   addPayrollRecord: (record: PayrollRecord) => void;
@@ -3834,15 +3861,81 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({
     setTHLPayrollRunList((prev) => [run, ...prev]);
     upsertHrAlias("/hr-thl-payroll-runs", run);
   };
-  const updateTHLPayrollRun = (id: string, updates: Partial<THLPayrollRun>) =>
+  const updateTHLPayrollRun = async (
+    id: string,
+    updates: Partial<THLPayrollRun>,
+  ) => {
+    const current = thlPayrollRunList.find((run) => run.id === id);
+    if (!current) throw new Error("Gajian THL tidak ditemukan");
+
+    const next = { ...current, ...updates };
+
     setTHLPayrollRunList((prev) =>
-      prev.map((r) => {
-        if (r.id !== id) return r;
-        const next = { ...r, ...updates };
-        upsertHrAlias("/hr-thl-payroll-runs", next);
-        return next;
-      }),
+      prev.map((run) => (run.id === id ? next : run)),
     );
+
+    try {
+      const saved = await persistHrAlias("/hr-thl-payroll-runs", next);
+      setTHLPayrollRunList((prev) =>
+        prev.map((run) => (run.id === id ? saved : run)),
+      );
+    } catch (error) {
+      setTHLPayrollRunList((prev) =>
+        prev.map((run) => (run.id === id ? current : run)),
+      );
+      throw error;
+    }
+  };
+
+  const disburseTHLPayrollRun = async (
+    id: string,
+    updates: Partial<THLPayrollRun>,
+  ) => {
+    const current = thlPayrollRunList.find((run) => run.id === id);
+    if (!current) throw new Error("Gajian THL tidak ditemukan");
+
+    const next = { ...current, ...updates };
+
+    setTHLPayrollRunList((prev) =>
+      prev.map((run) => (run.id === id ? next : run)),
+    );
+
+    try {
+      const posted = await api.request<{
+        postedLoanIds: string[];
+        postedSavingMemberIds: string[];
+      }>(`/koperasi/thl-payroll-runs/${encodeURIComponent(id)}/post`, {
+        method: "POST",
+        body: JSON.stringify({
+          period: next.periode,
+          run: next,
+        }),
+      });
+
+      if (
+        posted.postedLoanIds.length > 0 ||
+        posted.postedSavingMemberIds.length > 0
+      ) {
+        const summary = await api.request<{
+          simpanans: KoperasiSimpanan[];
+          pinjamans: KoperasiPinjaman[];
+          transactions: KoperasiCashTransaction[];
+          balance: number;
+        }>("/koperasi/summary");
+
+        setKoperasiSimpananList(summary.simpanans);
+        setKoperasiPinjamanList(summary.pinjamans);
+        setKoperasiTransactions(summary.transactions);
+        setKoperasiBalance(summary.balance);
+      }
+    } catch (error) {
+      setTHLPayrollRunList((prev) =>
+        prev.map((run) => (run.id === id ? current : run)),
+      );
+      throw error;
+    }
+  };
+
   const deleteTHLPayrollRun = (id: string) => {
     setTHLPayrollRunList((prev) => prev.filter((r) => r.id !== id));
     void api
@@ -6797,12 +6890,38 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({
       `/koperasi/pinjaman/${encodeURIComponent(id)}/approve`,
       { method: "POST" },
     );
+
     setKoperasiPinjamanList((prev) =>
       prev.map((pinjaman) => (pinjaman.id === id ? saved : pinjaman)),
     );
-    setKoperasiBalance((prev) => prev - saved.amount);
+
+    // Approval hanya mengubah Pending -> Approved.
+    // Belum ada pergerakan Kas Koperasi.
     return saved;
   };
+
+  const disburseKoperasiPinjaman = async (id: string) => {
+    const saved = await api.request<KoperasiPinjaman>(
+      `/koperasi/pinjaman/${encodeURIComponent(id)}/disburse`,
+      { method: "POST" },
+    );
+
+    setKoperasiPinjamanList((prev) =>
+      prev.map((pinjaman) => (pinjaman.id === id ? saved : pinjaman)),
+    );
+
+    // Cash OUT baru terjadi saat Approved -> Active.
+    setKoperasiBalance((prev) => prev - saved.amount);
+
+    // Backend cash ledger tetap authoritative kalau state lokal sebelumnya stale.
+    void api
+      .request<{ balance: number }>("/koperasi/summary")
+      .then((summary) => setKoperasiBalance(summary.balance))
+      .catch(() => undefined);
+
+    return saved;
+  };
+
   const bayarKoperasiAngsuran = async (id: string) => {
     const current = koperasiPinjamanList.find((pinjaman) => pinjaman.id === id);
     if (!current)
@@ -6902,6 +7021,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({
         koperasiPinjamanList,
         addKoperasiPinjaman,
         approveKoperasiPinjaman,
+        disburseKoperasiPinjaman,
         bayarKoperasiAngsuran,
         koperasiBalance,
         koperasiTransactions,
@@ -6948,6 +7068,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({
         thlPayrollRunList,
         addTHLPayrollRun,
         updateTHLPayrollRun,
+        disburseTHLPayrollRun,
         deleteTHLPayrollRun,
         suratMasukList,
         suratKeluarList,

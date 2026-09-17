@@ -2,12 +2,11 @@ import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router';
 import {
   Save, Settings, Shield, Building2, Clock, Percent,
-  Plus, Trash2, FileText, ChevronRight
+  FileText, ChevronRight
 } from 'lucide-react';
 import { useApp, type PayrollPolicy } from '../../contexts/AppContext';
 import { toast } from 'sonner';
 
-type IncentiveRule = { minAttendancePct: number; maxAttendancePct: number; deductionPct: number };
 
 const DEFAULT_POLICY: PayrollPolicy = {
   id: 'default',
@@ -19,12 +18,9 @@ const DEFAULT_POLICY: PayrollPolicy = {
   standardWorkHours: 8,
   mealAllowancePerDay: 0,
   overtimeRateMultiplier: 1.5,
-  incentiveDeductionRules: [
-    { minAttendancePct: 0, maxAttendancePct: 74, deductionPct: 100 },
-    { minAttendancePct: 75, maxAttendancePct: 84, deductionPct: 50 },
-    { minAttendancePct: 85, maxAttendancePct: 94, deductionPct: 25 },
-    { minAttendancePct: 95, maxAttendancePct: 100, deductionPct: 0 },
-  ],
+  // Legacy attendance-tier rules tidak dipakai Payroll Pro.
+  // Rule authoritative: persentase potongan insentif per hari tidak masuk.
+  incentiveDeductionRules: [],
   incentiveDeductionPerAbsencePercent: 25,
   bpjsJHTEmployer: 3.7,
   bpjsJHTEmployee: 2,
@@ -97,17 +93,12 @@ export default function PayrollPolicyPage() {
   void searchParams;
 
   const [policy, setPolicy] = useState<PayrollPolicy>(payrollPolicy ?? DEFAULT_POLICY);
-  const [rules, setRules] = useState<IncentiveRule[]>(
-    (payrollPolicy ?? DEFAULT_POLICY).incentiveDeductionRules
-  );
   const [activeSection, setActiveSection] = useState<SectionId>('umum');
-  const [previewPct, setPreviewPct] = useState(80);
 
   // Sync if context updates from storage
   useEffect(() => {
     if (payrollPolicy) {
       setPolicy(payrollPolicy);
-      setRules(payrollPolicy.incentiveDeductionRules);
     }
   }, [payrollPolicy]);
 
@@ -115,27 +106,20 @@ export default function PayrollPolicyPage() {
     setPolicy(prev => ({ ...prev, [key]: value }));
   };
 
-  const updateRule = (idx: number, key: keyof IncentiveRule, value: number) => {
-    setRules(prev => prev.map((r, i) => (i === idx ? { ...r, [key]: value } : r)));
-  };
-
-  const addRule = () => {
-    setRules(prev => [...prev, { minAttendancePct: 0, maxAttendancePct: 100, deductionPct: 0 }]);
-  };
-
-  const removeRule = (idx: number) => {
-    setRules(prev => prev.filter((_, i) => i !== idx));
-  };
-
-  const getPreviewDeduction = () => {
-    const match = rules.find(
-      r => previewPct >= r.minAttendancePct && previewPct <= r.maxAttendancePct
-    );
-    return match ? match.deductionPct : null;
-  };
-
   const handleSave = () => {
-    const toSave: PayrollPolicy = { ...policy, incentiveDeductionRules: rules };
+    const percentPerDay = Math.min(
+      100,
+      Math.max(0, policy.incentiveDeductionPerAbsencePercent ?? 25)
+    );
+
+    const toSave: PayrollPolicy = {
+      ...policy,
+      incentiveDeductionPerAbsencePercent: percentPerDay,
+      // Legacy tier sengaja dikosongkan agar tidak menjadi sumber rule kedua.
+      incentiveDeductionRules: [],
+    };
+
+    setPolicy(toSave);
     setPayrollPolicy(toSave);
     toast.success('Kebijakan penggajian berhasil disimpan');
   };
@@ -144,8 +128,6 @@ export default function PayrollPolicyPage() {
     setActiveSection(id);
     document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
-
-  const previewDed = getPreviewDeduction();
 
   return (
     <div className="flex gap-6 p-6 bg-slate-50 min-h-screen">
@@ -301,100 +283,33 @@ export default function PayrollPolicyPage() {
           <div className="space-y-4">
             <div className="max-w-xs">
               <FieldLabel>Potongan Insentif per Hari Tidak Masuk (%)</FieldLabel>
-              <input type="number" min={0} max={100} step={0.1}
+              <input
+                type="number"
+                min={0}
+                max={100}
+                step={0.1}
                 value={policy.incentiveDeductionPerAbsencePercent ?? 25}
-                onChange={e => update('incentiveDeductionPerAbsencePercent', Number(e.target.value))}
-                className={inputCls} />
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs">
-                <thead>
-                  <tr className="border-b border-slate-100">
-                    <th className="pb-2 text-left text-[9px] font-black uppercase tracking-widest text-slate-400">Min Kehadiran %</th>
-                    <th className="pb-2 text-left text-[9px] font-black uppercase tracking-widest text-slate-400">Max Kehadiran %</th>
-                    <th className="pb-2 text-left text-[9px] font-black uppercase tracking-widest text-slate-400">Potongan %</th>
-                    <th className="pb-2" />
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-50">
-                  {rules.map((rule, idx) => (
-                    <tr key={idx}>
-                      <td className="py-2 pr-3">
-                        <input
-                          type="number"
-                          value={rule.minAttendancePct}
-                          onChange={e => updateRule(idx, 'minAttendancePct', Number(e.target.value))}
-                          min={0}
-                          max={100}
-                          className="w-20 p-2 bg-slate-50 border border-slate-200 rounded-lg font-bold text-xs outline-none focus:ring-2 focus:ring-blue-400"
-                        />
-                      </td>
-                      <td className="py-2 pr-3">
-                        <input
-                          type="number"
-                          value={rule.maxAttendancePct}
-                          onChange={e => updateRule(idx, 'maxAttendancePct', Number(e.target.value))}
-                          min={0}
-                          max={100}
-                          className="w-20 p-2 bg-slate-50 border border-slate-200 rounded-lg font-bold text-xs outline-none focus:ring-2 focus:ring-blue-400"
-                        />
-                      </td>
-                      <td className="py-2 pr-3">
-                        <input
-                          type="number"
-                          value={rule.deductionPct}
-                          onChange={e => updateRule(idx, 'deductionPct', Number(e.target.value))}
-                          min={0}
-                          max={100}
-                          className="w-20 p-2 bg-slate-50 border border-slate-200 rounded-lg font-bold text-xs outline-none focus:ring-2 focus:ring-blue-400"
-                        />
-                      </td>
-                      <td className="py-2">
-                        <button
-                          type="button"
-                          onClick={() => removeRule(idx)}
-                          className="p-1.5 text-red-400 hover:bg-red-50 rounded-lg transition-all"
-                        >
-                          <Trash2 size={13} />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                onChange={e =>
+                  update(
+                    'incentiveDeductionPerAbsencePercent',
+                    Math.min(100, Math.max(0, Number(e.target.value)))
+                  )
+                }
+                className={inputCls}
+              />
             </div>
 
-            <button
-              type="button"
-              onClick={addRule}
-              className="flex items-center gap-1.5 px-3 py-2 bg-slate-100 hover:bg-blue-50 hover:text-blue-600 text-slate-600 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all"
-            >
-              <Plus size={13} /> Tambah Baris
-            </button>
-
-            {/* Live Preview */}
-            <div className="bg-blue-50 border border-blue-100 rounded-2xl p-4 space-y-3">
-              <p className="text-[10px] font-black uppercase tracking-widest text-blue-600">Preview Kalkulasi</p>
-              <div className="flex items-center gap-3">
-                <label className="text-[10px] font-bold text-slate-500 whitespace-nowrap">Kehadiran:</label>
-                <input
-                  type="range"
-                  min={0}
-                  max={100}
-                  value={previewPct}
-                  onChange={e => setPreviewPct(Number(e.target.value))}
-                  className="flex-1"
-                />
-                <span className="text-sm font-black text-blue-700 w-10 text-right">{previewPct}%</span>
-              </div>
-              {previewDed !== null ? (
-                <p className="text-xs font-bold text-slate-700">
-                  Jika kehadiran <strong>{previewPct}%</strong>, potongan ={' '}
-                  <strong className="text-red-600">{previewDed}%</strong> dari insentif
-                </p>
-              ) : (
-                <p className="text-xs font-bold text-slate-400">Tidak ada aturan yang cocok untuk {previewPct}%</p>
-              )}
+            <div className="rounded-2xl border border-blue-100 bg-blue-50 p-4 space-y-1">
+              <p className="text-[10px] font-black uppercase tracking-widest text-blue-700">
+                Rule Authoritative Payroll
+              </p>
+              <p className="text-xs font-bold text-slate-700">
+                Alpha + Izin + Sakit × {policy.incentiveDeductionPerAbsencePercent ?? 25}% per hari.
+              </p>
+              <p className="text-[10px] font-semibold text-slate-500">
+                Potongan otomatis berhenti di 100% dari Tunjangan Insentif.
+                Cuti Approved dan Libur Nasional tidak dikenai potongan insentif.
+              </p>
             </div>
           </div>
         </SectionCard>

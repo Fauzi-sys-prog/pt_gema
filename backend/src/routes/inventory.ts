@@ -430,8 +430,28 @@ async function applyStockInInventory(tx: InventoryTx, stockInId: string) {
   const stockCategory =
     asTrimmedString(legacy.stockCategory) ||
     (stockIn.type === "Production Output" ? "Barang Jadi" : "General");
+  const legacyItems = Array.isArray(legacy.items)
+    ? legacy.items.map(asRecord)
+    : [];
 
   for (const [index, item] of stockIn.items.entries()) {
+    const legacyItem =
+      legacyItems.find((candidate) => {
+        const code =
+          asTrimmedString(candidate.kode ?? candidate.itemKode) || "";
+        return code === item.itemCode;
+      }) ??
+      legacyItems[index] ??
+      {};
+
+    const requestedCategory =
+      asTrimmedString(legacyItem.kategori) ||
+      asTrimmedString(legacy.stockCategory);
+
+    const itemCategory =
+      stockIn.type === "Production Output"
+        ? stockCategory
+        : requestedCategory || undefined;
     if (Number(item.qty) <= 0) continue;
     let inventoryItem = await tx.inventoryItem.findFirst({
       where: { OR: [{ code: item.itemCode }, { name: item.itemName }] },
@@ -442,7 +462,7 @@ async function applyStockInInventory(tx: InventoryTx, stockInId: string) {
           id: `INV-${randomUUID()}`,
           code: item.itemCode,
           name: item.itemName || item.itemCode,
-          category: stockCategory,
+          category: itemCategory || stockCategory,
           unit: item.unit || "pcs",
           location: defaultLocation,
           minStock: 0,
@@ -453,6 +473,7 @@ async function applyStockInInventory(tx: InventoryTx, stockInId: string) {
           metadata: {
             source: "stock-in",
             stok: 0,
+            kategori: itemCategory || stockCategory,
             lokasi: defaultLocation,
           } as Prisma.InputJsonValue,
         },
@@ -468,14 +489,14 @@ async function applyStockInInventory(tx: InventoryTx, stockInId: string) {
         category:
           stockIn.type === "Production Output"
             ? stockCategory
-            : inventoryItem.category,
+            : itemCategory || inventoryItem.category,
         metadata: {
           ...asRecord(inventoryItem.metadata),
           stok: stockAfter,
           kategori:
             stockIn.type === "Production Output"
               ? stockCategory
-              : inventoryItem.category,
+              : itemCategory || inventoryItem.category,
           lokasi: defaultLocation,
           lastUpdate: stockIn.tanggal.toISOString(),
         },
@@ -1141,6 +1162,10 @@ async function createResource(
             const qty = toFiniteNumber(raw.qty, 0);
             if (!code || qty <= 0) continue;
             const unit = asTrimmedString(raw.satuan ?? raw.unit) || "pcs";
+            const requestedCategory =
+              asTrimmedString(raw.kategori) ||
+              asTrimmedString(payload.stockCategory);
+
             if (status !== "Posted") {
               normalizedItems.push({
                 code,
@@ -1169,10 +1194,15 @@ async function createResource(
                 where: { id: existingItem.id },
                 data: {
                   name: name || existingItem.name,
+                  category: requestedCategory || existingItem.category,
                   unit,
                   supplierName: supplierName ?? existingItem.supplierName,
                   onHandQty: stockAfter,
                   lastStockUpdateAt: tanggal,
+                  metadata: {
+                    ...asRecord(existingItem.metadata),
+                    kategori: requestedCategory || existingItem.category,
+                  } as Prisma.InputJsonValue,
                 },
               });
             } else {
@@ -1184,7 +1214,7 @@ async function createResource(
                   id: inventoryItemId,
                   code,
                   name: name || code,
-                  category: "General",
+                  category: requestedCategory || "General",
                   unit,
                   location,
                   minStock: 0,
@@ -1196,6 +1226,7 @@ async function createResource(
                   metadata: {
                     source: "stock-in",
                     stockInId: entityId,
+                    kategori: requestedCategory || "General",
                   } as Prisma.InputJsonValue,
                 },
               });
@@ -2195,6 +2226,90 @@ inventoryRouter.post(
         message: "ID Surat Jalan wajib diisi",
         legacyError: "ID Surat Jalan wajib diisi",
       });
+
+    const sjType =
+      asTrimmedString(suratJalan.sjType) || "Material Delivery";
+
+    if (sjType === "Material Delivery") {
+      const sjItems = Array.isArray(suratJalan.items)
+        ? suratJalan.items.map(asRecord)
+        : [];
+      const stockOutItems = Array.isArray(stockOut.items)
+        ? stockOut.items.map(asRecord)
+        : [];
+
+      if (Object.keys(stockOut).length === 0 || stockOutItems.length === 0) {
+        return sendError(res, 400, {
+          code: "VALIDATION_ERROR",
+          message:
+            "Material Delivery wajib memiliki Stock Out agar stok gudang berkurang",
+          legacyError:
+            "Material Delivery wajib memiliki Stock Out agar stok gudang berkurang",
+        });
+      }
+
+      if (sjItems.length === 0) {
+        return sendError(res, 400, {
+          code: "VALIDATION_ERROR",
+          message: "Material Delivery wajib memiliki minimal 1 item",
+          legacyError: "Material Delivery wajib memiliki minimal 1 item",
+        });
+      }
+
+      const sjQtyByCode = new Map<string, number>();
+      for (const item of sjItems) {
+        const code = asTrimmedString(item.itemKode);
+        const qty = toFiniteNumber(item.jumlah ?? item.qty, 0);
+
+        if (!code || qty <= 0) {
+          return sendError(res, 400, {
+            code: "VALIDATION_ERROR",
+            message:
+              "Semua item Material Delivery wajib memiliki itemKode dan qty lebih dari 0",
+            legacyError:
+              "Semua item Material Delivery wajib memiliki itemKode dan qty lebih dari 0",
+          });
+        }
+
+        sjQtyByCode.set(code, (sjQtyByCode.get(code) || 0) + qty);
+      }
+
+      const stockOutQtyByCode = new Map<string, number>();
+      for (const item of stockOutItems) {
+        const code = asTrimmedString(item.kode);
+        const qty = toFiniteNumber(item.qty, 0);
+
+        if (!code || qty <= 0) {
+          return sendError(res, 400, {
+            code: "VALIDATION_ERROR",
+            message:
+              "Semua item Stock Out wajib memiliki kode dan qty lebih dari 0",
+            legacyError:
+              "Semua item Stock Out wajib memiliki kode dan qty lebih dari 0",
+          });
+        }
+
+        stockOutQtyByCode.set(
+          code,
+          (stockOutQtyByCode.get(code) || 0) + qty,
+        );
+      }
+
+      if (
+        sjQtyByCode.size !== stockOutQtyByCode.size ||
+        [...sjQtyByCode.entries()].some(
+          ([code, qty]) => stockOutQtyByCode.get(code) !== qty,
+        )
+      ) {
+        return sendError(res, 400, {
+          code: "VALIDATION_ERROR",
+          message:
+            "Item dan qty Surat Jalan harus sama dengan Stock Out",
+          legacyError:
+            "Item dan qty Surat Jalan harus sama dengan Stock Out",
+        });
+      }
+    }
 
     try {
       const result = await prisma.$transaction(

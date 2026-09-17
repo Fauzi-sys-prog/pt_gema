@@ -121,31 +121,26 @@ export default function ProductionDashboard() {
   useEffect(() => {
     if (location.state && (location.state as any).createWO) {
       const state = location.state as any;
-      const project = projectList.find((p) => p.id === state.projectId);
 
+      // Project hanya menjadi referensi WO.
+      // Item pekerjaan, target, dan BOM selalu dimulai kosong/default
+      // dan tidak boleh diwariskan otomatis dari Project / BOQ.
       setFormData((prev) => ({
         ...prev,
         projectId: state.projectId || "",
         projectName: state.projectName || "",
-        itemToProduce: state.itemToProduce || "",
-        targetQty: state.targetQty || 1,
+        itemToProduce: "",
+        targetQty: 1,
         requiresBom: state.requiresBom !== false,
-        bom:
-          state.bom ||
-          project?.boq?.map((item) => ({
-            kode: item.itemKode || "",
-            nama: item.materialName,
-            qty: item.qtyEstimate,
-            unit: item.unit,
-          })) ||
-          [],
+        bom: [],
       }));
+
       setShowCreateModal(true);
 
       // Clear state to prevent modal reopening on refresh
       window.history.replaceState({}, document.title);
     }
-  }, [location.state, projectList]);
+  }, [location.state]);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -253,29 +248,40 @@ export default function ProductionDashboard() {
   const resetForm = () => setFormData(woDefaults(workOrderList?.length ?? 0));
 
   const handleProjectSelect = (projectId: string) => {
-    if (projectId === "INTERNAL") {
-      setFormData({
-        ...formData,
-        projectId: "INTERNAL",
-        projectName: "INTERNAL PRODUKSI",
+    if (!projectId) {
+      setFormData((prev) => ({
+        ...prev,
+        projectId: "",
+        projectName: "",
+        itemToProduce: "",
+        targetQty: 1,
         bom: [],
-      });
+      }));
       return;
     }
+
+    if (projectId === "INTERNAL") {
+      setFormData((prev) => ({
+        ...prev,
+        projectId: "INTERNAL",
+        projectName: "INTERNAL PRODUKSI",
+        itemToProduce: "",
+        targetQty: 1,
+        bom: [],
+      }));
+      return;
+    }
+
     const project = projectList.find((p) => p.id === projectId);
     if (project) {
-      setFormData({
-        ...formData,
+      setFormData((prev) => ({
+        ...prev,
         projectId: project.id,
         projectName: project.namaProject,
-        bom:
-          project.boq?.map((item) => ({
-            kode: item.itemKode || "",
-            nama: item.materialName,
-            qty: item.qtyEstimate,
-            unit: item.unit,
-          })) || [],
-      });
+        itemToProduce: "",
+        targetQty: 1,
+        bom: [],
+      }));
     }
   };
 

@@ -705,7 +705,15 @@ function buildBoqRowsFromQuotation(quotationPayload: Record<string, unknown>): R
       const category = readString(section, "nama") || readString(section, "label") || "Quotation";
       for (const item of toArrayOfRecords(section.items)) {
         const qty = toNumber(item.qty, 0) || toNumber(item.jumlah, 0);
-        const unitPrice = 0; // Quotation contains selling prices only.
+        const sellingPrice =
+          toNumber(item.hargaJualUnit, 0) ||
+          toNumber(item.hargaJual, 0) ||
+          toNumber(item.sellingPerUnit, 0);
+        const pricingMethod = (readString(item, "pricingMethod") || "PER_UNIT").toUpperCase();
+        const unitPrice =
+          pricingMethod === "LUMP_SUM" && qty > 0
+            ? sellingPrice / qty
+            : sellingPrice;
         rows.push({
           itemKode: readString(item, "id") || `BOQ-${String(idx).padStart(3, "0")}`,
           materialName:

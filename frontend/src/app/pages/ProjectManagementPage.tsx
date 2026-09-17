@@ -55,7 +55,7 @@ import { toast } from 'sonner';
 import { BOQMaterialModal } from "../components/project/BOQMaterialModal";
 import logoGTP from "figma:asset/661f558dc14c79fa090b7039a885f26b843f5c04.png";
 
-type ProjectTab = "overview" | "boq" | "work-order" | "field-records" | "vendor-biaya" | "invoice" | "peminjaman-alat";
+type ProjectTab = "overview" | "boq" | "work-order" | "surat-jalan" | "field-records" | "vendor-biaya" | "invoice" | "peminjaman-alat";
 
 import { TimelineTracker } from "../components/project/TimelineTracker";
 import { MaterialUsageReportModal } from "../components/project/MaterialUsageReportModal";
@@ -78,8 +78,6 @@ export default function ProjectManagementPage() {
     quotationList,
     poList,
     stockOutList,
-    stockItemList,
-    addStockOut,
     expenseList,
     addExpense,
     approveExpense,
@@ -422,28 +420,142 @@ export default function ProjectManagementPage() {
     }
   };
 
-  const handleAddUsage = () => {
+  const handleAddUsage = async () => {
     if (!selectedProject || !usageForm || usageForm.qty <= 0 || isSubmitting) return;
-    setIsSubmitting(true);
-    const so = {
-      id: `SO-FR-${Date.now()}`,
-      noStockOut: `SO-FR-${Date.now()}`,
-      projectId: selectedProject.id,
-      penerima: selectedProject.name,
-      tanggal: new Date().toISOString().split('T')[0],
-      type: 'Project Issue' as const,
-      status: 'Posted' as const,
-      createdBy: 'Field Record',
-      items: [{ kode: usageForm.kode, nama: usageForm.nama, satuan: usageForm.satuan, qty: usageForm.qty, hargaSatuan: usageForm.hargaSatuan, keterangan: usageForm.keterangan }],
+
+    const normalizeKey = (value: unknown) =>
+      String(value ?? '').trim().toLowerCase();
+
+    const usageCode = normalizeKey(usageForm.kode);
+    const usageName = normalizeKey(usageForm.nama);
+
+    const deliveredSuratJalan = suratJalanList.filter(
+      (sj: any) =>
+        sj.projectId === selectedProject.id &&
+        sj.sjType === 'Material Delivery' &&
+        sj.deliveryStatus === 'Delivered',
+    );
+
+    const itemMatches = (item: any) => {
+      const itemCode = normalizeKey(item.itemKode);
+      const itemName = normalizeKey(item.namaItem);
+
+      return (
+        (itemCode && usageCode && itemCode === usageCode) ||
+        (itemName && usageName && itemName === usageName)
+      );
     };
+
+    const sourceSuratJalan = deliveredSuratJalan.filter((sj: any) =>
+      (sj.items || []).some(itemMatches),
+    );
+
+    const deliveredQty = sourceSuratJalan.reduce(
+      (total: number, sj: any) =>
+        total +
+        (sj.items || [])
+          .filter(itemMatches)
+          .reduce(
+            (sum: number, item: any) => sum + Number(item.jumlah || 0),
+            0,
+          ),
+      0,
+    );
+
+    const existingReports = selectedProject.materialUsageReports || [];
+
+    const usedQty = existingReports.reduce(
+      (total: number, report: any) =>
+        total +
+        (report.items || [])
+          .filter((item: any) => {
+            const itemCode = normalizeKey(item.itemCode);
+            const itemName = normalizeKey(item.materialName);
+
+            return (
+              (itemCode && usageCode && itemCode === usageCode) ||
+              (itemName && usageName && itemName === usageName)
+            );
+          })
+          .reduce(
+            (sum: number, item: any) =>
+              sum + Number(item.qtyUsed ?? item.terpasang ?? 0),
+            0,
+          ),
+      0,
+    );
+
+    const remainingQty = Math.max(0, deliveredQty - usedQty);
+
+    if (deliveredQty <= 0) {
+      toast.error(
+        'Barang ini belum memiliki Surat Jalan Material Delivery berstatus Delivered.',
+      );
+      return;
+    }
+
+    if (usageForm.qty > remainingQty + 0.0001) {
+      toast.error(
+        `Jumlah dipakai melebihi sisa barang di proyek. Sisa tersedia: ${remainingQty} ${usageForm.satuan}`,
+      );
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    const ts = Date.now();
+    const reportId = `MUR-${ts}`;
+
+    const report: any = {
+      id: reportId,
+      projectId: selectedProject.id,
+      reportNumber: reportId,
+      spkNumber: (selectedProject as any).spkList?.[0]?.noSPK || '',
+      date: new Date().toISOString().split('T')[0],
+      location: selectedProject.location || '',
+      customerName: selectedProject.customer || '',
+      sourceSuratJalanIds: sourceSuratJalan.map((sj: any) => sj.id),
+      sourceSuratJalanNos: sourceSuratJalan.map((sj: any) => sj.noSurat),
+      items: [{
+        id: `${reportId}-1`,
+        itemCode: usageForm.kode,
+        materialName: usageForm.nama,
+        unit: usageForm.satuan,
+        pengambilan: usageForm.qty,
+        terpasang: usageForm.qty,
+        sisa: Math.max(0, remainingQty - usageForm.qty),
+        qtyUsed: usageForm.qty,
+        deliveredQty,
+        remainingBefore: remainingQty,
+        remainingAfter: Math.max(0, remainingQty - usageForm.qty),
+        hargaSatuan: usageForm.hargaSatuan,
+        keterangan: usageForm.keterangan,
+        sourceSuratJalanNos: sourceSuratJalan.map((sj: any) => sj.noSurat),
+      }],
+      preparedBy:
+        (currentUser as any)?.name ||
+        (currentUser as any)?.username ||
+        'Field Record',
+      checkedBy: '',
+      approvedBy: '',
+    };
+
     try {
-      addStockOut(so);
+      const saved = await updateProject(selectedProject.id, {
+        materialUsageReports: [...existingReports, report],
+      });
+
+      if (!saved) return;
+
       setShowAddUsageModal(false);
       setUsageForm(null);
       setUsageSearch('');
       toast.success('Pemakaian barang berhasil dicatat');
     } catch (err) {
-      toast.error('Pemakaian barang gagal dicatat: ' + (err instanceof Error ? err.message : 'Error'));
+      toast.error(
+        'Pemakaian barang gagal dicatat: ' +
+          (err instanceof Error ? err.message : 'Error'),
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -802,7 +914,7 @@ export default function ProjectManagementPage() {
             </div>
 
             <div className="flex border-b border-slate-100 px-3 sm:px-6 md:px-10 bg-white overflow-x-auto scrollbar-none">
-              {(["overview", "boq", "work-order", "field-records", "vendor-biaya", "invoice", "peminjaman-alat"] as ProjectTab[]).map((tab) => (
+              {(["overview", "boq", "work-order", "surat-jalan", "field-records", "vendor-biaya", "invoice", "peminjaman-alat"] as ProjectTab[]).map((tab) => (
                 <button
                   key={tab}
                   onClick={() => setProjectTab(tab)}
@@ -814,6 +926,7 @@ export default function ProjectManagementPage() {
                     : tab === "invoice" ? "Invoice"
                     : tab === "field-records" ? "Field"
                     : tab === "work-order" ? "Work Order"
+                    : tab === "surat-jalan" ? "Surat Jalan"
                     : tab === "peminjaman-alat" ? "Peminjaman Alat"
                     : tab === "boq" ? "RAB / BOQ"
                     : tab.replace("-", " ")}
@@ -1212,56 +1325,201 @@ export default function ProjectManagementPage() {
                       <Plus size={18} className="text-blue-600" /> Catat Pemakaian Barang
                     </h3>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-start">
-                      {/* Search BOQ */}
+                      {/* Search material yang sudah Delivered via Surat Jalan */}
                       <div className="md:col-span-2 relative">
-                        <label className="text-[9px] font-black text-slate-600 uppercase tracking-widest block mb-2">Pilih Item dari BOQ Proyek</label>
+                        <label className="text-[9px] font-black text-slate-600 uppercase tracking-widest block mb-2">
+                          Pilih Item dari Surat Jalan Delivered
+                        </label>
                         <div className="relative">
                           <Search size={16} className="absolute left-3 top-3 text-slate-400" />
                           <input
                             type="text"
                             value={usageSearch}
-                            onChange={e => { setUsageSearch(e.target.value); setUsageForm(null); }}
-                            placeholder="Ketik nama atau kode item BOQ..."
+                            onChange={e => {
+                              setUsageSearch(e.target.value);
+                              setUsageForm(null);
+                            }}
+                            placeholder="Ketik nama atau kode material yang sudah sampai..."
                             className="w-full pl-9 pr-4 py-2.5 border border-slate-200 rounded-xl text-sm text-neutral-900 placeholder:text-neutral-400 focus:ring-2 focus:ring-blue-500 outline-none"
                           />
+
                           {usageSearch && !usageForm && (() => {
-                            const boqItems = (selectedProject?.boq || []).filter((b: any) =>
-                              b.materialName?.toLowerCase().includes(usageSearch.toLowerCase()) ||
-                              b.itemKode?.toLowerCase().includes(usageSearch.toLowerCase())
-                            ).slice(0, 8);
-                            return boqItems.length > 0 ? (
-                              <div className="absolute z-10 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl max-h-56 overflow-y-auto">
-                                {boqItems.map((item: any, i: number) => {
-                                  const kodeKey = item.itemKode || item.materialName;
-                                  const terpakaiQty = stockOutList
-                                    .filter((so: any) => so.projectId === selectedProject?.id)
-                                    .flatMap((so: any) => so.items || [])
-                                    .filter((si: any) => (si.kode || si.nama) === kodeKey)
-                                    .reduce((sum: number, si: any) => sum + (si.qty || 0), 0);
-                                  const sisa = (item.qtyEstimate || 0) - terpakaiQty;
-                                  return (
-                                    <div key={i}
-                                      onClick={() => { setUsageForm({ kode: kodeKey, nama: item.materialName, satuan: item.unit, hargaSatuan: item.unitPrice || 0, qty: 1, keterangan: '' }); setUsageSearch(item.materialName); }}
-                                      className="px-4 py-3 hover:bg-blue-50 cursor-pointer border-b border-slate-50 last:border-0">
-                                      <div className="flex justify-between items-center">
-                                        <div>
-                                          <p className="text-[10px] font-mono font-bold text-blue-700">{item.itemKode || '-'}</p>
-                                          <p className="text-sm font-bold text-neutral-900">{item.materialName}</p>
-                                          {item.category && <p className="text-[9px] text-neutral-500 uppercase font-bold">{item.category}</p>}
-                                        </div>
-                                        <div className="text-right shrink-0 ml-4 space-y-0.5">
-                                          <span className="text-[10px] bg-blue-100 text-blue-800 px-2 py-0.5 rounded font-bold block">BOQ: {item.qtyEstimate} {item.unit}</span>
-                                          <span className="text-[10px] bg-orange-50 text-orange-700 px-2 py-0.5 rounded font-bold block">Terpakai: {terpakaiQty} {item.unit}</span>
-                                          <span className={`text-[10px] px-2 py-0.5 rounded font-bold block ${sisa <= 0 ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-700'}`}>Sisa: {sisa} {item.unit}</span>
-                                        </div>
+                            const normalizeKey = (value: unknown) =>
+                              String(value ?? '').trim().toLowerCase();
+
+                            const deliveredSj = suratJalanList.filter(
+                              (sj: any) =>
+                                sj.projectId === selectedProject?.id &&
+                                sj.sjType === 'Material Delivery' &&
+                                sj.deliveryStatus === 'Delivered',
+                            );
+
+                            const materialMap: Record<string, any> = {};
+
+                            deliveredSj.forEach((sj: any) => {
+                              (sj.items || []).forEach((item: any) => {
+                                const key =
+                                  normalizeKey(item.itemKode) ||
+                                  normalizeKey(item.namaItem);
+
+                                if (!key) return;
+
+                                if (!materialMap[key]) {
+                                  const boqItem = (selectedProject?.boq || []).find(
+                                    (b: any) =>
+                                      (
+                                        item.itemKode &&
+                                        b.itemKode &&
+                                        normalizeKey(b.itemKode) ===
+                                          normalizeKey(item.itemKode)
+                                      ) ||
+                                      normalizeKey(b.materialName) ===
+                                        normalizeKey(item.namaItem),
+                                  );
+
+                                  materialMap[key] = {
+                                    kode: item.itemKode || item.namaItem,
+                                    nama: item.namaItem,
+                                    satuan: item.satuan,
+                                    hargaSatuan: boqItem?.unitPrice || 0,
+                                    deliveredQty: 0,
+                                    sjNumbers: [],
+                                  };
+                                }
+
+                                materialMap[key].deliveredQty += Number(
+                                  item.jumlah || 0,
+                                );
+
+                                if (
+                                  sj.noSurat &&
+                                  !materialMap[key].sjNumbers.includes(sj.noSurat)
+                                ) {
+                                  materialMap[key].sjNumbers.push(sj.noSurat);
+                                }
+                              });
+                            });
+
+                            const existingReports =
+                              selectedProject?.materialUsageReports || [];
+
+                            const rows = Object.values(materialMap)
+                              .map((item: any) => {
+                                const usedQty = existingReports.reduce(
+                                  (total: number, report: any) =>
+                                    total +
+                                    (report.items || [])
+                                      .filter((ri: any) => {
+                                        const reportCode = normalizeKey(
+                                          ri.itemCode,
+                                        );
+                                        const reportName = normalizeKey(
+                                          ri.materialName,
+                                        );
+                                        const itemCode = normalizeKey(item.kode);
+                                        const itemName = normalizeKey(item.nama);
+
+                                        return (
+                                          (reportCode &&
+                                            itemCode &&
+                                            reportCode === itemCode) ||
+                                          (reportName &&
+                                            itemName &&
+                                            reportName === itemName)
+                                        );
+                                      })
+                                      .reduce(
+                                        (sum: number, ri: any) =>
+                                          sum +
+                                          Number(
+                                            ri.qtyUsed ?? ri.terpasang ?? 0,
+                                          ),
+                                        0,
+                                      ),
+                                  0,
+                                );
+
+                                return {
+                                  ...item,
+                                  usedQty,
+                                  remainingQty: Math.max(
+                                    0,
+                                    item.deliveredQty - usedQty,
+                                  ),
+                                };
+                              })
+                              .filter(
+                                (item: any) =>
+                                  normalizeKey(item.nama).includes(
+                                    normalizeKey(usageSearch),
+                                  ) ||
+                                  normalizeKey(item.kode).includes(
+                                    normalizeKey(usageSearch),
+                                  ),
+                              )
+                              .slice(0, 8);
+
+                            return rows.length > 0 ? (
+                              <div className="absolute z-10 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl max-h-64 overflow-y-auto">
+                                {rows.map((item: any, i: number) => (
+                                  <div
+                                    key={`${item.kode}-${i}`}
+                                    onClick={() => {
+                                      if (item.remainingQty <= 0) return;
+
+                                      setUsageForm({
+                                        kode: item.kode,
+                                        nama: item.nama,
+                                        satuan: item.satuan,
+                                        hargaSatuan: item.hargaSatuan,
+                                        qty: Math.min(1, item.remainingQty),
+                                        keterangan: '',
+                                      });
+                                      setUsageSearch(item.nama);
+                                    }}
+                                    className={`px-4 py-3 border-b border-slate-50 last:border-0 ${
+                                      item.remainingQty <= 0
+                                        ? 'bg-slate-50 cursor-not-allowed opacity-60'
+                                        : 'hover:bg-blue-50 cursor-pointer'
+                                    }`}
+                                  >
+                                    <div className="flex justify-between items-start gap-4">
+                                      <div>
+                                        <p className="text-[10px] font-mono font-bold text-blue-700">
+                                          {item.kode || '-'}
+                                        </p>
+                                        <p className="text-sm font-bold text-neutral-900">
+                                          {item.nama}
+                                        </p>
+                                        <p className="text-[9px] text-slate-400 font-bold mt-1">
+                                          SJ: {item.sjNumbers.join(', ')}
+                                        </p>
+                                      </div>
+
+                                      <div className="text-right shrink-0 space-y-0.5">
+                                        <span className="text-[10px] bg-blue-100 text-blue-800 px-2 py-0.5 rounded font-bold block">
+                                          Dikirim: {item.deliveredQty} {item.satuan}
+                                        </span>
+                                        <span className="text-[10px] bg-orange-50 text-orange-700 px-2 py-0.5 rounded font-bold block">
+                                          Terpakai: {item.usedQty} {item.satuan}
+                                        </span>
+                                        <span
+                                          className={`text-[10px] px-2 py-0.5 rounded font-bold block ${
+                                            item.remainingQty <= 0
+                                              ? 'bg-red-50 text-red-600'
+                                              : 'bg-emerald-50 text-emerald-700'
+                                          }`}
+                                        >
+                                          Sisa: {item.remainingQty} {item.satuan}
+                                        </span>
                                       </div>
                                     </div>
-                                  );
-                                })}
+                                  </div>
+                                ))}
                               </div>
                             ) : (
                               <div className="absolute z-10 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow px-4 py-3 text-[10px] text-slate-400 font-bold uppercase">
-                                Item tidak ditemukan di BOQ
+                                Tidak ada material Delivered yang cocok
                               </div>
                             );
                           })()}
@@ -1321,68 +1579,232 @@ export default function ProjectManagementPage() {
                         <h3 className="text-sm font-black uppercase tracking-widest italic flex items-center gap-2">
                           <Package size={18} className="text-blue-600" /> Material Usage Report
                         </h3>
-                        <p className="text-[10px] text-slate-600 font-bold uppercase mt-1">Barang yang sudah dikeluarkan dari gudang untuk proyek ini</p>
+                        <p className="text-[10px] text-slate-600 font-bold uppercase mt-1">Pemakaian aktual material yang sudah diterima melalui Surat Jalan</p>
                       </div>
                     </div>
 
                     {(() => {
-                      const projectStockOuts = stockOutList.filter(so => so.projectId === selectedProject.id);
-                      // flatten all items, merge by kode
-                      const usageMap: Record<string, { kode: string; nama: string; unit: string; qty: number; totalValue: number; dates: string[] }> = {};
-                      projectStockOuts.forEach(so => {
-                        (so.items || []).forEach((item: any) => {
-                          const key = item.kode || item.nama;
-                          const master = stockItemList.find((s: any) => s.kode === item.kode);
-                          const harga = master?.hargaSatuan || item.hargaSatuan || 0;
+                      const normalizeKey = (value: unknown) =>
+                        String(value ?? '').trim().toLowerCase();
+
+                      const usageReports =
+                        selectedProject.materialUsageReports || [];
+
+                      const usageMap: Record<
+                        string,
+                        {
+                          kode: string;
+                          nama: string;
+                          unit: string;
+                          qtyUsed: number;
+                          deliveredQty: number;
+                          dates: string[];
+                          notes: string[];
+                          sjNumbers: string[];
+                        }
+                      > = {};
+
+                      usageReports.forEach((report: any) => {
+                        (report.items || []).forEach((item: any) => {
+                          const key =
+                            normalizeKey(item.itemCode) ||
+                            normalizeKey(item.materialName);
+
+                          if (!key) return;
+
                           if (!usageMap[key]) {
-                            usageMap[key] = { kode: item.kode || '-', nama: item.nama || item.kode, unit: item.satuan || master?.satuan || '-', qty: 0, totalValue: 0, dates: [], keterangan: item.keterangan || '' };
+                            usageMap[key] = {
+                              kode: item.itemCode || '-',
+                              nama:
+                                item.materialName ||
+                                item.itemCode ||
+                                '-',
+                              unit: item.unit || '-',
+                              qtyUsed: 0,
+                              deliveredQty: 0,
+                              dates: [],
+                              notes: [],
+                              sjNumbers: [],
+                            };
                           }
-                          usageMap[key].qty += item.qty || 0;
-                          usageMap[key].totalValue += (item.qty || 0) * harga;
-                          if (so.tanggal && !usageMap[key].dates.includes(so.tanggal)) usageMap[key].dates.push(so.tanggal);
+
+                          usageMap[key].qtyUsed += Number(
+                            item.qtyUsed ?? item.terpasang ?? 0,
+                          );
+
+                          if (
+                            report.date &&
+                            !usageMap[key].dates.includes(report.date)
+                          ) {
+                            usageMap[key].dates.push(report.date);
+                          }
+
+                          if (
+                            item.keterangan &&
+                            !usageMap[key].notes.includes(item.keterangan)
+                          ) {
+                            usageMap[key].notes.push(item.keterangan);
+                          }
+
+                          const reportSjNumbers = [
+                            ...(Array.isArray(report.sourceSuratJalanNos)
+                              ? report.sourceSuratJalanNos
+                              : []),
+                            ...(Array.isArray(item.sourceSuratJalanNos)
+                              ? item.sourceSuratJalanNos
+                              : []),
+                          ];
+
+                          reportSjNumbers.forEach((no: string) => {
+                            if (
+                              no &&
+                              !usageMap[key].sjNumbers.includes(no)
+                            ) {
+                              usageMap[key].sjNumbers.push(no);
+                            }
+                          });
                         });
                       });
-                      const rows = Object.values(usageMap);
+
+                      const deliveredSj = suratJalanList.filter(
+                        (sj: any) =>
+                          sj.projectId === selectedProject.id &&
+                          sj.sjType === 'Material Delivery' &&
+                          sj.deliveryStatus === 'Delivered',
+                      );
+
+                      deliveredSj.forEach((sj: any) => {
+                        (sj.items || []).forEach((item: any) => {
+                          const itemCode = normalizeKey(item.itemKode);
+                          const itemName = normalizeKey(item.namaItem);
+
+                          const row = Object.values(usageMap).find(
+                            (candidate) => {
+                              const rowCode = normalizeKey(candidate.kode);
+                              const rowName = normalizeKey(candidate.nama);
+
+                              return (
+                                (itemCode &&
+                                  rowCode &&
+                                  itemCode === rowCode) ||
+                                (itemName &&
+                                  rowName &&
+                                  itemName === rowName)
+                              );
+                            },
+                          );
+
+                          if (!row) return;
+
+                          row.deliveredQty += Number(item.jumlah || 0);
+
+                          if (
+                            sj.noSurat &&
+                            !row.sjNumbers.includes(sj.noSurat)
+                          ) {
+                            row.sjNumbers.push(sj.noSurat);
+                          }
+                        });
+                      });
+
+                      const rows = Object.values(usageMap)
+                        .map((row) => ({
+                          ...row,
+                          remainingQty: Math.max(
+                            0,
+                            row.deliveredQty - row.qtyUsed,
+                          ),
+                        }))
+                        .sort((a, b) =>
+                          a.nama.localeCompare(b.nama),
+                        );
+
                       if (rows.length === 0) {
                         return (
                           <div className="flex flex-col items-center justify-center py-16 text-slate-300">
                             <Package size={40} strokeWidth={1} />
-                            <p className="text-sm font-bold uppercase tracking-widest mt-4">Belum ada pemakaian barang</p>
+                            <p className="text-sm font-bold uppercase tracking-widest mt-4">
+                              Belum ada pemakaian barang
+                            </p>
                           </div>
                         );
                       }
-                      const grandTotal = rows.reduce((s, r) => s + r.totalValue, 0);
+
                       return (
-                        <>
-                          <div className="overflow-x-auto">
-                            <table className="w-full text-left">
-                              <thead>
-                                <tr className="bg-slate-50 text-[9px] font-black text-slate-600 uppercase tracking-widest border-b border-slate-200">
-                                  <th className="p-4">Item Code</th>
-                                  <th className="p-4">Nama Material</th>
-                                  <th className="p-4 text-center">Satuan</th>
-                                  <th className="p-4 text-center">Total Qty Pakai</th>
-                                  <th className="p-4">Keterangan</th>
-                                  <th className="p-4">Tanggal Terakhir</th>
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-left">
+                            <thead>
+                              <tr className="bg-slate-50 text-[9px] font-black text-slate-600 uppercase tracking-widest border-b border-slate-200">
+                                <th className="p-4">Item Code</th>
+                                <th className="p-4">Nama Material</th>
+                                <th className="p-4 text-center">Satuan</th>
+                                <th className="p-4 text-center">Dikirim</th>
+                                <th className="p-4 text-center">Terpakai</th>
+                                <th className="p-4 text-center">Sisa</th>
+                                <th className="p-4">SJ Sumber</th>
+                                <th className="p-4">Keterangan</th>
+                                <th className="p-4">Tanggal Terakhir</th>
+                              </tr>
+                            </thead>
+
+                            <tbody className="divide-y divide-slate-50">
+                              {rows.map((r, i) => (
+                                <tr
+                                  key={`${r.kode}-${i}`}
+                                  className="text-xs font-bold hover:bg-slate-50/50 transition-colors"
+                                >
+                                  <td className="p-4 text-slate-400 font-mono text-[10px]">
+                                    {r.kode}
+                                  </td>
+
+                                  <td className="p-4 uppercase text-slate-900">
+                                    {r.nama}
+                                  </td>
+
+                                  <td className="p-4 text-center text-slate-500">
+                                    {r.unit}
+                                  </td>
+
+                                  <td className="p-4 text-center">
+                                    <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-blue-50 text-blue-700">
+                                      {r.deliveredQty}
+                                    </span>
+                                  </td>
+
+                                  <td className="p-4 text-center">
+                                    <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-orange-50 text-orange-700">
+                                      {r.qtyUsed}
+                                    </span>
+                                  </td>
+
+                                  <td className="p-4 text-center">
+                                    <span
+                                      className={`px-2 py-0.5 rounded-full text-[9px] font-black ${
+                                        r.remainingQty <= 0
+                                          ? 'bg-red-50 text-red-600'
+                                          : 'bg-emerald-50 text-emerald-700'
+                                      }`}
+                                    >
+                                      {r.remainingQty}
+                                    </span>
+                                  </td>
+
+                                  <td className="p-4 text-[10px] font-mono text-blue-600">
+                                    {r.sjNumbers.join(', ') || '-'}
+                                  </td>
+
+                                  <td className="p-4 text-slate-500 text-[10px] italic">
+                                    {r.notes.join('; ') || '-'}
+                                  </td>
+
+                                  <td className="p-4 text-slate-400 text-[10px]">
+                                    {r.dates.slice(-1)[0] || '-'}
+                                  </td>
                                 </tr>
-                              </thead>
-                              <tbody className="divide-y divide-slate-50">
-                                {rows.map((r, i) => (
-                                  <tr key={i} className="text-xs font-bold hover:bg-slate-50/50 transition-colors">
-                                    <td className="p-4 text-slate-400 font-mono text-[10px]">{r.kode}</td>
-                                    <td className="p-4 uppercase text-slate-900">{r.nama}</td>
-                                    <td className="p-4 text-center text-slate-500">{r.unit}</td>
-                                    <td className="p-4 text-center">
-                                      <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-blue-50 text-blue-700">{r.qty}</span>
-                                    </td>
-                                    <td className="p-4 text-slate-500 text-[10px] italic">{r.keterangan || '-'}</td>
-                                    <td className="p-4 text-slate-400 text-[10px]">{r.dates.slice(-1)[0] || '-'}</td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          </div>
-                        </>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
                       );
                     })()}
                   </div>
@@ -1784,6 +2206,184 @@ export default function ProjectManagementPage() {
                                   </tr>
                                 );
                               })}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {projectTab === "surat-jalan" && (() => {
+                const projectSjs = (suratJalanList || [])
+                  .filter((sj: any) =>
+                    sj.projectId === selectedProject.id ||
+                    (!sj.projectId && sj.tujuan === selectedProject.namaProject)
+                  )
+                  .sort((a: any, b: any) =>
+                    String(b.tanggal || '').localeCompare(String(a.tanggal || ''))
+                  );
+
+                const materialSjs = projectSjs.filter(
+                  (sj: any) => sj.sjType === 'Material Delivery',
+                );
+                const deliveredCount = materialSjs.filter(
+                  (sj: any) => sj.deliveryStatus === 'Delivered',
+                ).length;
+                const pendingCount = materialSjs.filter(
+                  (sj: any) => sj.deliveryStatus !== 'Delivered',
+                ).length;
+
+                const deliveryStatusColor: Record<string, string> = {
+                  Pending: 'bg-amber-100 text-amber-700',
+                  'On Delivery': 'bg-blue-100 text-blue-700',
+                  'In Transit': 'bg-blue-100 text-blue-700',
+                  Delivered: 'bg-emerald-100 text-emerald-700',
+                  Returned: 'bg-slate-100 text-slate-600',
+                };
+
+                return (
+                  <div className="space-y-5 animate-in fade-in duration-300">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                      <div className="bg-white border border-slate-100 rounded-2xl p-5 shadow-sm">
+                        <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1">
+                          Total Surat Jalan
+                        </p>
+                        <p className="text-lg font-black text-slate-900">
+                          {projectSjs.length}
+                        </p>
+                        <p className="text-[9px] text-slate-400 mt-1">
+                          {materialSjs.length} material delivery
+                        </p>
+                      </div>
+
+                      <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-5 shadow-sm">
+                        <p className="text-[9px] font-black uppercase tracking-widest text-emerald-600 mb-1">
+                          Delivered
+                        </p>
+                        <p className="text-lg font-black text-emerald-700">
+                          {deliveredCount}
+                        </p>
+                        <p className="text-[9px] text-emerald-500 mt-1">
+                          Material sudah diterima project
+                        </p>
+                      </div>
+
+                      <div className={`${pendingCount > 0 ? 'bg-amber-50 border-amber-100' : 'bg-slate-50 border-slate-100'} border rounded-2xl p-5 shadow-sm`}>
+                        <p className={`text-[9px] font-black uppercase tracking-widest mb-1 ${pendingCount > 0 ? 'text-amber-600' : 'text-slate-400'}`}>
+                          Belum Delivered
+                        </p>
+                        <p className={`text-lg font-black ${pendingCount > 0 ? 'text-amber-700' : 'text-slate-600'}`}>
+                          {pendingCount}
+                        </p>
+                        <p className="text-[9px] text-slate-400 mt-1">
+                          Material masih dalam proses pengiriman
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden">
+                      <div className="px-6 py-4 border-b border-slate-50">
+                        <h3 className="text-sm font-black uppercase tracking-widest italic text-slate-700">
+                          Surat Jalan Project
+                        </h3>
+                        <p className="text-[10px] text-slate-400 mt-0.5">
+                          Read only · Kelola transaksi di Correspondence → Surat Jalan
+                        </p>
+                      </div>
+
+                      {projectSjs.length === 0 ? (
+                        <div className="py-14 text-center text-slate-300">
+                          <Package size={40} strokeWidth={1} className="mx-auto" />
+                          <p className="text-xs font-black uppercase tracking-widest mt-3">
+                            Belum ada Surat Jalan untuk proyek ini
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-left">
+                            <thead>
+                              <tr className="bg-slate-50 text-[9px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">
+                                <th className="px-5 py-3">No. SJ</th>
+                                <th className="px-5 py-3">Tanggal</th>
+                                <th className="px-5 py-3">Tipe</th>
+                                <th className="px-5 py-3">Item</th>
+                                <th className="px-5 py-3">Tujuan / UP</th>
+                                <th className="px-5 py-3">Status</th>
+                                <th className="px-5 py-3">Delivered At</th>
+                              </tr>
+                            </thead>
+
+                            <tbody className="divide-y divide-slate-50">
+                              {projectSjs.map((sj: any) => (
+                                <tr
+                                  key={sj.id}
+                                  className="hover:bg-slate-50/50"
+                                >
+                                  <td className="px-5 py-3.5 text-xs font-black text-slate-800 uppercase">
+                                    {sj.noSurat}
+                                  </td>
+
+                                  <td className="px-5 py-3.5 text-xs text-slate-500">
+                                    {sj.tanggal || '-'}
+                                  </td>
+
+                                  <td className="px-5 py-3.5">
+                                    <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
+                                      {sj.sjType || '-'}
+                                    </span>
+                                  </td>
+
+                                  <td className="px-5 py-3.5">
+                                    {(sj.items || []).slice(0, 3).map((item: any, i: number) => (
+                                      <div
+                                        key={i}
+                                        className="text-[10px] text-slate-700 font-semibold"
+                                      >
+                                        {item.jumlah} {item.satuan} × {item.namaItem}
+                                        {item.batchNo && (
+                                          <span className="text-slate-400 font-normal">
+                                            {' '}· Batch {item.batchNo}
+                                          </span>
+                                        )}
+                                      </div>
+                                    ))}
+
+                                    {(sj.items || []).length > 3 && (
+                                      <span className="text-[9px] text-slate-400 italic">
+                                        +{sj.items.length - 3} item lainnya
+                                      </span>
+                                    )}
+                                  </td>
+
+                                  <td className="px-5 py-3.5">
+                                    <p className="text-xs font-bold text-slate-700">
+                                      {sj.tujuan || '-'}
+                                    </p>
+                                    {sj.upPerson && (
+                                      <p className="text-[9px] text-slate-400">
+                                        UP: {sj.upPerson}
+                                      </p>
+                                    )}
+                                  </td>
+
+                                  <td className="px-5 py-3.5">
+                                    <span
+                                      className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${
+                                        deliveryStatusColor[sj.deliveryStatus || 'Pending'] ||
+                                        'bg-slate-100 text-slate-600'
+                                      }`}
+                                    >
+                                      {sj.deliveryStatus || 'Pending'}
+                                    </span>
+                                  </td>
+
+                                  <td className="px-5 py-3.5 text-[10px] text-slate-500">
+                                    {sj.deliveredAt || sj.podTime || '-'}
+                                  </td>
+                                </tr>
+                              ))}
                             </tbody>
                           </table>
                         </div>

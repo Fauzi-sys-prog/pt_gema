@@ -50,7 +50,7 @@ export default function KasKoperasiPage() {
   const {
     koperasiMembers, addKoperasiMember, updateKoperasiMember,
     koperasiSimpananList, addKoperasiSimpanan,
-    koperasiPinjamanList, addKoperasiPinjaman, approveKoperasiPinjaman, bayarKoperasiAngsuran,
+    koperasiPinjamanList, addKoperasiPinjaman, approveKoperasiPinjaman, disburseKoperasiPinjaman, bayarKoperasiAngsuran,
     koperasiBalance, topUpKoperasi,
     employeeList, thlList,
   } = useApp();
@@ -255,14 +255,60 @@ export default function KasKoperasiPage() {
 
   const approvePinjaman = async (p: KoperasiPinjaman) => {
     if (processingId) return;
-    if (!window.confirm(`Setujui & cairkan pinjaman ${p.pinjamanNo} (${formatRp(p.amount)}) untuk ${p.memberName}?`)) return;
+
+    if (!window.confirm(
+      `Setujui pinjaman ${p.pinjamanNo} (${formatRp(p.amount)}) untuk ${p.memberName}?\n\nApproval belum mengeluarkan Kas Koperasi.`
+    )) return;
+
     setProcessingId(p.id);
+
     try {
       const saved = await approveKoperasiPinjaman(p.id);
-      if (detailPinjaman?.id === p.id) setDetailPinjaman(saved);
-      toast.success(`Pinjaman ${p.memberName} disetujui & dicairkan`);
-    } catch (error) { toast.error(error instanceof Error ? error.message : "Gagal menyetujui pinjaman"); }
-    finally { setProcessingId(null); }
+
+      if (detailPinjaman?.id === p.id) {
+        setDetailPinjaman(saved);
+      }
+
+      toast.success(`Pinjaman ${p.memberName} disetujui — siap dicairkan`);
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Gagal menyetujui pinjaman"
+      );
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
+  const disbursePinjaman = async (p: KoperasiPinjaman) => {
+    if (processingId) return;
+
+    if (!window.confirm(
+      `Cairkan pinjaman ${p.pinjamanNo} sebesar ${formatRp(p.amount)} untuk ${p.memberName}?\n\nKas Koperasi akan berkurang setelah pencairan berhasil.`
+    )) return;
+
+    setProcessingId(p.id);
+
+    try {
+      const saved = await disburseKoperasiPinjaman(p.id);
+
+      if (detailPinjaman?.id === p.id) {
+        setDetailPinjaman(saved);
+      }
+
+      toast.success(
+        `Pinjaman ${p.memberName} dicairkan — Kas Koperasi sudah diposting`
+      );
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Gagal mencairkan pinjaman"
+      );
+    } finally {
+      setProcessingId(null);
+    }
   };
 
   const bayarAngsuran = async (p: KoperasiPinjaman) => {
@@ -307,7 +353,7 @@ export default function KasKoperasiPage() {
   // ── pinjaman form preview ─────────────────────────────────────────────────
   const pinAdminFee = Math.round(pinjamanForm.amount * 2.5 / 100);
   const pinTotal    = pinjamanForm.amount + pinAdminFee;
-  const pinAngsuran = pinjamanForm.installmentCount > 0 ? Math.round(pinTotal / pinjamanForm.installmentCount) : 0;
+  const pinAngsuran = pinjamanForm.installmentCount > 0 ? Math.round(pinjamanForm.amount / pinjamanForm.installmentCount) : 0;
 
   const TABS: { key: Tab; label: string; icon: React.ReactNode; count: number }[] = [
     { key: "anggota",  label: "Anggota",  icon: <Users size={14} />,      count: koperasiMembers.length },
@@ -516,7 +562,23 @@ export default function KasKoperasiPage() {
                             <div className="flex items-center gap-1">
                               <button onClick={() => setDetailPinjaman(p)} className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"><Eye size={14} /></button>
                               {p.status === "Pending" && (
-                                <button onClick={() => approvePinjaman(p)} disabled={processingId !== null} className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"><CheckCircle2 size={14} /></button>
+                                <button
+                                  onClick={() => approvePinjaman(p)}
+                                  disabled={processingId !== null}
+                                  title="Setujui pinjaman"
+                                  className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                  <CheckCircle2 size={14} />
+                                </button>
+                              )}
+                              {p.status === "Approved" && (
+                                <button
+                                  onClick={() => disbursePinjaman(p)}
+                                  disabled={processingId !== null}
+                                  className="px-2 py-1 text-[9px] font-black text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-all uppercase disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                  Cairkan
+                                </button>
                               )}
                               {p.status === "Active" && (
                                 <button onClick={() => bayarAngsuran(p)} disabled={processingId !== null} className="px-2 py-1 text-[9px] font-black text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-all uppercase disabled:opacity-50 disabled:cursor-not-allowed">Bayar</button>
@@ -748,6 +810,7 @@ export default function KasKoperasiPage() {
                 ["Sisa Cicilan",   `${detailPinjaman.installmentCount - detailPinjaman.paidInstallments}x`],
                 ["Tgl Pengajuan",  fmt(detailPinjaman.requestDate)],
                 ["Disetujui",      detailPinjaman.approvedDate ? fmt(detailPinjaman.approvedDate) : "—"],
+                ["Dicairkan",       detailPinjaman.disbursedDate ? fmt(detailPinjaman.disbursedDate) : "—"],
               ].map(([l, v]) => (
                 <div key={l} className="bg-slate-50 rounded-xl p-3">
                   <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{l}</p>
@@ -772,11 +835,25 @@ export default function KasKoperasiPage() {
               </div>
             )}
             {detailPinjaman.status === "Pending" && (
-              <button onClick={() => { approvePinjaman(detailPinjaman); setDetailPinjaman(null); }} disabled={processingId !== null}
-                className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed">
-                <CheckCircle2 size={13} /> Setujui & Cairkan
+              <button
+                onClick={() => approvePinjaman(detailPinjaman)}
+                disabled={processingId !== null}
+                className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <CheckCircle2 size={13} /> Setujui Pinjaman
               </button>
             )}
+
+            {detailPinjaman.status === "Approved" && (
+              <button
+                onClick={() => disbursePinjaman(detailPinjaman)}
+                disabled={processingId !== null}
+                className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Cairkan Pinjaman
+              </button>
+            )}
+
             {detailPinjaman.status === "Active" && (
               <button onClick={() => bayarAngsuran(detailPinjaman)} disabled={processingId !== null}
                 className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all disabled:opacity-50 disabled:cursor-not-allowed">

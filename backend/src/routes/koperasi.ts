@@ -23,7 +23,7 @@ import { z } from "zod";
 export const koperasiRouter = Router();
 async function writeAuditLog(
   req: AuthRequest,
-  action: "create" | "update" | "delete" | "bulk-upsert" | "approve" | "installment",
+  action: "create" | "update" | "delete" | "bulk-upsert" | "approve" | "disburse" | "installment",
   resource: string,
   entityId: string | null,
   metadata?: Record<string, unknown>,
@@ -235,14 +235,77 @@ koperasiRouter.post("/koperasi/members", authenticate, async (req: AuthRequest, 
 
 koperasiRouter.patch("/koperasi/members/:id", authenticate, async (req: AuthRequest, res: Response) => {
   if (!canWrite(req.user?.role)) return deny(res);
+
   const status = req.body?.status;
-  if (!(status === "Active" || status === "Inactive")) return sendError(res, 400, { code: "VALIDATION_ERROR", message: "Status anggota tidak valid", legacyError: "Status anggota tidak valid" });
+  if (!(status === "Active" || status === "Inactive")) {
+    return sendError(res, 400, {
+      code: "VALIDATION_ERROR",
+      message: "Status anggota tidak valid",
+      legacyError: "Status anggota tidak valid",
+    });
+  }
+
   try {
-    const member = await prisma.koperasiMember.update({ where: { id: req.params.id }, data: { status } });
-    await writeAuditLog(req, "update", "koperasi-members", member.id, { status: member.status });
-    return res.json(serializeDecimals({ ...member, joinDate: dateOnly(member.joinDate) }));
-  } catch {
-    return sendError(res, 404, { code: "NOT_FOUND", message: "Anggota tidak ditemukan", legacyError: "Anggota tidak ditemukan" });
+    const member = await prisma.$transaction(async (tx) => {
+      // Serialize perubahan status anggota dengan pengajuan pinjaman untuk
+      // member yang sama. Mencegah race: nonaktif vs create loan.
+      await tx.$queryRaw`
+        SELECT id
+        FROM "KoperasiMember"
+        WHERE id = ${req.params.id}
+        FOR UPDATE
+      `;
+
+      const current = await tx.koperasiMember.findUnique({
+        where: { id: req.params.id },
+      });
+
+      if (!current) throw new Error("NOT_FOUND");
+
+      if (status === "Inactive") {
+        const openLoan = await tx.koperasiPinjaman.findFirst({
+          where: {
+            memberId: current.id,
+            status: { in: ["Pending", "Approved", "Active"] },
+          },
+          select: { id: true, pinjamanNo: true },
+        });
+
+        if (openLoan) throw new Error("OPEN_LOAN_EXISTS");
+      }
+
+      return tx.koperasiMember.update({
+        where: { id: current.id },
+        data: { status },
+      });
+    });
+
+    await writeAuditLog(req, "update", "koperasi-members", member.id, {
+      status: member.status,
+    });
+
+    return res.json(
+      serializeDecimals({
+        ...member,
+        joinDate: dateOnly(member.joinDate),
+      }),
+    );
+  } catch (error) {
+    const key = error instanceof Error ? error.message : "";
+
+    if (key === "OPEN_LOAN_EXISTS") {
+      return sendError(res, 409, {
+        code: key,
+        message: "Anggota masih memiliki pinjaman terbuka dan tidak dapat dinonaktifkan",
+        legacyError: "Anggota masih memiliki pinjaman terbuka",
+      });
+    }
+
+    return sendError(res, 404, {
+      code: "NOT_FOUND",
+      message: "Anggota tidak ditemukan",
+      legacyError: "Anggota tidak ditemukan",
+    });
   }
 });
 
@@ -270,64 +333,392 @@ koperasiRouter.post("/koperasi/simpanan", authenticate, async (req: AuthRequest,
 
 koperasiRouter.post("/koperasi/pinjaman", authenticate, async (req: AuthRequest, res: Response) => {
   if (!canWrite(req.user?.role)) return deny(res);
+
   const parsed = koperasiPinjamanSchema.safeParse(req.body);
-  if (!parsed.success) return sendError(res, 400, { code: "VALIDATION_ERROR", message: "Data pinjaman tidak valid", details: parsed.error.flatten(), legacyError: "Data pinjaman tidak valid" });
+  if (!parsed.success) {
+    return sendError(res, 400, {
+      code: "VALIDATION_ERROR",
+      message: "Data pinjaman tidak valid",
+      details: parsed.error.flatten(),
+      legacyError: "Data pinjaman tidak valid",
+    });
+  }
+
   try {
     const payload = parsed.data;
-    const member = await prisma.koperasiMember.findUnique({ where: { id: payload.memberId } });
-    if (!member || member.status !== "Active") return sendError(res, 400, { code: "MEMBER_INVALID", message: "Anggota aktif tidak ditemukan", legacyError: "Anggota aktif tidak ditemukan" });
-    const adminFeePercent = 2.5;
-    const adminFeeAmount = Math.round(payload.amount * adminFeePercent / 100);
-    const totalAmount = payload.amount + adminFeeAmount;
 
-    // Angsuran reguler hanya membayar pokok.
-    // Biaya admin 2.5% adalah kewajiban satu kali dan diserap pada angsuran terakhir.
-    const installmentAmount = Math.round(payload.amount / payload.installmentCount);
-    const pinjaman = await prisma.koperasiPinjaman.create({
-      data: {
-        ...payload,
-        memberName: member.employeeName,
-        adminFeePercent,
-        adminFeeAmount,
-        totalAmount,
-        installmentAmount,
-        paidInstallments: 0,
-        status: "Pending",
-        requestDate: new Date(`${payload.requestDate}T00:00:00.000Z`),
-      },
+    const pinjaman = await prisma.$transaction(async (tx) => {
+      // Lock member supaya create loan dan deactivate member tidak bisa
+      // saling menyalip.
+      await tx.$queryRaw`
+        SELECT id
+        FROM "KoperasiMember"
+        WHERE id = ${payload.memberId}
+        FOR UPDATE
+      `;
+
+      const member = await tx.koperasiMember.findUnique({
+        where: { id: payload.memberId },
+      });
+
+      if (!member || member.status !== "Active") {
+        throw new Error("MEMBER_INVALID");
+      }
+
+      const existingOpenLoan = await tx.koperasiPinjaman.findFirst({
+        where: {
+          memberId: member.id,
+          status: { in: ["Pending", "Approved", "Active"] },
+        },
+        select: { id: true, pinjamanNo: true },
+      });
+
+      if (existingOpenLoan) {
+        throw new Error("OPEN_LOAN_EXISTS");
+      }
+
+      const adminFeePercent = 2.5;
+      const adminFeeAmount = Math.round(
+        payload.amount * adminFeePercent / 100,
+      );
+      const totalAmount = payload.amount + adminFeeAmount;
+
+      // Cicilan reguler hanya pokok.
+      // Admin 2.5% ditagihkan sekali pada cicilan terakhir.
+      const installmentAmount = Math.round(
+        payload.amount / payload.installmentCount,
+      );
+
+      return tx.koperasiPinjaman.create({
+        data: {
+          ...payload,
+          memberName: member.employeeName,
+          adminFeePercent,
+          adminFeeAmount,
+          totalAmount,
+          installmentAmount,
+          paidInstallments: 0,
+          status: "Pending",
+          requestDate: new Date(`${payload.requestDate}T00:00:00.000Z`),
+          createdByUserId: req.user?.id ?? null,
+        },
+      });
     });
-    await writeAuditLog(req, "create", "koperasi-pinjaman", pinjaman.id, { pinjamanNo: pinjaman.pinjamanNo, amount: pinjaman.amount });
-    return res.status(201).json(serializeDecimals({ ...pinjaman, requestDate: dateOnly(pinjaman.requestDate), approvedDate: undefined, disbursedDate: undefined }));
-  } catch {
-    return sendError(res, 500, { code: "CREATE_FAILED", message: "Gagal mengajukan pinjaman", legacyError: "Gagal mengajukan pinjaman" });
+
+    await writeAuditLog(req, "create", "koperasi-pinjaman", pinjaman.id, {
+      pinjamanNo: pinjaman.pinjamanNo,
+      amount: pinjaman.amount,
+    });
+
+    return res.status(201).json(
+      serializeDecimals({
+        ...pinjaman,
+        requestDate: dateOnly(pinjaman.requestDate),
+        approvedDate: undefined,
+        disbursedDate: undefined,
+      }),
+    );
+  } catch (error) {
+    const key = error instanceof Error ? error.message : "";
+
+    if (key === "MEMBER_INVALID") {
+      return sendError(res, 400, {
+        code: key,
+        message: "Anggota aktif tidak ditemukan",
+        legacyError: "Anggota aktif tidak ditemukan",
+      });
+    }
+
+    if (key === "OPEN_LOAN_EXISTS") {
+      return sendError(res, 409, {
+        code: key,
+        message: "Anggota masih memiliki pinjaman Pending, Approved, atau Active",
+        legacyError: "Anggota masih memiliki pinjaman terbuka",
+      });
+    }
+
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2002"
+    ) {
+      const target = JSON.stringify(error.meta?.target ?? "");
+
+      const openLoanConflict =
+        target.includes("memberId") ||
+        error.message.includes("one_open_loan");
+
+      return sendError(res, 409, {
+        code: openLoanConflict ? "OPEN_LOAN_EXISTS" : "UNIQUE_CONFLICT",
+        message: openLoanConflict
+          ? "Anggota masih memiliki pinjaman terbuka"
+          : "Nomor pinjaman sudah digunakan",
+        legacyError: openLoanConflict
+          ? "Anggota masih memiliki pinjaman terbuka"
+          : "Nomor pinjaman sudah digunakan",
+      });
+    }
+
+    return sendError(res, 500, {
+      code: "CREATE_FAILED",
+      message: "Gagal mengajukan pinjaman",
+      legacyError: "Gagal mengajukan pinjaman",
+    });
   }
 });
 
 koperasiRouter.post("/koperasi/pinjaman/:id/approve", authenticate, async (req: AuthRequest, res: Response) => {
   if (!canApprove(req.user?.role)) return deny(res);
+
   try {
     const pinjaman = await prisma.$transaction(async (tx) => {
-      // Serialize cooperative cash decisions so two approvals cannot spend
-      // the same balance snapshot.
-      await tx.$executeRaw`SELECT pg_advisory_xact_lock(2001)`;
-      const current = await tx.koperasiPinjaman.findUnique({ where: { id: req.params.id } });
+      await tx.$queryRaw`
+        SELECT id
+        FROM "KoperasiPinjaman"
+        WHERE id = ${req.params.id}
+        FOR UPDATE
+      `;
+
+      const current = await tx.koperasiPinjaman.findUnique({
+        where: { id: req.params.id },
+      });
+
       if (!current) throw new Error("NOT_FOUND");
       if (current.status !== "Pending") throw new Error("INVALID_STATUS");
-      await assertFinancialYearsOpen(tx, financialYearsFromValue({ date: dateOnly(new Date()) }));
-      const balance = await postedBalance(tx);
-      if (balance < Number(current.amount)) throw new Error("INSUFFICIENT_BALANCE");
+
+      const actorUserId = req.user?.id ?? null;
+
+      // Maker-checker: pembuat pengajuan tidak boleh approve sendiri.
+      if (
+        actorUserId &&
+        current.createdByUserId &&
+        actorUserId === current.createdByUserId
+      ) {
+        throw new Error("MAKER_CANNOT_APPROVE");
+      }
+
       const today = new Date();
-      const updated = await tx.koperasiPinjaman.update({ where: { id: current.id }, data: { status: "Active", approvedBy: req.user?.id, approvedDate: today, disbursedDate: today } });
-      await tx.koperasiCashTransaction.create({ data: transactionInput({ date: dateOnly(today), type: "PENCAIRAN_PINJAMAN", direction: "OUT", amount: Number(current.amount), description: `Pencairan pinjaman ${current.memberName}`, referenceType: "KOPERASI_PINJAMAN", referenceId: current.id, createdBy: req.user?.id, approvedBy: req.user?.id }) });
+
+      const updated = await tx.koperasiPinjaman.update({
+        where: { id: current.id },
+        data: {
+          status: "Approved",
+          approvedBy: actorUserId,
+          approvedByUserId: actorUserId,
+          approvedDate: today,
+        },
+      });
+
+      await writeAuditLog(
+        req,
+        "approve",
+        "koperasi-pinjaman",
+        updated.id,
+        {
+          pinjamanNo: updated.pinjamanNo,
+          fromStatus: "Pending",
+          toStatus: "Approved",
+        },
+        tx,
+      );
+
       return updated;
     });
-    await writeAuditLog(req, "approve", "koperasi-pinjaman", pinjaman.id, { pinjamanNo: pinjaman.pinjamanNo });
-    return res.json(serializeDecimals({ ...pinjaman, requestDate: dateOnly(pinjaman.requestDate), approvedDate: pinjaman.approvedDate ? dateOnly(pinjaman.approvedDate) : undefined, disbursedDate: pinjaman.disbursedDate ? dateOnly(pinjaman.disbursedDate) : undefined }));
+
+    return res.json(
+      serializeDecimals({
+        ...pinjaman,
+        requestDate: dateOnly(pinjaman.requestDate),
+        approvedDate: pinjaman.approvedDate
+          ? dateOnly(pinjaman.approvedDate)
+          : undefined,
+        disbursedDate: pinjaman.disbursedDate
+          ? dateOnly(pinjaman.disbursedDate)
+          : undefined,
+      }),
+    );
+  } catch (error) {
+    const key = error instanceof Error ? error.message : "";
+
+    if (key === "MAKER_CANNOT_APPROVE") {
+      return sendError(res, 403, {
+        code: key,
+        message: "Pembuat pengajuan pinjaman tidak boleh menyetujui pengajuannya sendiri",
+        legacyError: "Maker tidak boleh menjadi approver",
+      });
+    }
+
+    if (key === "INVALID_STATUS") {
+      return sendError(res, 409, {
+        code: key,
+        message: "Hanya pinjaman Pending yang dapat disetujui",
+        legacyError: "Pinjaman bukan berstatus Pending",
+      });
+    }
+
+    return sendError(res, 404, {
+      code: "NOT_FOUND",
+      message: "Pinjaman tidak ditemukan",
+      legacyError: "Pinjaman tidak ditemukan",
+    });
+  }
+});
+
+
+koperasiRouter.post("/koperasi/pinjaman/:id/disburse", authenticate, async (req: AuthRequest, res: Response) => {
+  if (!canApprove(req.user?.role)) return deny(res);
+
+  try {
+    const pinjaman = await prisma.$transaction(async (tx) => {
+      // Semua keputusan cash Koperasi diserialisasi terhadap top-up /
+      // pencairan lain.
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(2001)`;
+
+      await tx.$queryRaw`
+        SELECT id
+        FROM "KoperasiPinjaman"
+        WHERE id = ${req.params.id}
+        FOR UPDATE
+      `;
+
+      const current = await tx.koperasiPinjaman.findUnique({
+        where: { id: req.params.id },
+      });
+
+      if (!current) throw new Error("NOT_FOUND");
+      if (current.status !== "Approved") throw new Error("INVALID_STATUS");
+
+      const actorUserId = req.user?.id ?? null;
+
+      // Checker approval tidak boleh menjadi orang yang mencairkan.
+      if (
+        actorUserId &&
+        current.approvedByUserId &&
+        actorUserId === current.approvedByUserId
+      ) {
+        throw new Error("APPROVER_CANNOT_DISBURSE");
+      }
+
+      const today = new Date();
+      const todayText = dateOnly(today);
+
+      await assertFinancialYearsOpen(
+        tx,
+        financialYearsFromValue({ date: todayText }),
+      );
+
+      const balance = await postedBalance(tx);
+
+      if (balance < Number(current.amount)) {
+        throw new Error("INSUFFICIENT_BALANCE");
+      }
+
+      const postingId = `loan-disbursement:${current.id}`;
+
+      const existingPosting = await tx.koperasiCashTransaction.findUnique({
+        where: { id: postingId },
+      });
+
+      if (existingPosting) {
+        throw new Error("ALREADY_DISBURSED");
+      }
+
+      const updated = await tx.koperasiPinjaman.update({
+        where: { id: current.id },
+        data: {
+          status: "Active",
+          disbursedDate: today,
+          disbursedByUserId: actorUserId,
+        },
+      });
+
+      await tx.koperasiCashTransaction.create({
+        data: {
+          ...transactionInput({
+            date: todayText,
+            type: "PENCAIRAN_PINJAMAN",
+            direction: "OUT",
+            amount: Number(current.amount),
+            description: `Pencairan pinjaman ${current.memberName}`,
+            referenceType: "KOPERASI_PINJAMAN",
+            referenceId: current.id,
+            createdBy: actorUserId ?? undefined,
+            approvedBy: current.approvedByUserId ?? undefined,
+          }),
+          id: postingId,
+        },
+      });
+
+      await writeAuditLog(
+        req,
+        "disburse",
+        "koperasi-pinjaman",
+        updated.id,
+        {
+          pinjamanNo: updated.pinjamanNo,
+          amount: Number(updated.amount),
+          fromStatus: "Approved",
+          toStatus: "Active",
+        },
+        tx,
+      );
+
+      return updated;
+    });
+
+    return res.json(
+      serializeDecimals({
+        ...pinjaman,
+        requestDate: dateOnly(pinjaman.requestDate),
+        approvedDate: pinjaman.approvedDate
+          ? dateOnly(pinjaman.approvedDate)
+          : undefined,
+        disbursedDate: pinjaman.disbursedDate
+          ? dateOnly(pinjaman.disbursedDate)
+          : undefined,
+      }),
+    );
   } catch (error) {
     if (sendYearClosed(res, error)) return;
+
     const key = error instanceof Error ? error.message : "";
-    const message = key === "INSUFFICIENT_BALANCE" ? "Saldo koperasi tidak cukup untuk mencairkan pinjaman" : key === "INVALID_STATUS" ? "Pinjaman bukan berstatus Pending" : "Pinjaman tidak ditemukan";
-    return sendError(res, key === "INSUFFICIENT_BALANCE" || key === "INVALID_STATUS" ? 400 : 404, { code: key || "NOT_FOUND", message, legacyError: message });
+
+    if (key === "APPROVER_CANNOT_DISBURSE") {
+      return sendError(res, 403, {
+        code: key,
+        message: "Approver pinjaman tidak boleh sekaligus mencairkan pinjaman",
+        legacyError: "Approver tidak boleh menjadi disburser",
+      });
+    }
+
+    if (key === "INSUFFICIENT_BALANCE") {
+      return sendError(res, 409, {
+        code: key,
+        message: "Saldo Kas Koperasi tidak cukup untuk mencairkan pinjaman",
+        legacyError: "Saldo koperasi tidak cukup",
+      });
+    }
+
+    if (key === "INVALID_STATUS") {
+      return sendError(res, 409, {
+        code: key,
+        message: "Hanya pinjaman Approved yang dapat dicairkan",
+        legacyError: "Pinjaman belum Approved",
+      });
+    }
+
+    if (key === "ALREADY_DISBURSED") {
+      return sendError(res, 409, {
+        code: key,
+        message: "Pencairan pinjaman ini sudah pernah diposting",
+        legacyError: "Pinjaman sudah dicairkan",
+      });
+    }
+
+    return sendError(res, 404, {
+      code: "NOT_FOUND",
+      message: "Pinjaman tidak ditemukan",
+      legacyError: "Pinjaman tidak ditemukan",
+    });
   }
 });
 
@@ -528,3 +919,315 @@ koperasiRouter.post("/koperasi/payroll-runs/:id/post", authenticate, async (req:
     return sendError(res, 400, { code: "PAYROLL_POST_FAILED", message, legacyError: message });
   }
 });
+// ---------------------------------------------------------------------------
+// THL PAYROLL -> KAS KOPERASI
+// THL menggunakan KoperasiMember.memberType="THL" + subjectId=<THL id>.
+// Admin pinjaman 2.5% adalah kewajiban satu kali atas total pokok pinjaman
+// dan ditagihkan pada cicilan terakhir, sama dengan payroll karyawan.
+// ---------------------------------------------------------------------------
+
+const thlPayrollSlipSchema = z
+  .object({
+    thlId: z.string().min(1),
+  })
+  .passthrough();
+
+const thlPayrollRunSchema = z
+  .object({
+    status: z.string(),
+    periode: z.string().regex(/^\d{4}-\d{2}$/),
+    slips: z.array(thlPayrollSlipSchema),
+  })
+  .passthrough();
+
+const thlPayrollPostSchema = z.object({
+  period: z.string().regex(/^\d{4}-\d{2}$/),
+  run: thlPayrollRunSchema,
+});
+
+koperasiRouter.post(
+  "/koperasi/thl-payroll-runs/:id/post",
+  authenticate,
+  async (req: AuthRequest, res: Response) => {
+    if (!canApprove(req.user?.role)) return deny(res);
+
+    const parsed = thlPayrollPostSchema.safeParse(req.body);
+
+    if (!parsed.success) {
+      return sendError(res, 400, {
+        code: "VALIDATION_ERROR",
+        message: "Periode gajian THL tidak valid",
+        legacyError: "Periode gajian THL tidak valid",
+      });
+    }
+
+    try {
+      const result = await prisma.$transaction(async (tx) => {
+        // Gunakan lock koperasi yang sama supaya posting employee payroll,
+        // THL payroll, installment manual, dan saldo koperasi tidak berlomba.
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(2001)`;
+
+        await assertFinancialYearsOpen(
+          tx,
+          financialYearsFromValue({
+            date: `${parsed.data.period}-01`,
+          }),
+        );
+
+        const run = await tx.appEntity.findUnique({
+          where: {
+            resource_entityId: {
+              resource: "hr-thl-payroll-runs",
+              entityId: req.params.id,
+            },
+          },
+        });
+
+        const currentPayload =
+          run?.payload &&
+          typeof run.payload === "object" &&
+          !Array.isArray(run.payload)
+            ? (run.payload as Record<string, unknown>)
+            : null;
+
+        const payload = parsed.data.run;
+
+        if (
+          !currentPayload ||
+          currentPayload.status !== "Approved" ||
+          payload.status !== "Disbursed" ||
+          payload.periode !== parsed.data.period
+        ) {
+          throw new Error("THL_PAYROLL_NOT_APPROVED");
+        }
+
+        const slips = Array.isArray(payload.slips)
+          ? (payload.slips as Array<Record<string, unknown>>)
+          : [];
+
+        const thlIds = slips
+          .map((slip) =>
+            typeof slip.thlId === "string" ? slip.thlId : "",
+          )
+          .filter(Boolean);
+
+        // ================================================================
+        // PINJAMAN KOPERASI THL
+        // ================================================================
+
+        const loans = await tx.koperasiPinjaman.findMany({
+          where: {
+            status: "Active",
+            member: {
+              memberType: "THL",
+              subjectId: { in: thlIds },
+            },
+          },
+          include: { member: true },
+        });
+
+        const postedLoanIds: string[] = [];
+
+        for (const loan of loans) {
+          const referenceId = `${req.params.id}:${loan.id}`;
+
+          const exists = await tx.koperasiCashTransaction.findFirst({
+            where: {
+              referenceType: "KOPERASI_THL_PAYROLL_DEDUCTION",
+              referenceId,
+            },
+          });
+
+          if (exists) continue;
+
+          const paidInstallments = loan.paidInstallments + 1;
+          const settled =
+            paidInstallments >= loan.installmentCount;
+
+          const scheduledPrincipal = Math.round(
+            Number(loan.amount) / loan.installmentCount,
+          );
+
+          const principal = settled
+            ? Number(loan.amount) -
+              scheduledPrincipal * (loan.installmentCount - 1)
+            : scheduledPrincipal;
+
+          // Cicilan terakhir = pokok terakhir + admin 2.5% keseluruhan
+          // + koreksi pembulatan bila ada.
+          const targetInstallmentTotal = settled
+            ? Math.max(
+                0,
+                Number(loan.totalAmount) -
+                  Number(loan.installmentAmount) *
+                    (loan.installmentCount - 1),
+              )
+            : Number(loan.installmentAmount);
+
+          const admin = Math.max(
+            0,
+            targetInstallmentTotal - principal,
+          );
+
+          await tx.koperasiCashTransaction.createMany({
+            data: [
+              transactionInput({
+                date: `${parsed.data.period}-01`,
+                type: "CICILAN_POKOK",
+                direction: "IN",
+                amount: principal,
+                description: `Potongan gajian THL cicilan pokok ${loan.memberName}`,
+                referenceType: "KOPERASI_THL_PAYROLL_DEDUCTION",
+                referenceId,
+                createdBy: req.user?.id,
+              }),
+              ...(admin > 0
+                ? [
+                    transactionInput({
+                      date: `${parsed.data.period}-01`,
+                      type: "ADMIN_FEE",
+                      direction: "IN",
+                      amount: admin,
+                      description: `Potongan gajian THL admin koperasi ${loan.memberName}`,
+                      referenceType:
+                        "KOPERASI_THL_PAYROLL_DEDUCTION",
+                      referenceId,
+                      createdBy: req.user?.id,
+                    }),
+                  ]
+                : []),
+            ],
+          });
+
+          await tx.koperasiPinjaman.update({
+            where: { id: loan.id },
+            data: {
+              paidInstallments,
+              status: settled ? "Settled" : "Active",
+            },
+          });
+
+          postedLoanIds.push(loan.id);
+        }
+
+        // ================================================================
+        // SIMPANAN WAJIB THL
+        // ================================================================
+
+        const members = await tx.koperasiMember.findMany({
+          where: {
+            status: "Active",
+            memberType: "THL",
+            subjectId: { in: thlIds },
+            simpananWajibBulanan: { gt: 0 },
+          },
+        });
+
+        const postedSavingMemberIds: string[] = [];
+
+        for (const member of members) {
+          const referenceId =
+            `${req.params.id}:${member.id}:WAJIB`;
+
+          const exists = await tx.koperasiCashTransaction.findFirst({
+            where: {
+              referenceType: "KOPERASI_THL_PAYROLL_SAVING",
+              referenceId,
+            },
+          });
+
+          if (exists) continue;
+
+          const saving = await tx.koperasiSimpanan.create({
+            data: {
+              id: `thl-payroll-saving:${referenceId}`,
+              memberId: member.id,
+              memberName: member.employeeName,
+              type: "Wajib",
+              amount: Number(member.simpananWajibBulanan),
+              date: new Date(
+                `${parsed.data.period}-01T00:00:00.000Z`,
+              ),
+              period: parsed.data.period,
+              notes:
+                `Potongan simpanan wajib gajian THL ${parsed.data.period}`,
+            },
+          });
+
+          await tx.koperasiCashTransaction.create({
+            data: transactionInput({
+              date: `${parsed.data.period}-01`,
+              type: "SIMPANAN_WAJIB",
+              direction: "IN",
+              amount: Number(member.simpananWajibBulanan),
+              description:
+                `Potongan gajian THL simpanan wajib ${member.employeeName}`,
+              referenceType: "KOPERASI_THL_PAYROLL_SAVING",
+              referenceId,
+              notes: saving.notes ?? undefined,
+              createdBy: req.user?.id,
+            }),
+          });
+
+          postedSavingMemberIds.push(member.id);
+        }
+
+        // Baru commit status Disbursed setelah seluruh posting koperasi sukses.
+        await tx.appEntity.update({
+          where: {
+            resource_entityId: {
+              resource: "hr-thl-payroll-runs",
+              entityId: req.params.id,
+            },
+          },
+          data: {
+            payload: payload as any,
+          },
+        });
+
+        await tx.auditLogEntry.create({
+          data: {
+            id: randomUUID(),
+            timestamp: new Date(),
+            action: "THL_PAYROLL_DISBURSED",
+            domain: "hr",
+            actorUserId: req.user?.id ?? null,
+            actorRole: req.user?.role ?? null,
+            userId: req.user?.id ?? null,
+            module: "Payroll THL",
+            details: `Disburse THL payroll ${req.params.id}`,
+            status: "Success",
+            resource: "hr-thl-payroll-runs",
+            entityId: req.params.id,
+            operation: "disburse",
+            metadata: JSON.stringify({
+              postedLoanIds,
+              postedSavingMemberIds,
+            }),
+          },
+        });
+
+        return {
+          postedLoanIds,
+          postedSavingMemberIds,
+        };
+      });
+
+      return res.json(serializeDecimals(result));
+    } catch (error) {
+      if (sendYearClosed(res, error)) return;
+
+      const message =
+        error instanceof Error &&
+        error.message === "THL_PAYROLL_NOT_APPROVED"
+          ? "Gajian THL harus berstatus Approved sebelum dicairkan"
+          : "Gagal mencairkan gajian THL dan memposting potongan koperasi";
+
+      return sendError(res, 400, {
+        code: "THL_PAYROLL_POST_FAILED",
+        message,
+        legacyError: message,
+      });
+    }
+  },
+);

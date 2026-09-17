@@ -8,7 +8,7 @@ import {
   TrendingUp, Calculator, Users, Package, Wrench, ShoppingCart,
   Percent, CreditCard, FileCheck, AlertCircle, Building2, Award,
   ChevronDown, ChevronRight, Zap, Target, Settings, Calendar,
-  MapPin, Eye, Trash2, History, RotateCcw, Pencil, Receipt
+  MapPin, Eye, Trash2, History, RotateCcw, Pencil
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { downloadQuotationWordDocument } from '../../components/QuotationWordExport';
@@ -789,15 +789,6 @@ export default function QuotationPage() {
                           title={quotation.status === 'Revised' ? 'Submit Ulang untuk Approval' : 'Submit untuk Approval'}
                         >
                           <Send className="w-4 h-4" />
-                        </button>
-                      )}
-                      {(quotation as any).clientApprovalStatus === 'Approved' && (
-                        <button
-                          onClick={() => navigate('/finance/accounts-receivable', { state: { createFromQuotation: quotation.id } })}
-                          className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded transition-colors"
-                          title="Buat Invoice"
-                        >
-                          <Receipt className="w-4 h-4" />
                         </button>
                       )}
                       <button
@@ -1681,6 +1672,100 @@ export default function QuotationPage() {
                     <div className="text-gray-900"><strong>Lokasi:</strong> {selectedQuotation.lokasi}</div>
                     <div className="col-span-2 text-gray-900"><strong>Perihal:</strong> {selectedQuotation.perihal}</div>
                   </div>
+
+                  {/* Rincian Penawaran dari Form Quotation */}
+                  {selectedQuotation.sections?.length > 0 && (
+                    <div className="border-t pt-4">
+                      <h3 className="font-bold mb-3 text-gray-900">Rincian Penawaran</h3>
+
+                      <div className="space-y-4">
+                        {selectedQuotation.sections.map((section: any, sectionIndex: number) => (
+                          <div
+                            key={section.id || sectionIndex}
+                            className="border border-gray-200 rounded-lg overflow-hidden"
+                          >
+                            <div className="px-4 py-2.5 bg-gray-100 font-bold text-gray-900">
+                              {section.nama || section.title || section.label || `Section ${sectionIndex + 1}`}
+                            </div>
+
+                            <div className="overflow-x-auto">
+                              <table className="w-full text-xs">
+                                <thead className="bg-gray-50">
+                                  <tr className="border-t border-b border-gray-200">
+                                    <th className="px-3 py-2 text-center w-10">No</th>
+                                    <th className="px-3 py-2 text-left">Keterangan</th>
+                                    <th className="px-3 py-2 text-center">Qty</th>
+                                    <th className="px-3 py-2 text-center">Satuan</th>
+                                    <th className="px-3 py-2 text-center">Metode</th>
+                                    <th className="px-3 py-2 text-right">Harga/Unit</th>
+                                    <th className="px-3 py-2 text-right">Total</th>
+                                  </tr>
+                                </thead>
+
+                                <tbody>
+                                  {(section.items || []).map((item: any, itemIndex: number) => {
+                                    const qty = Number(item.qty ?? item.quantity ?? item.jumlah ?? 0);
+                                    const price = Number(
+                                      item.hargaJualUnit ??
+                                      item.hargaUnit ??
+                                      item.unitPrice ??
+                                      0
+                                    );
+                                    const pricingMethod = String(item.pricingMethod || 'PER_UNIT').toUpperCase();
+                                    const total = pricingMethod === 'LUMP_SUM'
+                                      ? price
+                                      : qty * price;
+
+                                    return (
+                                      <tr
+                                        key={item.id || itemIndex}
+                                        className="border-b border-gray-100 last:border-b-0"
+                                      >
+                                        <td className="px-3 py-2 text-center align-top">
+                                          {itemIndex + 1}
+                                        </td>
+
+                                        <td className="px-3 py-2 align-top">
+                                          <div className="font-semibold text-gray-900">
+                                            {item.keterangan || item.description || item.materialName || '-'}
+                                          </div>
+                                          {item.subKeterangan && (
+                                            <div className="mt-1 text-gray-500 whitespace-pre-wrap">
+                                              {item.subKeterangan}
+                                            </div>
+                                          )}
+                                        </td>
+
+                                        <td className="px-3 py-2 text-center align-top">
+                                          {qty.toLocaleString('id-ID')}
+                                        </td>
+
+                                        <td className="px-3 py-2 text-center align-top">
+                                          {item.satuan || item.unit || '-'}
+                                        </td>
+
+                                        <td className="px-3 py-2 text-center align-top">
+                                          {pricingMethod === 'LUMP_SUM' ? 'Lump Sum' : 'Per Satuan'}
+                                        </td>
+
+                                        <td className="px-3 py-2 text-right align-top">
+                                          Rp {price.toLocaleString('id-ID')}
+                                        </td>
+
+                                        <td className="px-3 py-2 text-right font-semibold text-gray-900 align-top">
+                                          Rp {total.toLocaleString('id-ID')}
+                                        </td>
+                                      </tr>
+                                    );
+                                  })}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
                   <div className="border-t pt-4">
                     <h3 className="font-bold mb-2 text-gray-900">Financial Summary</h3>

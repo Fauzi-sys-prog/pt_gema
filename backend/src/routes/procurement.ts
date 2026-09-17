@@ -325,7 +325,8 @@ async function syncPurchaseOrderProgress(poId: string, db: ProcurementDb = prism
 
   for (const receiving of receivings) {
     for (const item of receiving.items) {
-      const qty = Math.max(0, Number(item.qtyReceived));
+      // PO fulfillment is based on accepted/good quantity, not physical arrival.
+      const qty = Math.max(0, Number(item.qtyGood));
       if (qty <= 0) continue;
       const codeKey = String(item.itemCode || "").trim().toLowerCase();
       const nameKey = String(item.itemName || "").trim().toLowerCase();
@@ -430,7 +431,7 @@ async function syncInventoryFromReceiving(receivingId: string) {
     .map((item) => ({
       code: asTrimmedString(item.itemCode) || "",
       name: item.itemName,
-      qty: Math.max(0, Number(item.qtyGood || item.qtyReceived || 0)),
+      qty: Math.max(0, Number(item.qtyGood ?? item.qtyReceived ?? 0)),
       unit: item.unit,
       batchNo: item.batchNo || undefined,
       expiryDate: item.expiryDate || undefined,
@@ -605,13 +606,33 @@ export async function validateReceiving(payload: Record<string, unknown>, db: Pr
   // Serialize receiving submissions for the same PO before calculating its remainder.
   await db.$queryRaw`SELECT id FROM "ProcurementPurchaseOrder" WHERE id = ${poId} FOR UPDATE`;
   const po = await db.procurementPurchaseOrder.findUnique({ where: { id: poId }, include: { items: true } });
-  if (!po || !["Approved", "Partial"].includes(po.status)) throw new Error("PO tidak dapat diterima: harus Approved atau Partial.");
+  const currentReceiving = await db.procurementReceiving.findUnique({
+    where: { id },
+    select: { purchaseOrderId: true },
+  });
+
+  const canEditSameReceivedPo =
+    Boolean(po) &&
+    currentReceiving?.purchaseOrderId === poId &&
+    po?.status === "Received";
+
+  if (
+    !po ||
+    (!["Approved", "Partial"].includes(po.status) && !canEditSameReceivedPo)
+  ) {
+    throw new Error("PO tidak dapat diterima: harus Approved atau Partial.");
+  }
   const previous = await db.procurementReceiving.findMany({ where: { purchaseOrderId: poId, id: { not: id }, status: { not: "Rejected" } }, include: { items: true } });
   const remaining = new Map(po.items.map(item => [item.id, Number(item.qty)]));
   const match = (code: string, name: string) => po.items.find(item => code ? item.itemCode === code : item.itemName === name);
   for (const receipt of previous) for (const item of receipt.items) {
     const poItem = match(item.itemCode || "", item.itemName);
-    if (poItem) remaining.set(poItem.id, (remaining.get(poItem.id) || 0) - Number(item.qtyReceived));
+    if (poItem) {
+      remaining.set(
+        poItem.id,
+        (remaining.get(poItem.id) || 0) - Math.max(0, Number(item.qtyGood))
+      );
+    }
   }
   const items = (Array.isArray(payload.items) ? payload.items : []).map(asRecord);
   if (!items.some(item => Number(item.qtyReceived) > 0)) throw new Error("Receiving tidak boleh kosong.");
@@ -619,14 +640,28 @@ export async function validateReceiving(payload: Record<string, unknown>, db: Pr
     const poItem = match(asTrimmedString(item.itemKode) || "", String(item.itemName || ""));
     const qty = Number(item.qtyReceived);
     const damaged = Number(item.qtyDamaged ?? 0);
-    if (!poItem || !Number.isFinite(qty) || qty < 0 || !Number.isFinite(damaged) || damaged < 0 || damaged > qty || qty > (remaining.get(poItem.id) || 0)) {
+    const good = qty - damaged;
+    const itemRemaining = poItem ? (remaining.get(poItem.id) || 0) : 0;
+
+    if (
+      !poItem ||
+      !Number.isFinite(qty) ||
+      qty < 0 ||
+      !Number.isFinite(damaged) ||
+      damaged < 0 ||
+      damaged > qty ||
+      !Number.isFinite(good) ||
+      good < 0 ||
+      good > itemRemaining
+    ) {
       throw new Error("Receiving tidak valid: periksa SKU, sisa PO, dan jumlah barang rusak.");
     }
+
     item.qtyOrdered = Number(poItem.qty);
-    item.qtyPreviouslyReceived = Number(poItem.qty) - (remaining.get(poItem.id) || 0);
-    item.qtyGood = qty - damaged;
+    item.qtyPreviouslyReceived = Number(poItem.qty) - itemRemaining;
+    item.qtyGood = good;
     item.unit = poItem.unit;
-    remaining.set(poItem.id, (remaining.get(poItem.id) || 0) - qty);
+    remaining.set(poItem.id, itemRemaining - good);
   }
   payload.items = items;
   payload.status = [...remaining.values()].every(qty => qty <= 0) ? "Complete" : "Partial";
@@ -801,6 +836,10 @@ async function updateResource(resource: ProcurementResource, id: string, payload
       },
     });
     return getResource(resource, id, db);
+  }
+
+  if (asTrimmedString(payload.status) !== "Rejected") {
+    await validateReceiving(payload, db, id);
   }
 
   const previousReceiving = await db.procurementReceiving.findUnique({

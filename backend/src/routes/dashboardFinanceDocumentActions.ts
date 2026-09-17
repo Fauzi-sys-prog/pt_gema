@@ -11,7 +11,7 @@ export function buildPurchaseOrderApprovalPayload(params: {
   nowIso?: string;
 }) {
   const { documentId, payload, action, actor, reason, nowIso = new Date().toISOString() } = params;
-  const nextStatus = action === "APPROVE" ? "APPROVED" : "REJECTED";
+  const nextStatus = action === "APPROVE" ? "Approved" : "Rejected";
 
   return {
     nextStatus,

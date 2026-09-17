@@ -32,6 +32,7 @@ export default function SuratJalanPage() {
   const location = useLocation();
   const {
     suratJalanList,
+    stockItemList,
     createSuratJalanWithStockOut,
     updateSuratJalan,
     projectList,
@@ -128,6 +129,49 @@ export default function SuratJalanPage() {
 
   const handleCreateSJ = (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (formData.sjType === 'Material Delivery') {
+      if (formData.items.length === 0) {
+        toast.error('Material Delivery wajib memiliki minimal 1 item.');
+        return;
+      }
+
+      const requestedByCode = new Map<string, number>();
+
+      for (const item of formData.items) {
+        const code = (item.itemKode || '').trim();
+        const qty = Number(item.jumlah);
+
+        if (!code) {
+          toast.error('Semua material wajib dipilih dari Monitoring Gudang.');
+          return;
+        }
+
+        if (!Number.isFinite(qty) || qty <= 0) {
+          toast.error(`Qty ${item.namaItem || code} harus lebih dari 0.`);
+          return;
+        }
+
+        requestedByCode.set(code, (requestedByCode.get(code) || 0) + qty);
+      }
+
+      for (const [code, qty] of requestedByCode.entries()) {
+        const stock = stockItemList.find(item => item.kode === code);
+
+        if (!stock) {
+          toast.error(`Material ${code} tidak ditemukan di Monitoring Gudang.`);
+          return;
+        }
+
+        if (qty > Number(stock.stok || 0)) {
+          toast.error(
+            `Stok ${stock.nama} tidak cukup. Tersedia ${stock.stok} ${stock.satuan}, diminta ${qty} ${stock.satuan}.`
+          );
+          return;
+        }
+      }
+    }
+
     setIsSubmitting(true);
 
     setTimeout(async () => {
@@ -273,10 +317,26 @@ export default function SuratJalanPage() {
 
   const updateItem = (index: number, field: string, value: any) => {
     const newItems = [...formData.items];
-    newItems[index] = { ...newItems[index], [field]: value };
-    if (field === 'namaItem' && !newItems[index].batchNo) {
+
+    if (formData.sjType === 'Material Delivery' && field === 'itemKode') {
+      const stock = stockItemList.find(item => item.kode === value);
+
+      newItems[index] = {
+        ...newItems[index],
+        itemKode: stock?.kode || '',
+        namaItem: stock?.nama || '',
+        satuan: stock?.satuan || 'Pcs',
+        jumlah: stock ? Math.min(Math.max(Number(newItems[index].jumlah) || 1, 1), stock.stok) : 1,
+        batchNo: newItems[index].batchNo || generateBatchNo(),
+      };
+    } else {
+      newItems[index] = { ...newItems[index], [field]: value };
+
+      if (field === 'namaItem' && !newItems[index].batchNo) {
         newItems[index].batchNo = generateBatchNo();
+      }
     }
+
     setFormData(prev => ({ ...prev, items: newItems }));
   };
 
@@ -866,10 +926,29 @@ export default function SuratJalanPage() {
                       {formData.items.map((item, idx) => (
                         <div key={idx} className="bg-white rounded-xl border border-slate-100 shadow-sm p-3 space-y-2 sm:space-y-0 sm:grid sm:grid-cols-[1fr_72px_72px_120px_32px] sm:gap-2 sm:items-center group">
                           {/* Name */}
-                          <input type="text" required
-                            placeholder={formData.sjType === 'Material Delivery' ? 'Deskripsi material...' : 'Nama alat / equipment...'}
-                            value={item.namaItem} onChange={e => updateItem(idx, 'namaItem', e.target.value)}
-                            className="w-full px-3 py-2 bg-slate-50 border border-slate-100 rounded-lg text-xs font-bold text-black outline-none focus:border-indigo-300 transition-all" />
+                          {formData.sjType === 'Material Delivery' ? (
+                            <select
+                              required
+                              value={item.itemKode}
+                              onChange={e => updateItem(idx, 'itemKode', e.target.value)}
+                              className="w-full px-3 py-2 bg-slate-50 border border-slate-100 rounded-lg text-xs font-bold text-black outline-none focus:border-indigo-300 transition-all"
+                            >
+                              <option value="">— Pilih dari Monitoring Gudang —</option>
+                              {stockItemList
+                                .filter(stock => Number(stock.stok) > 0)
+                                .map(stock => (
+                                  <option key={stock.id} value={stock.kode}>
+                                    {stock.kode} — {stock.nama} · Stok {stock.stok} {stock.satuan}
+                                  </option>
+                                ))}
+                            </select>
+                          ) : (
+                            <input type="text" required
+                              placeholder="Nama alat / equipment..."
+                              value={item.namaItem}
+                              onChange={e => updateItem(idx, 'namaItem', e.target.value)}
+                              className="w-full px-3 py-2 bg-slate-50 border border-slate-100 rounded-lg text-xs font-bold text-black outline-none focus:border-indigo-300 transition-all" />
+                          )}
 
                           {/* Qty + Unit — side by side on mobile */}
                           <div className="flex gap-2 sm:contents">
@@ -877,7 +956,9 @@ export default function SuratJalanPage() {
                               value={item.jumlah} onChange={e => updateItem(idx, 'jumlah', parseFloat(e.target.value))}
                               className="w-1/3 sm:w-full px-2 py-2 bg-slate-50 border border-slate-100 rounded-lg text-xs font-black text-center text-black outline-none focus:border-indigo-300 transition-all" />
                             <input type="text" required placeholder="Sat."
-                              value={item.satuan} onChange={e => updateItem(idx, 'satuan', e.target.value)}
+                              value={item.satuan}
+                              readOnly={formData.sjType === 'Material Delivery'}
+                              onChange={e => updateItem(idx, 'satuan', e.target.value)}
                               className="w-1/3 sm:w-full px-2 py-2 bg-slate-50 border border-slate-100 rounded-lg text-xs font-black uppercase text-center text-black outline-none focus:border-indigo-300 transition-all" />
 
                             {/* Batch / Keterangan — inline on mobile */}

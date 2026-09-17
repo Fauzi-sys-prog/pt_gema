@@ -233,23 +233,40 @@ export default function ReceivingPage() {
       toast.error('Mohon masukkan Nomor Surat Jalan (SJ) dari Vendor');
       return;
     }
-    if (!items.some(item => item.qtyReceived > 0) || items.some(item =>
-      !Number.isFinite(item.qtyReceived) || item.qtyReceived < 0 ||
-      item.qtyReceived > Math.max(0, item.qtyOrdered - item.qtyPreviouslyReceived) ||
-      !Number.isFinite(item.qtyDamaged) || item.qtyDamaged < 0 || item.qtyDamaged > item.qtyReceived)) {
-      toast.error('Qty diterima harus positif, tidak melebihi sisa PO, dan qty rusak tidak melebihi qty diterima.');
+    const hasInvalidItem = items.some((item) => {
+      const remaining = Math.max(0, item.qtyOrdered - item.qtyPreviouslyReceived);
+      const good = item.qtyReceived - item.qtyDamaged;
+
+      return (
+        !Number.isFinite(item.qtyReceived) ||
+        item.qtyReceived < 0 ||
+        !Number.isFinite(item.qtyDamaged) ||
+        item.qtyDamaged < 0 ||
+        item.qtyDamaged > item.qtyReceived ||
+        !Number.isFinite(good) ||
+        good < 0 ||
+        good > remaining
+      );
+    });
+
+    if (!items.some((item) => item.qtyReceived > 0) || hasInvalidItem) {
+      toast.error('Periksa jumlah datang/rusak. Qty barang baik tidak boleh melebihi sisa PO.');
       return;
     }
     setIsSubmitting(true);
 
     const totalQtyOrdered = items.reduce((sum, item) => sum + item.qtyOrdered, 0);
-    const totalQtyReceived = items.reduce((sum, item) => sum + item.qtyReceived + item.qtyPreviouslyReceived, 0);
-    const receivedPercentage = (totalQtyReceived / totalQtyOrdered) * 100;
+    // Fulfillment PO mengikuti barang baik/accepted, bukan sekadar fisik datang.
+    const totalQtyFulfilled = items.reduce(
+      (sum, item) => sum + item.qtyGood + item.qtyPreviouslyReceived,
+      0,
+    );
+    const fulfilledPercentage = (totalQtyFulfilled / totalQtyOrdered) * 100;
 
-    let status: 'Pending' | 'Partial' | 'Complete' = 'Pending';
-    if (receivedPercentage === 0) status = 'Pending';
-    else if (receivedPercentage >= 100) status = 'Complete';
-    else status = 'Partial';
+    // Receiving yang sudah memiliki barang fisik selalu Partial atau Complete.
+    // "Pending" bukan status hasil submit Receiving.
+    const status: 'Partial' | 'Complete' =
+      fulfilledPercentage >= 100 ? 'Complete' : 'Partial';
 
     const newNo = generateDocNumber('GRN', receivingList.length + 1);
 
@@ -312,8 +329,16 @@ export default function ReceivingPage() {
 
   const calculateProgress = (receiving: Receiving) => {
     const totalOrdered = receiving.items.reduce((sum, item) => sum + item.qtyOrdered, 0);
-    const totalReceived = receiving.items.reduce((sum, item) => sum + item.qtyReceived, 0);
-    return totalOrdered > 0 ? Math.round((totalReceived / totalOrdered) * 100) : 0;
+    const totalFulfilled = receiving.items.reduce(
+      (sum, item) =>
+        sum +
+        (item.qtyPreviouslyReceived ?? 0) +
+        (item.qtyGood ?? item.qtyReceived ?? 0),
+      0,
+    );
+    return totalOrdered > 0
+      ? Math.min(100, Math.round((totalFulfilled / totalOrdered) * 100))
+      : 0;
   };
 
   const filteredReceiving = receivingList.filter((rcv) => {
@@ -523,7 +548,7 @@ export default function ReceivingPage() {
                       required
                     >
                       <option value="">-- Pilih Purchase Order --</option>
-                      {poList.filter(po => ['Sent', 'Partial', 'Approved'].includes(po.status)).map(po => (
+                      {poList.filter(po => ['Partial', 'Approved'].includes(po.status)).map(po => (
                         <option key={po.id} value={po.id}>{po.noPO} - {po.supplier}</option>
                       ))}
                     </select>
@@ -580,9 +605,10 @@ export default function ReceivingPage() {
                       <thead className="bg-slate-50 border-b-2 border-slate-100">
                         <tr>
                           <th className="px-6 py-4 text-left text-[10px] font-black uppercase tracking-widest">Material</th>
-                          <th className="px-6 py-4 text-center text-[10px] font-black uppercase tracking-widest">Ordered</th>
-                          <th className="px-6 py-4 text-center text-[10px] font-black uppercase tracking-widest">Qty Recv</th>
+                          <th className="px-6 py-4 text-center text-[10px] font-black uppercase tracking-widest">PO Qty</th>
+                          <th className="px-6 py-4 text-center text-[10px] font-black uppercase tracking-widest">Datang</th>
                           <th className="px-6 py-4 text-center text-[10px] font-black uppercase tracking-widest text-rose-600">Rusak</th>
+                          <th className="px-6 py-4 text-center text-[10px] font-black uppercase tracking-widest text-emerald-600">Good</th>
                           <th className="px-6 py-4 text-left text-[10px] font-black uppercase tracking-widest">Batch/Lot</th>
                           <th className="px-6 py-4 text-left text-[10px] font-black uppercase tracking-widest">Expiry</th>
                         </tr>
@@ -594,9 +620,21 @@ export default function ReceivingPage() {
                               <div className="text-sm font-black italic uppercase text-slate-900">{item.itemName}</div>
                               <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{item.itemKode} • {item.unit}</div>
                             </td>
-                            <td className="px-6 py-4 text-center text-sm font-bold text-slate-400">{item.qtyOrdered}<div className="text-xs">Sudah: {item.qtyPreviouslyReceived} · Sisa: {Math.max(0, item.qtyOrdered - item.qtyPreviouslyReceived)}</div></td>
                             <td className="px-6 py-4 text-center">
-                              <input type="number" min="0" max={Math.max(0, item.qtyOrdered - item.qtyPreviouslyReceived)} value={item.qtyReceived} onChange={(e) => {
+                              <div className="text-base font-black italic text-slate-900">
+                                {item.qtyOrdered} <span className="text-[9px] text-slate-400 not-italic uppercase">{item.unit}</span>
+                              </div>
+                              <div className="mt-1 flex items-center justify-center gap-1.5">
+                                <span className="px-2 py-0.5 rounded-md bg-slate-100 text-[9px] font-black text-slate-500 whitespace-nowrap">
+                                  Sudah {item.qtyPreviouslyReceived + item.qtyGood}
+                                </span>
+                                <span className="px-2 py-0.5 rounded-md bg-indigo-50 text-[9px] font-black text-indigo-600 whitespace-nowrap">
+                                  Sisa {Math.max(0, item.qtyOrdered - item.qtyPreviouslyReceived - item.qtyGood)}
+                                </span>
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 text-center">
+                              <input type="number" min="0" value={item.qtyReceived} onChange={(e) => {
                                 const val = Number(e.target.value);
                                 const newItems = [...items];
                                 newItems[index].qtyReceived = val;
@@ -612,6 +650,11 @@ export default function ReceivingPage() {
                                 newItems[index].qtyGood = newItems[index].qtyReceived - val;
                                 setItems(newItems);
                               }} className="w-20 px-3 py-2 border-2 border-slate-100 rounded-xl text-center font-black italic focus:border-rose-500 text-rose-600 outline-none transition-all" />
+                            </td>
+                            <td className="px-6 py-4 text-center">
+                              <div className="inline-flex min-w-16 items-center justify-center rounded-xl border-2 border-emerald-100 bg-emerald-50 px-3 py-2 text-sm font-black italic text-emerald-700">
+                                {item.qtyGood}
+                              </div>
                             </td>
                             <td className="px-6 py-4">
                               <div className="flex gap-2">

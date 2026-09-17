@@ -25,7 +25,6 @@ export default function CutiPage() {
     startDate: '',
     endDate: '',
     reason: '',
-    nominal: 0,
     status: 'Pending'
   });
 
@@ -161,7 +160,7 @@ export default function CutiPage() {
       await addLeave(draft);
       toast.success('Pengajuan cuti/izin berhasil disubmit');
       setShowModal(false);
-      setFormData({ employeeId: '', employeeName: '', leaveType: 'Annual', startDate: '', endDate: '', reason: '', nominal: 0, status: 'Pending' });
+      setFormData({ employeeId: '', employeeName: '', leaveType: 'Annual', startDate: '', endDate: '', reason: '', status: 'Pending' });
     } catch (error) {
       toast.error(`Pengajuan gagal disimpan: ${error instanceof Error ? error.message : 'kesalahan database'}`);
     } finally {
@@ -386,18 +385,6 @@ export default function CutiPage() {
                   rows={3}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg"
                   required
-                />
-              </div>
-
-              <div>
-                <label className="block text-gray-700 mb-2">Nominal (IDR)</label>
-                <input
-                  type="number"
-                  min="0"
-                  step="any"
-                  value={formData.nominal ?? 0}
-                  onChange={e => setFormData({ ...formData, nominal: parseFloat(e.target.value) || 0 })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
                 />
               </div>
 

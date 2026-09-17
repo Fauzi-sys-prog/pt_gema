@@ -88,15 +88,23 @@ export default function PayrollProPage() {
       ? payrollEmployees.filter(e => employeeIds.includes(e.id))
       : payrollEmployees;
     const standardDays = payrollPolicy?.standardWorkDays ?? 25;
+    const inPeriod = (date: string) => date >= startDate && date <= endDate;
 
-    return activeEmps.map(emp => {
+    // Attendance adalah eligibility gate payroll.
+    // Karyawan aktif tanpa satu pun record absensi pada periode ini
+    // tidak boleh dibuatkan slip, sehingga gaji/tunjangan/kasbon/koperasi
+    // juga tidak ikut dihitung atau dipotong.
+    const eligibleEmps = activeEmps.filter(emp =>
+      attendanceList.some(a => a.employeeId === emp.id && inPeriod(a.date))
+    );
+
+    return eligibleEmps.map(emp => {
       const comp = employeeCompensations.find(c => c.employeeId === emp.id);
       const baseSalary = comp?.baseSalary ?? emp.salary ?? 0;
       const transportAllowance = comp?.transportAllowance ?? 0;
       const maximumIncentive = comp?.maximumIncentive ?? 0;
       const positionAllowance = comp?.positionAllowance ?? 0;
 
-      const inPeriod = (date: string) => date >= startDate && date <= endDate;
       const attendanceRecords = attendanceList.filter(a => inPeriod(a.date) && a.employeeId === emp.id);
       const attendanceDays = attendanceRecords.filter(a => a.status === 'Present' || a.status === 'Late').length;
       const lateMinutes = attendanceRecords.reduce((s, a) => {
@@ -120,24 +128,56 @@ export default function PayrollProPage() {
       const overtimeHours = isSales ? 0 : approvedOvertimes.reduce((s, r) => s + r.hours, 0);
       const overtimeReferences = Array.from(new Set(approvedOvertimes.map(r => r.nomorSPK).filter(Boolean))) as string[];
       const overtimePay = isSales ? 0 : overtimeHours * (comp?.overtimeRate ?? 0) * (payrollPolicy?.overtimeRateMultiplier ?? 1);
-      const mealAllowance = attendanceDays * (comp?.mealAllowancePerDay || payrollPolicy?.mealAllowancePerDay || 25000);
+      const mealAllowanceRate =
+        comp?.mealAllowancePerDay ??
+        payrollPolicy?.mealAllowancePerDay ??
+        25000;
+      const mealAllowance = attendanceDays * mealAllowanceRate;
 
-      // Approved cuti di periode ini — hari yang di-cover cuti tidak kena potongan insentif
-      const approvedLeaveDates = new Set(
+      // Approved leave tidak terkena potongan insentif.
+      // Paid leave dan Unpaid Leave dipisahkan karena Unpaid tetap
+      // mengurangi gaji pokok, tetapi bukan potongan insentif.
+      const expandLeaveDates = (leave: { startDate: string; endDate: string }) => {
+        const dates: string[] = [];
+        const cur = new Date(leave.startDate);
+        const end = new Date(leave.endDate);
+
+        while (cur <= end) {
+          dates.push(cur.toISOString().split('T')[0]);
+          cur.setDate(cur.getDate() + 1);
+        }
+
+        return dates;
+      };
+
+      const paidLeaveTypes = new Set(['Annual', 'Marriage', 'Maternity']);
+
+      const paidLeaveDates = new Set(
         leaveList
-          .filter(l => l.employeeId === emp.id && l.status === 'Approved' && l.leaveType === 'Annual')
-          .flatMap(l => {
-            const dates: string[] = [];
-            const cur = new Date(l.startDate);
-            const end = new Date(l.endDate);
-            while (cur <= end) {
-              dates.push(cur.toISOString().split('T')[0]);
-              cur.setDate(cur.getDate() + 1);
-            }
-            return dates;
-          })
+          .filter(l =>
+            l.employeeId === emp.id &&
+            l.status === 'Approved' &&
+            paidLeaveTypes.has(l.leaveType)
+          )
+          .flatMap(expandLeaveDates)
           .filter(inPeriod)
       );
+
+      const unpaidLeaveDates = new Set(
+        leaveList
+          .filter(l =>
+            l.employeeId === emp.id &&
+            l.status === 'Approved' &&
+            l.leaveType === 'Unpaid'
+          )
+          .flatMap(expandLeaveDates)
+          .filter(inPeriod)
+      );
+
+      const approvedLeaveDates = new Set([
+        ...paidLeaveDates,
+        ...unpaidLeaveDates,
+      ]);
 
       const holidayDates = new Set((payrollPolicy?.holidayDates ?? []).filter(inPeriod));
 
@@ -146,12 +186,24 @@ export default function PayrollProPage() {
       const alphaDays = attendanceRecords.filter(a => a.status === 'Absent' && !approvedLeaveDates.has(a.date) && !holidayDates.has(a.date)).length;
       const permissionDays = attendanceRecords.filter(a => a.status === 'Permission' && !approvedLeaveDates.has(a.date) && !holidayDates.has(a.date)).length;
       const sickDays = attendanceRecords.filter(a => a.status === 'Sick' && !approvedLeaveDates.has(a.date) && !holidayDates.has(a.date)).length;
-      const leaveDays = approvedLeaveDates.size;
+      const leaveDays = paidLeaveDates.size;
+      const unpaidLeaveDays = Array.from(unpaidLeaveDates)
+        .filter(date => !holidayDates.has(date))
+        .length;
       const holidayDays = holidayDates.size;
       const absentRecords = alphaDays + permissionDays + sickDays;
-      const deductionPctPerDay = payrollPolicy?.incentiveDeductionPerAbsencePercent ?? 25;
+      // Rule authoritative perusahaan:
+      // Alpha + Izin + Sakit × persentase/hari, maksimum 100% insentif.
+      // Tidak ada pembulatan nominal.
+      const deductionPctPerDay = Math.min(
+        100,
+        Math.max(0, payrollPolicy?.incentiveDeductionPerAbsencePercent ?? 25)
+      );
       const insentifRatePerDay = maximumIncentive * deductionPctPerDay / 100;
-      const incentiveDeductionAmount = Math.min(maximumIncentive, absentRecords * insentifRatePerDay);
+      const incentiveDeductionAmount = Math.min(
+        maximumIncentive,
+        absentRecords * insentifRatePerDay
+      );
 
       // Pakai nominal IDR dari master karyawan kalau sudah diisi, fallback ke persentase global
       const legacyBpjsKetEmployeeAmount = (comp?.bpjsKetEmployeePct ?? 0) > 100 ? comp?.bpjsKetEmployeePct ?? 0 : 0;
@@ -212,8 +264,27 @@ export default function PayrollProPage() {
       // JPK mengikuti format slip perusahaan: dicatat sebagai tunjangan lalu
       // dipotong kembali pada periode yang sama.
       const jpkAllowance = bpjsKetEmployer;
+
+      // Unpaid Leave:
+      // potongan per hari = gaji pokok / hari kerja standar.
+      // Tidak ada Math.round(); nominal snapshot mempertahankan nilai real.
+      const unpaidLeaveRatePerDay =
+        standardDays > 0 ? baseSalary / standardDays : 0;
+      const unpaidLeaveDeduction =
+        unpaidLeaveDays * unpaidLeaveRatePerDay;
+
       const grossIncome = baseSalary + transportAllowance + mealAllowance + maximumIncentive + positionAllowance + overtimePay + jpkAllowance;
-      const totalDeductions = kasbonDeduction + kasbonAdminFee + jpkAllowance + bpjsKetEmployee + bpjsKesEmployee + incentiveDeductionAmount + pph21 + koperasiDeduction;
+      const totalDeductions =
+        kasbonDeduction +
+        kasbonAdminFee +
+        jpkAllowance +
+        bpjsKetEmployee +
+        bpjsKesEmployee +
+        incentiveDeductionAmount +
+        unpaidLeaveDeduction +
+        pph21 +
+        koperasiDeduction;
+
       const takeHomePay = grossIncome - totalDeductions;
 
       return {
@@ -222,7 +293,15 @@ export default function PayrollProPage() {
         baseSalary, transportAllowance, mealAllowance, maximumIncentive,
         positionAllowance, overtimePay, bonus: 0, otherIncome: 0, grossIncome,
         kasbonDeduction, bpjsKetEmployee, bpjsKesEmployee, pph21,
-        incentiveDeductionAmount, absenceDeduction: 0, otherDeductions: 0, koperasiDeduction, koperasiLoanDeduction, koperasiMandatorySavingDeduction, koperasiLoanDetails, kasbonDetails, kasbonAdminFee, jpkAllowance, cutiAllowance: 0, totalDeductions,
+        incentiveDeductionAmount,
+        absenceDeduction: unpaidLeaveDeduction,
+        unpaidLeaveDays,
+        unpaidLeaveRatePerDay,
+        unpaidLeaveDeduction,
+        otherDeductions: 0,
+        koperasiDeduction, koperasiLoanDeduction, koperasiMandatorySavingDeduction,
+        koperasiLoanDetails, kasbonDetails, kasbonAdminFee, jpkAllowance,
+        cutiAllowance: 0, totalDeductions,
         takeHomePay, attendanceDays, standardDays, lateMinutes, overtimeHours, overtimeReferences,
         insentifRatePerDay, alphaDays, permissionDays, sickDays, leaveDays, holidayDays,
         bpjsKetEmployer, bpjsKesEmployer,
@@ -263,7 +342,16 @@ export default function PayrollProPage() {
       }
 
       let slips = buildSlips(period, periodStart, periodEnd, requestedIds);
-      if (slips.length === 0) { toast.error('Tidak ada karyawan yang dapat diproses'); return; }
+      const skippedNoAttendance = requestedIds.length - slips.length;
+
+      if (slips.length === 0) {
+        toast.error('Tidak ada karyawan yang dapat diproses. Pastikan karyawan memiliki data absensi pada periode payroll.');
+        return;
+      }
+
+      if (skippedNoAttendance > 0) {
+        toast.warning(`${skippedNoAttendance} karyawan dilewati karena tidak memiliki data absensi pada periode payroll.`);
+      }
       // Desember: rekalkulasi PPh 21 setahun (berbasis realisasi YTD) via backend.
       if (period.endsWith('-12')) {
         try {
@@ -331,7 +419,11 @@ export default function PayrollProPage() {
       const records = attendanceList.filter(a => a.employeeId === slip.employeeId && (run.periodStart && run.periodEnd ? a.date >= run.periodStart && a.date <= run.periodEnd : a.date.startsWith(run.period)));
       const approvedLeaveDates = new Set(
         leaveList
-          .filter(l => l.employeeId === slip.employeeId && l.status === 'Approved' && l.leaveType === 'Annual')
+          .filter(l =>
+            l.employeeId === slip.employeeId &&
+            l.status === 'Approved' &&
+            ['Annual', 'Marriage', 'Maternity', 'Unpaid'].includes(l.leaveType)
+          )
           .flatMap(l => {
             const dates: string[] = [];
             const current = new Date(l.startDate);

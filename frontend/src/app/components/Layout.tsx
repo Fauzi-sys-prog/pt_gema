@@ -303,7 +303,6 @@ export default function Layout({ children }: LayoutProps) {
         { title: "THL / Harian Lepas", path: "/hr/thl" },
         { title: "Timesheet THL", path: "/hr/thl-timesheet" },
         { title: "Gajian THL", path: "/hr/gajian-thl" },
-        { title: "Kasbon THL", path: "/hr/employee-advance?type=thl" },
         { title: "Kas Koperasi", path: "/hr/kas-koperasi" },
         { title: "Tunjangan", path: "/hr/tunjangan" },
         { title: "Proses Payroll", path: "/hr/payroll-pro" },

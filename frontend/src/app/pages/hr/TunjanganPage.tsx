@@ -60,14 +60,24 @@ export default function TunjanganPage() {
 
   const startEdit = (employeeId: string) => {
     const comp = employeeCompensations.find(c => c.employeeId === employeeId);
+
+    // Backward compatibility:
+    // data lama pernah menyimpan nominal JPK ke field percentage.
+    // Hanya nilai > 100 yang boleh dianggap legacy nominal rupiah.
+    const legacyJpkAmount =
+      (comp?.bpjsKetEmployerPct ?? 0) > 100
+        ? comp?.bpjsKetEmployerPct
+        : undefined;
+
     setEditForm({
       transportAllowance:  String(comp?.transportAllowance  ?? 0),
       mealAllowancePerDay: String(comp?.mealAllowancePerDay ?? payrollPolicy?.mealAllowancePerDay ?? 25000),
       maximumIncentive:    String(comp?.maximumIncentive    ?? 0),
       positionAllowance:   String(comp?.positionAllowance   ?? 0),
       overtimeRate:        String(comp?.overtimeRate        ?? 0),
-      jpk:                 String(comp?.bpjsKetEmployerAmount ?? comp?.bpjsKetEmployerPct ?? 220035),
+      jpk:                 String(comp?.bpjsKetEmployerAmount ?? legacyJpkAmount ?? 220035),
     });
+
     setEditId(employeeId);
   };
 
@@ -78,17 +88,24 @@ export default function TunjanganPage() {
     const emp = employeeList.find(e => e.id === employeeId);
     if (!emp) return;
     const existing = employeeCompensations.find(c => c.employeeId === employeeId);
+    const jpkAmount = parseFloat(editForm.jpk) || 0;
+
+    // Percentage yang benar (<=100) dipertahankan.
+    // Legacy nominal yang dulu salah masuk ke field percentage dibersihkan.
+    const existingEmployerPct = existing?.bpjsKetEmployerPct ?? 0;
+
     const updated: EmployeeCompensation = {
-      id:                 existing?.id ?? `comp-${employeeId}`,
+      ...(existing ?? {}),
+      id:                    existing?.id ?? `comp-${employeeId}`,
       employeeId,
-      baseSalary:         existing?.baseSalary ?? emp.salary ?? 0,
-      transportAllowance: parseFloat(editForm.transportAllowance)  || 0,
-      mealAllowancePerDay:parseFloat(editForm.mealAllowancePerDay) || 0,
-      maximumIncentive:   parseFloat(editForm.maximumIncentive)    || 0,
-      positionAllowance:  parseFloat(editForm.positionAllowance)   || 0,
-      overtimeRate:         parseFloat(editForm.overtimeRate)        || 0,
-      bpjsKetEmployerPct:   parseFloat(editForm.jpk)                || 0,
-      bpjsKetEmployerAmount: parseFloat(editForm.jpk)               || 0,
+      baseSalary:            existing?.baseSalary ?? emp.salary ?? 0,
+      transportAllowance:    parseFloat(editForm.transportAllowance)  || 0,
+      mealAllowancePerDay:   parseFloat(editForm.mealAllowancePerDay) || 0,
+      maximumIncentive:      parseFloat(editForm.maximumIncentive)    || 0,
+      positionAllowance:     parseFloat(editForm.positionAllowance)   || 0,
+      overtimeRate:          parseFloat(editForm.overtimeRate)        || 0,
+      bpjsKetEmployerPct:    existingEmployerPct > 100 ? 0 : existingEmployerPct,
+      bpjsKetEmployerAmount: jpkAmount,
     };
     setIsSaving(true);
     try {

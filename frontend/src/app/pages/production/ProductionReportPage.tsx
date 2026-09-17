@@ -722,8 +722,9 @@ export default function ProductionReportPage() {
 
                         return (
                           <option key={wo.id} value={wo.id}>
-                            {wo.woNumber} — {wo.itemToProduce} — Sisa:{" "}
-                            {remaining} {wo.targetUnit || ""}
+                            {wo.woNumber} — {wo.itemToProduce} — Output/Target:{" "}
+                            {Number(wo.completedQty || 0)}/{Number(wo.targetQty || 0)}{" "}
+                            {wo.targetUnit || ""}
                             {wo.nomorSPK ? ` — SPK: ${wo.nomorSPK}` : ""}
                           </option>
                         );
@@ -767,10 +768,10 @@ export default function ProductionReportPage() {
                           </div>
                           <div>
                             <p className="text-[9px] font-black text-blue-400 uppercase">
-                              Sisa Target
+                              Output / Target Barang
                             </p>
                             <p className="text-sm font-black text-rose-600">
-                              {remaining} {wo.targetUnit || ""}
+                              {completed} / {target} {wo.targetUnit || ""}
                             </p>
                           </div>
                         </div>

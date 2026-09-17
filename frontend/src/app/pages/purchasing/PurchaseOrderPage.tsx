@@ -144,7 +144,7 @@ export default function PurchaseOrderPage() {
           nama: item.materialName,
           qty: absoluteQty,
           unit: item.unit,
-          harga: item.unitPrice,
+          harga: item.unitPrice || existingStock?.hargaSatuan || 0,
           kode: existingStock?.kode || item.itemKode || `GTP-MTR-${item.materialName.substring(0,3).toUpperCase()}-${Math.floor(100+Math.random()*900)}`,
           kategori: existingStock?.kategori || 'General'
         };
@@ -817,7 +817,7 @@ export default function PurchaseOrderPage() {
                               // Check if item exists in master data
                               const existingStock = stockItemList.find(s => 
                                 (item.itemKode && s.kode === item.itemKode) || 
-                                (s.materialName && s.nama.toLowerCase() === item.materialName.toLowerCase())
+                                (s.nama.toLowerCase() === item.materialName.toLowerCase())
                               );
 
                               return {
@@ -825,7 +825,7 @@ export default function PurchaseOrderPage() {
                                 nama: item.materialName,
                                 qty: remainingQty,
                                 unit: item.unit,
-                                harga: item.unitPrice,
+                                harga: item.unitPrice || existingStock?.hargaSatuan || 0,
                                 kode: existingStock?.kode || item.itemKode || `GTP-MTR-${item.materialName.substring(0,3).toUpperCase()}-${Math.floor(100+Math.random()*900)}`,
                                 supplier: item.supplier
                               };

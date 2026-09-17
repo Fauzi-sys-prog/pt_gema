@@ -76,6 +76,12 @@ export default function PayrollSlipPage() {
   const dedPerja = slip.bpjsKetEmployee;
   const dedJkn = slip.bpjsKesEmployee;
   const dedInsentif = slip.incentiveDeductionAmount;
+  const unpaidLeaveDays = slip.unpaidLeaveDays ?? 0;
+  const unpaidLeaveRatePerDay = slip.unpaidLeaveRatePerDay ?? 0;
+  const dedUnpaidLeave =
+    slip.unpaidLeaveDeduction ??
+    slip.absenceDeduction ??
+    0;
   const dedKoperasiPinjaman = slip.koperasiLoanDeduction ?? slip.koperasiDeduction ?? 0;
   const dedKoperasiWajib = slip.koperasiMandatorySavingDeduction ?? 0;
   const totalDed = slip.totalDeductions;
@@ -169,6 +175,13 @@ export default function PayrollSlipPage() {
                 <SlipRow label="Potongan BPJSTKU Pekerja"    val={rpFmt(dedPerja)} />
                 <SlipRow label="Potongan JKN - KIS"           val={rpFmt(dedJkn)} />
                 <SlipRow label="Potongan Insentif Hari Kerja" val={dedInsentif > 0 ? rpReal(dedInsentif) : '-'} marker="(+)" />
+                {dedUnpaidLeave > 0 && (
+                  <SlipRow
+                    label="Potongan Unpaid Leave"
+                    sub={`${unpaidLeaveDays} Hari × ${rpReal(unpaidLeaveRatePerDay)}`}
+                    val={rpReal(dedUnpaidLeave)}
+                  />
+                )}
                 <SlipSubTotal label="Total Potongan"          val={rpFmt(totalDed)} marker="(-)" />
                 <SlipTotal    label="Total"                   val={rpFmt(thp)} highlight />
               </tbody>
@@ -187,6 +200,7 @@ export default function PayrollSlipPage() {
                   ['Sakit',          sakitCount],
                   ['Libur Nasional', holidayCount],
                   ['Cuti',           cutiCount],
+                  ['Unpaid Leave',   unpaidLeaveDays],
                 ].map(([label, val]) => (
                   <tr key={label as string} className="border-b border-gray-200">
                     <td className="px-2 py-0.5 text-gray-700">{label as string}</td>
@@ -207,13 +221,34 @@ export default function PayrollSlipPage() {
                     </td>
                   </tr>
                   {(() => {
-                    const rate = slip.insentifRatePerDay ?? slip.maximumIncentive / 4;
-                    return [1,2,3,4].map(day => (
-                      <tr key={day} className="border-b border-gray-200">
-                        <td className="px-2 py-0.5 text-gray-600">{day} Hari</td>
-                        <td className="px-2 py-0.5 text-right">{rpFmt(rate * day)}</td>
-                      </tr>
-                    ));
+                    const percentPerDay = Math.min(
+                      100,
+                      Math.max(0, policy?.incentiveDeductionPerAbsencePercent ?? 25)
+                    );
+
+                    const rate =
+                      slip.insentifRatePerDay ??
+                      (slip.maximumIncentive * percentPerDay / 100);
+
+                    const maxDays =
+                      percentPerDay > 0
+                        ? Math.ceil(100 / percentPerDay)
+                        : 0;
+
+                    return Array.from({ length: maxDays }, (_, index) => index + 1)
+                      .map(day => {
+                        const amount = Math.min(
+                          slip.maximumIncentive,
+                          rate * day
+                        );
+
+                        return (
+                          <tr key={day} className="border-b border-gray-200">
+                            <td className="px-2 py-0.5 text-gray-600">{day} Hari</td>
+                            <td className="px-2 py-0.5 text-right">{rpReal(amount)}</td>
+                          </tr>
+                        );
+                      });
                   })()}
                 </tbody>
               </table>
